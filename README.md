@@ -31,6 +31,8 @@ Every piece of data lives on **0G Storage** (permanent, verifiable). Every payme
 
 ## Architecture
 
+![workflow](/frontend/public/image.png)
+
 ```
 Creator uploads data → 0G Storage (root hash)
 Creator posts job → AnnotationMarket.sol (bounty locked onchain)
