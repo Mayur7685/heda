@@ -45,12 +45,44 @@ export default function DatasetDetail() {
     if (!dataset) return;
     setDownloading(true);
     try {
-      const res = await fetch(`${GALILEO.storageIndexer}/file?root=${dataset.rootHash}`);
-      if (!res.ok) throw new Error("File not found on 0G Storage");
-      const blob = await res.blob();
+      const JSZip = (await import("jszip")).default;
+      const zip = new JSZip();
+      const isImage = Number(dataset.dataType) === 0;
+
+      const dataRes = await fetch(`${GALILEO.storageIndexer}/file?root=${dataset.rootHash}`);
+      if (!dataRes.ok) throw new Error("Dataset not found on 0G Storage");
+      const dataText = await dataRes.text();
+
+      if (isImage) {
+        zip.file("annotations/instances.json", dataText);
+        try {
+          const coco = JSON.parse(dataText);
+          const sourceRoot = coco.info?.data_root_hash ?? metadata?.dataRootHash;
+          if (sourceRoot) {
+            const imgRes = await fetch(`${GALILEO.storageIndexer}/file?root=${sourceRoot}`).catch(() => null);
+            if (imgRes?.ok) {
+              const files: Array<{ name: string; type: string; data: string }> = await imgRes.json();
+              files.forEach((f, i) => {
+                if (f.data) {
+                  const ext = f.type?.split("/")[1] ?? "jpg";
+                  zip.file(`images/${f.name ?? `image_${i}.${ext}`}`, f.data, { base64: true });
+                }
+              });
+            }
+          }
+        } catch { /* images unavailable */ }
+        zip.file("README.txt", `Heda Dataset #${datasetId}\nFormat: COCO JSON\nAnnotations: annotations/instances.json\nImages: images/`);
+      } else {
+        zip.file("dataset.jsonl", dataText);
+        zip.file("README.txt", `Heda Dataset #${datasetId}\nFormat: JSONL\nFile: dataset.jsonl`);
+      }
+
+      const blob = await zip.generateAsync({ type: "blob", compression: "DEFLATE" });
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
-      a.href = url; a.download = `heda-dataset-${datasetId}-coco.json`; a.click();
+      a.href = url;
+      a.download = `heda-dataset-${datasetId}.zip`;
+      a.click();
       URL.revokeObjectURL(url);
     } catch (e: any) { setTxMsg(e.message); setTxErr(true); }
     finally { setDownloading(false); }

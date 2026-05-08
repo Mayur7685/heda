@@ -264,8 +264,10 @@ export default function Dashboard() {
                 </div>
               </div>
               {selected.approvedCount === selected.taskCount && selected.taskCount > 0 && (
-                <button className="btn-primary" onClick={() => setPublishing(true)}>
-                  Publish Dataset <span className="material-symbols-outlined" style={{ fontSize: 16 }}>arrow_forward</span>
+                <button className="btn-primary" onClick={() => setPublishing(true)}
+                  disabled={publishing || txMsg.startsWith("Building") || txMsg.startsWith("Fetching") || txMsg.startsWith("Uploading") || txMsg.startsWith("Publishing")}>
+                  {txMsg && !txErr && txMsg !== "" && !txMsg.includes("✓") ? txMsg : "Publish Dataset"}
+                  <span className="material-symbols-outlined" style={{ fontSize: 16 }}>arrow_forward</span>
                 </button>
               )}
             </div>

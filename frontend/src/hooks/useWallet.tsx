@@ -1,80 +1,58 @@
-import { createContext, useContext, useState, useEffect, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
+import { useAccount, useWalletClient, useSwitchChain } from "wagmi";
+import { useConnectModal } from "@rainbow-me/rainbowkit";
 import { ethers } from "ethers";
+import { galileo } from "../wagmi";
 import { GALILEO } from "../config";
-
-declare global {
-  interface Window { ethereum?: any; }
-}
 
 type WalletCtx = {
   signer: ethers.Signer | null;
   address: string | null;
   chainId: number | null;
   isCorrectChain: boolean;
-  connect: () => Promise<void>;
-  switchToGalileo: () => Promise<void>;
+  connect: () => void;
+  switchToGalileo: () => void;
   error: string | null;
 };
 
 const WalletContext = createContext<WalletCtx>({
   signer: null, address: null, chainId: null, isCorrectChain: false,
-  connect: async () => {}, switchToGalileo: async () => {}, error: null,
+  connect: () => {}, switchToGalileo: () => {}, error: null,
 });
 
 export function WalletProvider({ children }: { children: ReactNode }) {
+  const { address, chainId, isConnected } = useAccount();
+  const { data: walletClient } = useWalletClient();
+  const { openConnectModal } = useConnectModal();
+  const { switchChain } = useSwitchChain();
   const [signer, setSigner] = useState<ethers.Signer | null>(null);
-  const [address, setAddress] = useState<string | null>(null);
-  const [chainId, setChainId] = useState<number | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [error] = useState<string | null>(null);
 
   const isCorrectChain = chainId === GALILEO.chainId;
 
-  async function connect() {
-    if (!window.ethereum) { setError("MetaMask not found."); return; }
-    try {
-      const provider = new ethers.BrowserProvider(window.ethereum);
-      await provider.send("eth_requestAccounts", []);
-      const s = await provider.getSigner();
-      const network = await provider.getNetwork();
-      setSigner(s);
-      setAddress(await s.getAddress());
-      setChainId(Number(network.chainId));
-      setError(null);
-    } catch (e: any) { setError(e.message); }
-  }
-
-  async function switchToGalileo() {
-    if (!window.ethereum) return;
-    try {
-      await window.ethereum.request({ method: "wallet_switchEthereumChain", params: [{ chainId: `0x${GALILEO.chainId.toString(16)}` }] });
-    } catch (e: any) {
-      if (e.code === 4902) {
-        await window.ethereum.request({ method: "wallet_addEthereumChain", params: [{ chainId: `0x${GALILEO.chainId.toString(16)}`, chainName: "0G-Galileo-Testnet", nativeCurrency: { name: "0G", symbol: "0G", decimals: 18 }, rpcUrls: [GALILEO.rpc], blockExplorerUrls: [GALILEO.explorer] }] });
-      }
-    }
-  }
-
-  // Auto-reconnect if already connected
+  // Convert wagmi walletClient → ethers Signer
   useEffect(() => {
-    if (!window.ethereum) return;
-    window.ethereum.request({ method: "eth_accounts" }).then((accounts: string[]) => {
-      if (accounts.length > 0) connect();
-    });
-    const handleChainChange = (hex: string) => setChainId(parseInt(hex, 16));
-    const handleAccountsChange = (accounts: string[]) => {
-      if (accounts.length === 0) { setSigner(null); setAddress(null); setChainId(null); }
-      else connect();
-    };
-    window.ethereum.on("chainChanged", handleChainChange);
-    window.ethereum.on("accountsChanged", handleAccountsChange);
-    return () => {
-      window.ethereum?.removeListener("chainChanged", handleChainChange);
-      window.ethereum?.removeListener("accountsChanged", handleAccountsChange);
-    };
-  }, []);
+    if (!walletClient || !isConnected) { setSigner(null); return; }
+    // walletClient is viem — wrap with ethers BrowserProvider via window.ethereum
+    if (typeof window !== "undefined" && window.ethereum) {
+      const provider = new ethers.BrowserProvider(window.ethereum as any);
+      provider.getSigner().then(setSigner).catch(() => setSigner(null));
+    }
+  }, [walletClient, isConnected, chainId]);
+
+  const connect = () => openConnectModal?.();
+  const switchToGalileo = () => switchChain({ chainId: galileo.id });
 
   return (
-    <WalletContext.Provider value={{ signer, address, chainId, isCorrectChain, connect, switchToGalileo, error }}>
+    <WalletContext.Provider value={{
+      signer,
+      address: address ?? null,
+      chainId: chainId ?? null,
+      isCorrectChain,
+      connect,
+      switchToGalileo,
+      error,
+    }}>
       {children}
     </WalletContext.Provider>
   );

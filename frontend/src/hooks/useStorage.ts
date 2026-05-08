@@ -11,8 +11,15 @@ async function post(base64: string): Promise<string> {
   return json.rootHash;
 }
 
+// Safe base64 encoding for large buffers — spread operator blows stack on >1MB
 function toBase64(buffer: ArrayBuffer): string {
-  return btoa(String.fromCharCode(...new Uint8Array(buffer)));
+  const bytes = new Uint8Array(buffer);
+  let binary = "";
+  const chunkSize = 8192;
+  for (let i = 0; i < bytes.length; i += chunkSize) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + chunkSize));
+  }
+  return btoa(binary);
 }
 
 export async function uploadFile(file: File): Promise<string> {

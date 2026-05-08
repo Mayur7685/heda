@@ -1,7 +1,62 @@
-import { useEffect, useState } from "react";
 import { BrowserRouter, Routes, Route, NavLink } from "react-router-dom";
-import { ethers } from "ethers";
+import { ConnectButton } from "@rainbow-me/rainbowkit";
 import { useWallet } from "./hooks/useWallet";
+
+function HedaConnectButton() {
+  return (
+    <ConnectButton.Custom>
+      {({ account, chain, openAccountModal, openChainModal, openConnectModal, mounted }) => {
+        const ready = mounted;
+        const connected = ready && account && chain;
+        const wrongChain = connected && chain.unsupported;
+
+        if (!ready) return null;
+
+        if (!connected) {
+          return (
+            <button className="btn-primary" onClick={openConnectModal} style={{ fontSize: 13 }}>
+              <span className="material-symbols-outlined" style={{ fontSize: 16 }}>account_balance_wallet</span>
+              Connect Wallet
+            </button>
+          );
+        }
+
+        if (wrongChain) {
+          return (
+            <button onClick={openChainModal}
+              style={{ display: "flex", alignItems: "center", gap: 6, padding: "6px 12px", borderRadius: 4, border: "1px solid var(--error)", background: "rgba(147,0,10,0.2)", color: "var(--error)", cursor: "pointer", fontSize: 12, fontWeight: 600 }}>
+              <span className="material-symbols-outlined" style={{ fontSize: 14 }}>warning</span>
+              Switch to Galileo
+            </button>
+          );
+        }
+
+        return (
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            {/* Balance + address pill */}
+            <button onClick={openAccountModal}
+              style={{ display: "flex", alignItems: "center", gap: 8, padding: "5px 12px", background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 4, cursor: "pointer", transition: "border-color 0.15s" }}
+              onMouseEnter={(e) => (e.currentTarget.style.borderColor = "var(--primary)")}
+              onMouseLeave={(e) => (e.currentTarget.style.borderColor = "var(--border)")}>
+              {account.displayBalance && (
+                <>
+                  <span style={{ fontFamily: "'Space Grotesk', monospace", fontSize: 13, color: "var(--primary)", fontWeight: 600 }}>
+                    {account.displayBalance}
+                  </span>
+                  <span style={{ width: 1, height: 14, background: "var(--border)" }} />
+                </>
+              )}
+              <span style={{ fontFamily: "'Space Grotesk', monospace", fontSize: 12, color: "var(--text-2)" }}>
+                {account.displayName}
+              </span>
+              <span className="material-symbols-outlined" style={{ fontSize: 14, color: "var(--text-3)" }}>expand_more</span>
+            </button>
+          </div>
+        );
+      }}
+    </ConnectButton.Custom>
+  );
+}
 import Jobs from "./pages/Jobs";
 import Workspace from "./pages/Workspace";
 import CreateJob from "./pages/CreateJob";
@@ -12,15 +67,7 @@ import Submissions from "./pages/Submissions";
 import DatasetDetail from "./pages/DatasetDetail";
 
 function Header() {
-  const { signer, address, isCorrectChain, connect, switchToGalileo } = useWallet();
-  const [balance, setBalance] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (!signer || !address) return;
-    signer.provider?.getBalance(address).then((b) =>
-      setBalance(parseFloat(ethers.formatEther(b)).toFixed(2))
-    );
-  }, [address]);
+  const { address, isCorrectChain, switchToGalileo } = useWallet();
 
   const navLinks = [
     { to: "/", label: "Jobs" },
@@ -42,22 +89,13 @@ function Header() {
           ))}
         </nav>
       </div>
-
-      <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-        {address && isCorrectChain && balance !== null && (
-          <div className="wallet-pill">
-            <span className="balance">{balance} 0G</span>
-            <span className="divider" />
-            <span className="address">{address.slice(0, 6)}…{address.slice(-4)}</span>
-          </div>
-        )}
-        {!address ? (
-          <button className="btn-primary" onClick={connect}>Connect Wallet</button>
-        ) : !isCorrectChain ? (
-          <button className="btn-primary" onClick={switchToGalileo} style={{ background: "var(--error-bg)", color: "var(--error)" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+        {address && !isCorrectChain && (
+          <button onClick={switchToGalileo} style={{ fontSize: 12, padding: "4px 10px", background: "rgba(147,0,10,0.3)", border: "1px solid var(--error)", color: "var(--error)", borderRadius: 4, cursor: "pointer" }}>
             Switch to Galileo
           </button>
-        ) : null}
+        )}
+        <HedaConnectButton />
       </div>
     </header>
   );

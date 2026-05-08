@@ -83,7 +83,12 @@ export default function CreateJob() {
       const fileContents = await Promise.all(
         files.map(async (f) => {
           const buf = await f.arrayBuffer();
-          return { name: f.name, type: f.type, data: btoa(String.fromCharCode(...new Uint8Array(buf))) };
+          const bytes = new Uint8Array(buf);
+          let binary = "";
+          for (let i = 0; i < bytes.length; i += 8192) {
+            binary += String.fromCharCode(...bytes.subarray(i, i + 8192));
+          }
+          return { name: f.name, type: f.type, data: btoa(binary) };
         })
       );
       const dataRootHash = await uploadBlob(new Blob([JSON.stringify(fileContents)], { type: "application/json" }));
@@ -213,19 +218,42 @@ export default function CreateJob() {
         {/* Step 2: Configure */}
         {step === 2 && (
           <>
-            <h2 style={{ fontSize: 20, fontWeight: 600, marginBottom: 6 }}>Job Configuration</h2>
-            <p style={{ color: "var(--text-2)", fontSize: 14, marginBottom: 24 }}>Define the parameters and rewards for your annotation task.</p>
+            <h2 style={{ fontSize: 20, fontWeight: 600, marginBottom: 6 }}>
+              {dataType === 0 ? "Image Annotation Config" : "Text Annotation Config"}
+            </h2>
+            <p style={{ color: "var(--text-2)", fontSize: 14, marginBottom: 24 }}>
+              {dataType === 0
+                ? "Define what annotators should label and how much they earn per image."
+                : "Define the classification task and output schema for fine-tuning."}
+            </p>
 
             <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+
+              {/* Text: show selected schema as reminder */}
+              {dataType === 1 && (
+                <div style={{ background: "var(--primary-bg)", border: "1px solid rgba(0,228,121,0.3)", borderRadius: 4, padding: "10px 14px", fontSize: 13 }}>
+                  <span className="material-symbols-outlined" style={{ fontSize: 14, marginRight: 6, color: "var(--primary)" }}>schema</span>
+                  <span style={{ color: "var(--primary)", fontWeight: 600 }}>Output schema: {jsonlSchema === "chat" ? "Chat Messages" : jsonlSchema === "instruction" ? "Instruction" : "Text Completion"}</span>
+                  <span style={{ color: "var(--text-2)", marginLeft: 8 }}>— annotator labels will be formatted as {jsonlSchema === "chat" ? '{"messages": [...]}' : jsonlSchema === "instruction" ? '{"instruction": ..., "output": ...}' : '{"text": ...}'}</span>
+                </div>
+              )}
+
               <div>
-                <label className="label-caps" style={{ display: "block", marginBottom: 8 }}>Instructional Prompt</label>
-                <textarea rows={4} placeholder="Label all vehicles in the images using bounding boxes."
+                <label className="label-caps" style={{ display: "block", marginBottom: 8 }}>
+                  {dataType === 0 ? "Annotation Instructions" : "Task Instructions"}
+                </label>
+                <textarea rows={4}
+                  placeholder={dataType === 0
+                    ? "Draw bounding boxes around all vehicles. Label each box: car, truck, or bus."
+                    : "Read each text and classify its sentiment as positive, negative, or neutral."}
                   value={instructions} onChange={(e) => setInstructions(e.target.value)}
                   style={{ resize: "vertical" }} />
               </div>
 
               <div>
-                <label className="label-caps" style={{ display: "block", marginBottom: 8 }}>Target Labels</label>
+                <label className="label-caps" style={{ display: "block", marginBottom: 8 }}>
+                  {dataType === 0 ? "Bounding Box Classes" : "Classification Labels"}
+                </label>
                 <div style={{ display: "flex", flexWrap: "wrap", gap: 6, padding: "8px 12px", background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 4, minHeight: 44 }}>
                   {labels.map((l) => (
                     <span key={l} style={{ display: "inline-flex", alignItems: "center", gap: 4, background: "var(--surface-high)", border: "1px solid var(--border)", borderRadius: 4, padding: "2px 8px", fontSize: 13 }}>
@@ -234,11 +262,17 @@ export default function CreateJob() {
                         style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-3)", fontSize: 14, lineHeight: 1 }}>×</button>
                     </span>
                   ))}
-                  <input type="text" placeholder="Add label…" value={labelInput}
+                  <input type="text"
+                    placeholder={dataType === 0 ? "Add class… (e.g. car)" : "Add label… (e.g. positive)"}
+                    value={labelInput}
                     onChange={(e) => setLabelInput(e.target.value)} onKeyDown={addLabel}
                     style={{ border: "none", background: "transparent", outline: "none", minWidth: 100, padding: "2px 4px", fontSize: 13 }} />
                 </div>
-                <p className="hint" style={{ marginTop: 4 }}>Press Enter to add each label</p>
+                <p className="hint" style={{ marginTop: 4 }}>
+                  {dataType === 0
+                    ? "Press Enter to add each class. Annotators will use these as bbox labels."
+                    : "Press Enter to add each label. Annotators will pick one per text."}
+                </p>
               </div>
 
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
