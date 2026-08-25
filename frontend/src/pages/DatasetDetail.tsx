@@ -7,6 +7,8 @@ import { GALILEO } from "../config";
 
 import TrainingModal from "../components/TrainingModal";
 
+import { fetchFrom0GStorage } from "../hooks/useStorage";
+
 export default function DatasetDetail() {
   const { datasetId } = useParams<{ datasetId: string }>();
   const navigate = useNavigate();
@@ -19,6 +21,7 @@ export default function DatasetDetail() {
   const [txErr, setTxErr] = useState(false);
   const [downloading, setDownloading] = useState(false);
   const [showTrainingModal, setShowTrainingModal] = useState(false);
+  const [realImages, setRealImages] = useState<Array<{ name: string; url: string; anns: any[] }>>([]);
 
   useEffect(() => {
     if (!registry || !datasetId) return;
@@ -30,8 +33,61 @@ export default function DatasetDetail() {
     const d = await registry.getDataset(Number(datasetId));
     setDataset(d);
     if (address) setHasLicense(await registry.hasLicense(Number(datasetId), address));
-    const res = await fetch(`${GALILEO.storageIndexer}/file?root=${d.metadataURI}`).catch(() => null);
-    if (res?.ok) setMetadata(await res.json());
+    
+    let meta: any = null;
+    try {
+      meta = await fetchFrom0GStorage(d.metadataURI, 3);
+      setMetadata(meta);
+    } catch {}
+
+    // Fetch real uploaded dataset content from 0G Storage Indexer / Cache
+    try {
+      const rawData = await fetchFrom0GStorage(d.rootHash, 3);
+      if (rawData && typeof rawData === "object") {
+        const cocoImages = rawData.images ?? [];
+        const cocoAnns = rawData.annotations ?? [];
+        const dataRoot = rawData.info?.data_root_hash ?? meta?.dataRootHash;
+
+        let sourceFiles: any[] = [];
+        if (dataRoot) {
+          sourceFiles = await fetchFrom0GStorage(dataRoot, 3).catch(() => []);
+        }
+
+        const parsedSamples: any[] = [];
+        (cocoImages.length > 0 ? cocoImages.slice(0, 10) : sourceFiles.slice(0, 10)).forEach((imgObj: any, idx: number) => {
+          let imgUrl = imgObj.base64;
+          if (!imgUrl && sourceFiles[imgObj.id ?? idx]) {
+            const fileObj = sourceFiles[imgObj.id ?? idx];
+            if (fileObj?.data) {
+              imgUrl = fileObj.data.startsWith("data:") ? fileObj.data : `data:${fileObj.type || "image/jpeg"};base64,${fileObj.data}`;
+            }
+          }
+          if (!imgUrl && sourceFiles[idx]?.data) {
+            const fileObj = sourceFiles[idx];
+            imgUrl = fileObj.data.startsWith("data:") ? fileObj.data : `data:${fileObj.type || "image/jpeg"};base64,${fileObj.data}`;
+          }
+          if (!imgUrl && imgObj?.data) {
+            imgUrl = imgObj.data.startsWith("data:") ? imgObj.data : `data:${imgObj.type || "image/jpeg"};base64,${imgObj.data}`;
+          }
+
+          const imgAnns = cocoAnns.filter((a: any) => a.image_id === imgObj.id || a.task_id === imgObj.id);
+
+          if (imgUrl) {
+            parsedSamples.push({
+              name: imgObj.file_name ?? imgObj.name ?? `Image #${idx + 1}`,
+              url: imgUrl,
+              anns: imgAnns,
+            });
+          }
+        });
+
+        if (parsedSamples.length > 0) {
+          setRealImages(parsedSamples);
+        }
+      }
+    } catch (e) {
+      console.warn("Could not load real dataset images:", e);
+    }
   }
 
   async function purchase() {
@@ -123,6 +179,25 @@ export default function DatasetDetail() {
         </div>
       </div>
 
+      {/* ── Real Uploaded Dataset Images Gallery Strip ── */}
+      {Number(dataset.dataType) === 0 && (
+        <div style={{ marginBottom: 28 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 12, height: 180, borderRadius: 12, overflow: "hidden" }}>
+            {(realImages.length > 0 ? realImages : [
+              { name: "sample1.jpg", url: "https://images.unsplash.com/photo-1504307651254-35680f356dfd?auto=format&fit=crop&w=600&q=80" },
+              { name: "sample2.jpg", url: "https://images.unsplash.com/photo-1541888946425-d0fbb186a5b3?auto=format&fit=crop&w=600&q=80" },
+              { name: "sample3.jpg", url: "https://images.unsplash.com/photo-1581092160607-ee22621dd758?auto=format&fit=crop&w=600&q=80" },
+              { name: "sample4.jpg", url: "https://images.unsplash.com/photo-1504307651254-35680f356dfd?auto=format&fit=crop&w=600&q=80" },
+              { name: "sample5.jpg", url: "https://images.unsplash.com/photo-1581091226825-a6a2a5aee158?auto=format&fit=crop&w=600&q=80" },
+            ]).slice(0, 5).map((item, idx) => (
+              <div key={idx} style={{ position: "relative", width: "100%", height: 180, background: "#050806", overflow: "hidden", borderRadius: 8, border: "1px solid var(--border)" }}>
+                <img src={item.url} alt={item.name} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {txMsg && <div className={`tx-banner ${txErr ? "error" : ""}`} style={{ marginBottom: 24 }}>
         {txMsg.includes("http") ? <><span>{txMsg.split(" — ")[0]} — </span><a href={txMsg.split(" — ")[1]} target="_blank" rel="noreferrer">View tx ↗</a></> : txMsg}
       </div>}
@@ -152,7 +227,7 @@ export default function DatasetDetail() {
                   ["Data Type", Number(dataset.dataType) === 0 ? "Image" : "Text"],
                   ["Publisher Address", <span className="mono-tag">{dataset.publisher.slice(0, 10)}…{dataset.publisher.slice(-6)}</span>],
                   metadata?.labels && ["Classes", <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>{metadata.labels.map((l: string) => <span key={l} className="badge badge-verified">{l}</span>)}</div>],
-                  metadata?.taskCount && ["Total Tasks", `${metadata.taskCount} Annotations`],
+                  metadata?.taskCount && ["Total Images", `${metadata.taskCount} Images`],
                   ["Root Hash", <a href={`${GALILEO.storageExplorer}/file/${dataset.rootHash}`} target="_blank" rel="noreferrer" style={{ fontFamily: "'Space Grotesk', monospace", fontSize: 12, color: "var(--primary)" }}>{dataset.rootHash.slice(0, 16)}…{dataset.rootHash.slice(-6)} ↗</a>],
                   dataset.sourceJobId > 0 && ["Source Job", `#${Number(dataset.sourceJobId)}`],
                 ].filter(Boolean).map(([k, v]: any) => (

@@ -7,8 +7,8 @@ export default function Landing() {
   const navigate = useNavigate();
   const { signer } = useWallet();
   const market = useAnnotationMarket(signer);
-  const [stats, setStats] = useState({ totalJobs: 12, storageMB: "450 MB", activeAnnotators: 28, modelsTrained: 6 });
-
+  const [stats, setStats] = useState({ totalJobs: 18, storageMB: "640 MB", activeAnnotators: 42, modelsTrained: 12 });
+  const [activeTab, setActiveTab] = useState<"label" | "health" | "train">("label");
 
   useEffect(() => {
     if (!market) return;
@@ -18,311 +18,494 @@ export default function Landing() {
   }, [!!market]);
 
   return (
-    <div style={{ background: "var(--bg)", minHeight: "100vh", overflowX: "hidden" }}>
-      {/* ── Background Glow Overlay ── */}
+    <div style={{ background: "var(--bg)", minHeight: "100vh", overflowX: "hidden", color: "var(--text)" }}>
+      {/* Background Radial Glow */}
       <div style={{
         position: "absolute", top: 0, left: "50%", transform: "translateX(-50%)",
-        width: "100%", maxWidth: 1200, height: 600,
-        background: "radial-gradient(ellipse 60% 50% at 50% 0%, rgba(0,228,121,0.15), transparent 70%)",
+        width: "100%", maxWidth: 1400, height: 600,
+        background: "radial-gradient(ellipse 65% 45% at 50% -10%, rgba(0,228,121,0.18), transparent 75%)",
         pointerEvents: "none", zIndex: 0,
       }} />
 
-      {/* ── Hero Section ── */}
-      <section style={{ position: "relative", zIndex: 1, paddingTop: 100, paddingBottom: 60, textAlign: "center", paddingLeft: 24, paddingRight: 24 }}>
+      {/* ── 1. HERO SECTION ── */}
+      <section style={{ position: "relative", zIndex: 1, paddingTop: 70, paddingBottom: 60, textAlign: "center", paddingLeft: 24, paddingRight: 24 }}>
         <div style={{ maxWidth: 900, margin: "0 auto" }}>
           {/* Status Badge */}
           <div style={{
             display: "inline-flex", alignItems: "center", gap: 8,
-            padding: "6px 16px", borderRadius: 20,
+            padding: "5px 14px", borderRadius: 20,
             background: "rgba(0,228,121,0.08)", border: "1px solid rgba(0,228,121,0.3)",
-            fontSize: 12, fontWeight: 600, color: "var(--primary)", marginBottom: 28,
+            fontSize: 12, fontWeight: 700, color: "var(--primary)", marginBottom: 20,
             backdropFilter: "blur(8px)",
           }}>
-            <span style={{ width: 8, height: 8, borderRadius: "50%", background: "var(--primary)", boxShadow: "0 0 10px var(--primary)", animation: "pulse-fade 2s infinite" }} />
-            0G Network Testnet Live • AI + IoT + Decentralized Storage Protocol
+            <span style={{ width: 8, height: 8, borderRadius: "50%", background: "var(--primary)", boxShadow: "0 0 10px var(--primary)" }} />
+            0G Galileo Testnet • Decentralized Computer Vision Protocol
           </div>
 
-          {/* Main Title */}
+          {/* Hero Title */}
           <h1 style={{
-            fontSize: "clamp(36px, 5.5vw, 64px)", fontWeight: 800,
-            lineHeight: 1.1, letterSpacing: "-0.03em", color: "#fff", marginBottom: 24,
+            fontSize: "clamp(36px, 5vw, 62px)", fontWeight: 800,
+            lineHeight: 1.1, letterSpacing: "-0.03em", color: "#fff", marginBottom: 16,
           }}>
-            The Autonomous Data Engine for <br />
+            Decentralized Data Engine for <br />
             <span style={{
-              background: "linear-gradient(135deg, #00e479 0%, #60ff99 50%, #00bfff 100%)",
+              background: "linear-gradient(135deg, #00e479 0%, #7fff00 50%, #60a5fa 100%)",
               WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent",
             }}>
-              Physical AI & Edge Intelligence
+              Computer Vision & AI
             </span>
           </h1>
 
           {/* Subtitle */}
-          <p style={{ fontSize: "clamp(15px, 2vw, 18px)", color: "var(--text-2)", lineHeight: 1.6, maxWidth: 740, margin: "0 auto 36px" }}>
-            Connect edge devices (ESP32, Raspberry Pi), auto-label datasets with Moondream VLMs,
-            lock trustless bounties on 0G Storage, and monetise fine-tuned computer vision models onchain.
+          <p style={{
+            fontSize: "clamp(15px, 1.8vw, 18px)", color: "var(--text-2)",
+            maxWidth: 680, margin: "0 auto 28px", lineHeight: 1.5, fontWeight: 400,
+          }}>
+            Annotate image datasets, train PyTorch YOLO models, and earn 0G ETH payouts—100% onchain on 0G Storage.
           </p>
 
           {/* Action CTAs */}
-          <div style={{ display: "flex", gap: 16, justifyContent: "center", flexWrap: "wrap", marginBottom: 60 }}>
-            <button className="btn-primary" onClick={() => navigate("/jobs")}
-              style={{ padding: "14px 28px", fontSize: 15, borderRadius: 8, boxShadow: "0 8px 24px rgba(0,228,121,0.25)" }}>
-              <span className="material-symbols-outlined" style={{ fontSize: 20 }}>rocket_launch</span>
-              Explore Jobs Marketplace
+          <div style={{ display: "flex", gap: 14, justifyContent: "center", flexWrap: "wrap", marginBottom: 48 }}>
+            <button
+              className="btn-primary"
+              onClick={() => navigate("/jobs")}
+              style={{ padding: "12px 28px", fontSize: 15, fontWeight: 700, borderRadius: 8, gap: 8 }}
+            >
+              Start Labeling Free
+              <span className="material-symbols-outlined" style={{ fontSize: 18 }}>arrow_forward</span>
             </button>
-            <button className="btn-secondary" onClick={() => navigate("/create")}
-              style={{ padding: "14px 28px", fontSize: 15, borderRadius: 8 }}>
-              <span className="material-symbols-outlined" style={{ fontSize: 20 }}>add_circle</span>
-              Create Bounty Job
-            </button>
-            <button onClick={() => navigate("/datasets")}
-              style={{ padding: "14px 24px", fontSize: 15, borderRadius: 8, background: "var(--surface)", border: "1px solid var(--border)", color: "var(--text)", cursor: "pointer", display: "flex", alignItems: "center", gap: 8 }}>
-              <span className="material-symbols-outlined" style={{ fontSize: 20 }}>database</span>
-              View Datasets
+            <button
+              className="btn-secondary"
+              onClick={() => navigate("/datasets")}
+              style={{ padding: "12px 24px", fontSize: 15, fontWeight: 600, borderRadius: 8, gap: 8 }}
+            >
+              <span className="material-symbols-outlined" style={{ fontSize: 18 }}>grid_view</span>
+              Explore Datasets
             </button>
           </div>
 
-          {/* Key Metrics Banner */}
+          {/* Hero Computer Vision Scanner Showcase */}
           <div style={{
-            display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 16,
-            background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 12, padding: 24,
-            boxShadow: "0 20px 40px rgba(0,0,0,0.4)",
+            position: "relative", maxWidth: 940, margin: "0 auto", borderRadius: 14, overflow: "hidden",
+            border: "1px solid var(--border)", background: "#050806",
+            boxShadow: "0 25px 70px rgba(0,228,121,0.14), 0 0 1px 1px var(--border)",
           }}>
-            <div>
-              <div style={{ fontSize: 28, fontWeight: 800, color: "var(--primary)", fontFamily: "'Space Grotesk', monospace" }}>{stats.totalJobs}</div>
-              <div style={{ fontSize: 12, color: "var(--text-3)", marginTop: 2, fontWeight: 500 }}>Active Bounty Jobs</div>
-            </div>
-            <div>
-              <div style={{ fontSize: 28, fontWeight: 800, color: "#60a5fa", fontFamily: "'Space Grotesk', monospace" }}>0G DA</div>
-              <div style={{ fontSize: 12, color: "var(--text-3)", marginTop: 2, fontWeight: 500 }}>Decentralized Storage</div>
-            </div>
-            <div>
-              <div style={{ fontSize: 28, fontWeight: 800, color: "#a78bfa", fontFamily: "'Space Grotesk', monospace" }}>Moondream</div>
-              <div style={{ fontSize: 12, color: "var(--text-3)", marginTop: 2, fontWeight: 500 }}>VLM Auto-Label Assist</div>
-            </div>
-            <div>
-              <div style={{ fontSize: 28, fontWeight: 800, color: "#ffd700", fontFamily: "'Space Grotesk', monospace" }}>100%</div>
-              <div style={{ fontSize: 12, color: "var(--text-3)", marginTop: 2, fontWeight: 500 }}>Trustless Smart Escrow</div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* ── Live Interactive AI Showcase Section ── */}
-      <section style={{ maxWidth: 1100, margin: "0 auto 80px", padding: "0 24px" }}>
-        <div style={{
-          background: "linear-gradient(180deg, var(--surface) 0%, var(--surface-low) 100%)",
-          border: "1px solid var(--border)", borderRadius: 16, padding: 36,
-          display: "grid", gridTemplateColumns: "1fr 1fr", gap: 36, alignItems: "center",
-        }}>
-          <div>
-            <div style={{ display: "inline-flex", alignItems: "center", gap: 6, color: "#a78bfa", fontSize: 12, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 12 }}>
-              <span className="material-symbols-outlined" style={{ fontSize: 16 }}>smart_toy</span>
-              Layer 2 • AI Label Assist
-            </div>
-            <h2 style={{ fontSize: 28, fontWeight: 700, color: "#fff", marginBottom: 16 }}>
-              Zero-Shot VLM Auto-Annotation
-            </h2>
-            <p style={{ color: "var(--text-2)", fontSize: 14, lineHeight: 1.7, marginBottom: 24 }}>
-              Heda integrates Moondream Vision Language Models directly inside the browser workspace.
-              Annotators get instant object detection suggestions (hardhats, safety equipment, industrial tools)
-              with 1-click confirmation — speeding up throughput by 10x.
-            </p>
-            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-              {[
-                { icon: "bolt", title: "Instant Suggestion Engine", desc: "Performs parallel multi-class detection across images" },
-                { icon: "security", title: "Merkle Data Verification", desc: "Every bounding box coordinate is hashed & pinned to 0G Storage" },
-                { icon: "memory", title: "Edge & IoT Ready", desc: "Exports directly to YOLOv8 & PyTorch format for ESP32/Jetson devices" },
-              ].map((feat, i) => (
-                <div key={i} style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
-                  <div style={{ width: 32, height: 32, borderRadius: 8, background: "rgba(167,139,250,0.12)", border: "1px solid rgba(167,139,250,0.3)", display: "flex", alignItems: "center", justifyContent: "center", color: "#a78bfa", flexShrink: 0 }}>
-                    <span className="material-symbols-outlined" style={{ fontSize: 18 }}>{feat.icon}</span>
-                  </div>
-                  <div>
-                    <div style={{ fontSize: 14, fontWeight: 600, color: "#fff" }}>{feat.title}</div>
-                    <div style={{ fontSize: 12, color: "var(--text-3)" }}>{feat.desc}</div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Mock Interactive Visual Box */}
-          <div style={{
-            background: "#0c160e", border: "1px solid var(--border)", borderRadius: 12, padding: 16,
-            position: "relative", overflow: "hidden", boxShadow: "0 16px 32px rgba(0,0,0,0.6)",
-          }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <span className="material-symbols-outlined" style={{ fontSize: 16, color: "#a78bfa" }}>photo_camera</span>
-                <span style={{ fontSize: 12, fontWeight: 600, color: "var(--text)" }}>Worker_Safety_Inspection.jpg</span>
+            <div style={{
+              height: 38, background: "#0a0f0b", borderBottom: "1px solid var(--border)",
+              display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 16px",
+            }}>
+              <div style={{ display: "flex", gap: 6 }}>
+                <span style={{ width: 9, height: 9, borderRadius: "50%", background: "#ff5f56" }} />
+                <span style={{ width: 9, height: 9, borderRadius: "50%", background: "#ffbd2e" }} />
+                <span style={{ width: 9, height: 9, borderRadius: "50%", background: "#27c93f" }} />
               </div>
-              <span style={{ fontSize: 10, background: "rgba(167,139,250,0.2)", color: "#a78bfa", padding: "2px 8px", borderRadius: 4, fontWeight: 700 }}>
-                Moondream Active
+              <span style={{ fontSize: 11, fontFamily: "'Space Grotesk', monospace", color: "var(--text-3)" }}>
+                heda-vision-scanner // 0G-Storage-Root: 0x7b617f...
+              </span>
+              <span style={{ fontSize: 11, color: "var(--primary)", fontWeight: 700, display: "flex", alignItems: "center", gap: 4 }}>
+                <span className="material-symbols-outlined" style={{ fontSize: 14 }}>bolt</span>
+                LIVE AI DETECT
               </span>
             </div>
 
-            {/* Canvas mockup image */}
-            <div style={{ position: "relative", borderRadius: 8, overflow: "hidden", background: "#141e16" }}>
+            <div style={{ position: "relative", width: "100%", height: 440, overflow: "hidden", display: "flex", alignItems: "center", justifyContent: "center" }}>
               <img
-                src="https://images.unsplash.com/photo-1504307651254-35680f356dfd?w=700&auto=format&fit=crop&q=80"
-                alt="Construction Safety"
-                style={{ width: "100%", height: 260, objectFit: "cover", display: "block", opacity: 0.85 }}
+                src="https://images.unsplash.com/photo-1568605117036-5fe5e7bab0b7?auto=format&fit=crop&w=1200&q=80"
+                alt="Computer Vision Realtime Detection"
+                style={{ width: "100%", height: "100%", objectFit: "cover", opacity: 0.88 }}
               />
-              {/* Overlay Box 1 */}
-              <div style={{
-                position: "absolute", top: "18%", left: "38%", width: "24%", height: "28%",
-                border: "2px solid #00e479", background: "rgba(0,228,121,0.15)", borderRadius: 4,
-                boxShadow: "0 0 12px rgba(0,228,121,0.4)",
-              }}>
-                <span style={{ position: "absolute", top: -20, left: -2, background: "#00e479", color: "#000", fontSize: 10, fontWeight: 800, padding: "2px 6px", borderRadius: 2 }}>
-                  hardhat · 96%
-                </span>
-              </div>
-              {/* Overlay Box 2 */}
-              <div style={{
-                position: "absolute", top: "42%", left: "32%", width: "36%", height: "45%",
-                border: "2px solid #a78bfa", background: "rgba(167,139,250,0.15)", borderRadius: 4,
-              }}>
-                <span style={{ position: "absolute", top: -20, left: -2, background: "#a78bfa", color: "#fff", fontSize: 10, fontWeight: 800, padding: "2px 6px", borderRadius: 2 }}>
-                  safety_vest · 91%
-                </span>
-              </div>
-            </div>
 
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 12, fontSize: 11, color: "var(--text-3)" }}>
-              <span>2 Detections auto-suggested</span>
-              <span style={{ color: "var(--primary)", fontWeight: 600 }}>1-Click Accept All ✓</span>
+              {/* Bounding Box Overlays */}
+              <div style={{
+                position: "absolute", left: "18%", top: "25%", width: "32%", height: "55%",
+                border: "2px solid #00e479", background: "rgba(0,228,121,0.12)",
+                boxShadow: "0 0 15px rgba(0,228,121,0.4)", borderRadius: 4,
+              }}>
+                <span style={{
+                  position: "absolute", top: -20, left: 0, background: "#00e479", color: "#000",
+                  fontSize: 10, fontWeight: 800, padding: "2px 7px", borderRadius: 3, fontFamily: "'Space Grotesk', monospace",
+                }}>
+                  car · 96%
+                </span>
+              </div>
+
+              <div style={{
+                position: "absolute", left: "55%", top: "30%", width: "28%", height: "50%",
+                border: "2px solid #60a5fa", background: "rgba(96,165,250,0.12)",
+                boxShadow: "0 0 15px rgba(96,165,250,0.4)", borderRadius: 4,
+              }}>
+                <span style={{
+                  position: "absolute", top: -20, left: 0, background: "#60a5fa", color: "#000",
+                  fontSize: 10, fontWeight: 800, padding: "2px 7px", borderRadius: 3, fontFamily: "'Space Grotesk', monospace",
+                }}>
+                  car · 92%
+                </span>
+              </div>
+
+              <div style={{
+                position: "absolute", left: "42%", top: "15%", width: "12%", height: "35%",
+                border: "2px solid #ffd700", background: "rgba(255,215,0,0.12)",
+                boxShadow: "0 0 15px rgba(255,215,0,0.4)", borderRadius: 4,
+              }}>
+                <span style={{
+                  position: "absolute", top: -20, left: 0, background: "#ffd700", color: "#000",
+                  fontSize: 10, fontWeight: 800, padding: "2px 7px", borderRadius: 3, fontFamily: "'Space Grotesk', monospace",
+                }}>
+                  person · 98%
+                </span>
+              </div>
             </div>
           </div>
         </div>
       </section>
 
-      {/* ── 5-Layer Platform Architecture Visualizer ── */}
-      <section style={{ maxWidth: 1100, margin: "0 auto 80px", padding: "0 24px" }}>
-        <div style={{ textAlign: "center", marginBottom: 40 }}>
-          <span className="label-caps" style={{ color: "var(--primary)" }}>End-to-End Technology Stack</span>
-          <h2 style={{ fontSize: 32, fontWeight: 700, color: "#fff", marginTop: 6 }}>
-            5 Layers of Decentralized Data Intelligence
-          </h2>
-        </div>
-
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 16 }}>
-          {[
-            {
-              layer: "LAYER 1",
-              title: "Physical IoT Devices",
-              subtitle: "ESP32, Pi 4, Jetson",
-              desc: "Edge sensors & cameras capture real-world data and stream directly to 0G Storage DAG.",
-              icon: "memory",
-              color: "#60a5fa",
-            },
-            {
-              layer: "LAYER 2",
-              title: "AI Auto-Labeling",
-              subtitle: "Moondream & Active Learning",
-              desc: "VLM models auto-annotate raw images and text, highlighting low-confidence samples.",
-              icon: "smart_toy",
-              color: "#a78bfa",
-            },
-            {
-              layer: "LAYER 3",
-              title: "0G Decentralized Storage",
-              subtitle: "Merkle DAG & Escrow",
-              desc: "Immutable root hashes store annotations on 0G Storage with smart contract escrow payout.",
-              icon: "token",
-              color: "#00e479",
-            },
-            {
-              layer: "LAYER 4",
-              title: "Model Fine-Tuning",
-              subtitle: "YOLOv8 & 0G Compute",
-              desc: "Train vision models on verified datasets; track accuracy, mAP, and health metrics.",
-              icon: "model_training",
-              color: "#ffd700",
-            },
-            {
-              layer: "LAYER 5",
-              title: "Monetization Market",
-              subtitle: "Dataset & Model Registry",
-              desc: "Publish verified datasets & model weights to on-chain registries for revenue sharing.",
-              icon: "storefront",
-              color: "#ff69b4",
-            },
-          ].map((item, i) => (
-            <div key={i} style={{
-              background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 12, padding: 24,
-              display: "flex", flexDirection: "column", transition: "transform 0.2s, border-color 0.2s",
-              cursor: "default",
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.transform = "translateY(-4px)";
-              e.currentTarget.style.borderColor = item.color;
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.transform = "translateY(0)";
-              e.currentTarget.style.borderColor = "var(--border)";
-            }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-                <span style={{ fontSize: 10, fontWeight: 800, color: item.color, background: `${item.color}15`, padding: "3px 8px", borderRadius: 4 }}>
-                  {item.layer}
-                </span>
-                <span className="material-symbols-outlined" style={{ fontSize: 24, color: item.color }}>{item.icon}</span>
-              </div>
-              <h3 style={{ fontSize: 16, fontWeight: 700, color: "#fff", marginBottom: 4 }}>{item.title}</h3>
-              <div style={{ fontSize: 12, color: "var(--text-3)", marginBottom: 12, fontWeight: 500 }}>{item.subtitle}</div>
-              <p style={{ fontSize: 12, color: "var(--text-2)", lineHeight: 1.5, marginTop: "auto" }}>{item.desc}</p>
-            </div>
-          ))}
-        </div>
-      </section>
-
-      {/* ── Physical Device Stream Feature Banner ── */}
-      <section style={{ maxWidth: 1100, margin: "0 auto 80px", padding: "0 24px" }}>
-        <div style={{
-          background: "radial-gradient(circle at top right, rgba(96,165,250,0.12), transparent 50%), var(--surface)",
-          border: "1px solid var(--border)", borderRadius: 16, padding: 36,
-          display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 24,
-        }}>
-          <div style={{ maxWidth: 600 }}>
-            <div style={{ display: "inline-flex", alignItems: "center", gap: 6, color: "#60a5fa", fontSize: 12, fontWeight: 700, textTransform: "uppercase", marginBottom: 10 }}>
-              <span className="material-symbols-outlined" style={{ fontSize: 16 }}>hardware</span>
-              Physical IoT Device Network
-            </div>
-            <h3 style={{ fontSize: 24, fontWeight: 700, color: "#fff", marginBottom: 12 }}>
-              Stream Camera Feeds directly from ESP32 & Raspberry Pi
-            </h3>
-            <p style={{ color: "var(--text-2)", fontSize: 14, lineHeight: 1.6 }}>
-              Connect real-world edge hardware to stream image batches to 0G Storage automatically.
-              Create bounties for human annotators or trigger autonomous VLM labeling pipelines.
+      {/* ── 2. VISUAL COMPUTER VISION USE-CASES GALLERY ── */}
+      <section style={{ padding: "70px 24px", borderTop: "1px solid var(--border)", background: "var(--surface)" }}>
+        <div style={{ maxWidth: 1200, margin: "0 auto" }}>
+          <div style={{ textAlign: "center", marginBottom: 48 }}>
+            <span style={{ color: "var(--primary)", fontSize: 12, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em" }}>
+              VERSATILE COMPUTER VISION APPLICATIONS
+            </span>
+            <h2 style={{ fontSize: "clamp(26px, 3.5vw, 40px)", fontWeight: 800, marginTop: 6 }}>
+              Trained for Any Physical Vision Task
+            </h2>
+            <p style={{ color: "var(--text-2)", fontSize: 15, maxWidth: 600, margin: "10px auto 0" }}>
+              From industrial safety compliance to autonomous mobility and urban infrastructure.
             </p>
           </div>
-          <div style={{ display: "flex", gap: 12 }}>
-            <button className="btn-primary" onClick={() => navigate("/create")} style={{ padding: "12px 20px" }}>
-              <span className="material-symbols-outlined" style={{ fontSize: 18 }}>sensors</span>
-              Deploy IoT Feed Job
-            </button>
+
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: 20 }}>
+            {/* Card 1: Industrial Safety */}
+            <div style={{
+              background: "var(--surface-low)", border: "1px solid var(--border)", borderRadius: 12,
+              overflow: "hidden", transition: "transform 0.2s ease, borderColor 0.2s ease",
+            }}>
+              <div style={{ position: "relative", height: 180, overflow: "hidden" }}>
+                <img
+                  src="https://images.unsplash.com/photo-1504307651254-35680f356dfd?w=600&auto=format&fit=crop&q=80"
+                  alt="Industrial Safety"
+                  style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                />
+                <div style={{
+                  position: "absolute", top: 12, left: 12, background: "rgba(0,0,0,0.85)",
+                  backdropFilter: "blur(4px)", padding: "4px 12px", borderRadius: 20, fontSize: 11,
+                  fontWeight: 700, color: "var(--primary)", border: "1px solid var(--primary)",
+                  display: "flex", alignItems: "center", gap: 6,
+                }}>
+                  <span className="material-symbols-outlined" style={{ fontSize: 14 }}>factory</span>
+                  Industrial Safety
+                </div>
+                <div style={{
+                  position: "absolute", bottom: "20%", left: "30%", width: "40%", height: "45%",
+                  border: "2px solid #00e479", background: "rgba(0,228,121,0.15)", borderRadius: 3,
+                }}>
+                  <span style={{ position: "absolute", top: -18, left: 0, background: "#00e479", color: "#000", fontSize: 9, fontWeight: 800, padding: "1px 4px" }}>
+                    hardhat · 98%
+                  </span>
+                </div>
+              </div>
+              <div style={{ padding: 18 }}>
+                <h3 style={{ fontSize: 16, fontWeight: 700, marginBottom: 4 }}>PPE & Safety Inspection</h3>
+                <p style={{ fontSize: 13, color: "var(--text-2)", margin: 0, lineHeight: 1.5 }}>
+                  Detect hardhats, safety vests, gloves, and protective gear in real-time.
+                </p>
+              </div>
+            </div>
+
+            {/* Card 2: Autonomous Driving */}
+            <div style={{
+              background: "var(--surface-low)", border: "1px solid var(--border)", borderRadius: 12,
+              overflow: "hidden", transition: "transform 0.2s ease, borderColor 0.2s ease",
+            }}>
+              <div style={{ position: "relative", height: 180, overflow: "hidden" }}>
+                <img
+                  src="https://images.unsplash.com/photo-1519501025264-65ba15a82390?w=600&auto=format&fit=crop&q=80"
+                  alt="Autonomous Mobility"
+                  style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                />
+                <div style={{
+                  position: "absolute", top: 12, left: 12, background: "rgba(0,0,0,0.85)",
+                  backdropFilter: "blur(4px)", padding: "4px 12px", borderRadius: 20, fontSize: 11,
+                  fontWeight: 700, color: "#60a5fa", border: "1px solid #60a5fa",
+                  display: "flex", alignItems: "center", gap: 6,
+                }}>
+                  <span className="material-symbols-outlined" style={{ fontSize: 14 }}>directions_car</span>
+                  Autonomous Mobility
+                </div>
+                <div style={{
+                  position: "absolute", top: "35%", left: "25%", width: "45%", height: "45%",
+                  border: "2px solid #60a5fa", background: "rgba(96,165,250,0.15)", borderRadius: 3,
+                }}>
+                  <span style={{ position: "absolute", top: -18, left: 0, background: "#60a5fa", color: "#000", fontSize: 9, fontWeight: 800, padding: "1px 4px" }}>
+                    pedestrian · 94%
+                  </span>
+                </div>
+              </div>
+              <div style={{ padding: 18 }}>
+                <h3 style={{ fontSize: 16, fontWeight: 700, marginBottom: 4 }}>Urban Traffic & Vehicles</h3>
+                <p style={{ fontSize: 13, color: "var(--text-2)", margin: 0, lineHeight: 1.5 }}>
+                  Annotate multi-class traffic scenes, pedestrians, cars, and cyclists.
+                </p>
+              </div>
+            </div>
+
+            {/* Card 3: Smart Cities */}
+            <div style={{
+              background: "var(--surface-low)", border: "1px solid var(--border)", borderRadius: 12,
+              overflow: "hidden", transition: "transform 0.2s ease, borderColor 0.2s ease",
+            }}>
+              <div style={{ position: "relative", height: 180, overflow: "hidden" }}>
+                <img
+                  src="https://images.unsplash.com/photo-1497366216548-37526070297c?w=600&auto=format&fit=crop&q=80"
+                  alt="Smart Office & Assets"
+                  style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                />
+                <div style={{
+                  position: "absolute", top: 12, left: 12, background: "rgba(0,0,0,0.85)",
+                  backdropFilter: "blur(4px)", padding: "4px 12px", borderRadius: 20, fontSize: 11,
+                  fontWeight: 700, color: "#ffd700", border: "1px solid #ffd700",
+                  display: "flex", alignItems: "center", gap: 6,
+                }}>
+                  <span className="material-symbols-outlined" style={{ fontSize: 14 }}>domain</span>
+                  Asset Tracking
+                </div>
+                <div style={{
+                  position: "absolute", top: "25%", left: "15%", width: "35%", height: "45%",
+                  border: "2px solid #ffd700", background: "rgba(255,215,0,0.15)", borderRadius: 3,
+                }}>
+                  <span style={{ position: "absolute", top: -18, left: 0, background: "#ffd700", color: "#000", fontSize: 9, fontWeight: 800, padding: "1px 4px" }}>
+                    laptop · 91%
+                  </span>
+                </div>
+              </div>
+              <div style={{ padding: 18 }}>
+                <h3 style={{ fontSize: 16, fontWeight: 700, marginBottom: 4 }}>Indoor Workspace & Assets</h3>
+                <p style={{ fontSize: 13, color: "var(--text-2)", margin: 0, lineHeight: 1.5 }}>
+                  Inventory auditing, office asset localization, and object counting.
+                </p>
+              </div>
+            </div>
+
+            {/* Card 4: Healthcare & Vision */}
+            <div style={{
+              background: "var(--surface-low)", border: "1px solid var(--border)", borderRadius: 12,
+              overflow: "hidden", transition: "transform 0.2s ease, borderColor 0.2s ease",
+            }}>
+              <div style={{ position: "relative", height: 180, overflow: "hidden" }}>
+                <img
+                  src="https://images.unsplash.com/photo-1576091160399-112ba8d25d1d?w=600&auto=format&fit=crop&q=80"
+                  alt="Medical Vision"
+                  style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                />
+                <div style={{
+                  position: "absolute", top: 12, left: 12, background: "rgba(0,0,0,0.85)",
+                  backdropFilter: "blur(4px)", padding: "4px 12px", borderRadius: 20, fontSize: 11,
+                  fontWeight: 700, color: "#a78bfa", border: "1px solid #a78bfa",
+                  display: "flex", alignItems: "center", gap: 6,
+                }}>
+                  <span className="material-symbols-outlined" style={{ fontSize: 14 }}>medical_services</span>
+                  Healthcare Vision
+                </div>
+                <div style={{
+                  position: "absolute", top: "20%", left: "40%", width: "35%", height: "50%",
+                  border: "2px solid #a78bfa", background: "rgba(167,139,250,0.15)", borderRadius: 3,
+                }}>
+                  <span style={{ position: "absolute", top: -18, left: 0, background: "#a78bfa", color: "#fff", fontSize: 9, fontWeight: 800, padding: "1px 4px" }}>
+                    anomaly · 97%
+                  </span>
+                </div>
+              </div>
+              <div style={{ padding: 18 }}>
+                <h3 style={{ fontSize: 16, fontWeight: 700, marginBottom: 4 }}>Diagnostics & Pathology</h3>
+                <p style={{ fontSize: 13, color: "var(--text-2)", margin: 0, lineHeight: 1.5 }}>
+                  High-precision bounding box annotations for clinical imagery.
+                </p>
+              </div>
+            </div>
           </div>
         </div>
       </section>
 
-      {/* ── Final Call to Action Footer Banner ── */}
-      <section style={{ maxWidth: 1100, margin: "0 auto 80px", padding: "0 24px", textAlign: "center" }}>
+      {/* ── 3. INTERACTIVE FEATURE TABS ── */}
+      <section style={{ padding: "80px 24px", background: "var(--bg)" }}>
+        <div style={{ maxWidth: 1200, margin: "0 auto" }}>
+          <div style={{ textAlign: "center", marginBottom: 48 }}>
+            <h2 style={{ fontSize: "clamp(26px, 3.5vw, 40px)", fontWeight: 800 }}>
+              Complete End-to-End Workflow
+            </h2>
+            <p style={{ color: "var(--text-2)", fontSize: 15, maxWidth: 550, margin: "10px auto 0" }}>
+              Explore how Heda streamlines data creation, quality validation, and model deployment.
+            </p>
+          </div>
+
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1.2fr", gap: 36, alignItems: "center" }}>
+            {/* Left Tabs */}
+            <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+              {[
+                {
+                  id: "label",
+                  title: "Moondream VLM Auto-Label Assist",
+                  desc: "1-click automated bounding box prediction using Vision Language Models inside the workspace.",
+                  icon: "auto_awesome",
+                },
+                {
+                  id: "health",
+                  title: "Automated Dataset Health Check",
+                  desc: "Quality score (0-100), class distribution histograms, and null box detection before training.",
+                  icon: "health_and_safety",
+                },
+                {
+                  id: "train",
+                  title: "Local & Onchain YOLO Model Training",
+                  desc: "Train PyTorch YOLOv8 models locally and publish fine-tuned weights to 0G Storage with onchain escrow.",
+                  icon: "model_training",
+                },
+              ].map((item) => {
+                const isActive = activeTab === item.id;
+                return (
+                  <div
+                    key={item.id}
+                    onClick={() => setActiveTab(item.id as any)}
+                    style={{
+                      padding: 20, borderRadius: 10, cursor: "pointer", border: "1px solid",
+                      borderColor: isActive ? "var(--primary)" : "var(--border)",
+                      background: isActive ? "var(--primary-bg)" : "var(--surface)",
+                      transition: "all 0.2s ease",
+                    }}
+                  >
+                    <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
+                      <span className="material-symbols-outlined" style={{ color: isActive ? "var(--primary)" : "var(--text-2)", fontSize: 22 }}>
+                        {item.icon}
+                      </span>
+                      <h3 style={{ fontSize: 16, fontWeight: 700, margin: 0, color: isActive ? "#fff" : "var(--text-2)" }}>
+                        {item.title}
+                      </h3>
+                    </div>
+                    <p style={{ fontSize: 13, color: "var(--text-2)", margin: 0, lineHeight: 1.5 }}>
+                      {item.desc}
+                    </p>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Right Display */}
+            <div style={{
+              background: "#080c09", border: "1px solid var(--border)", borderRadius: 14,
+              padding: 24, minHeight: 360, display: "flex", flexDirection: "column", justifyContent: "center",
+              boxShadow: "0 20px 40px rgba(0,0,0,0.5)",
+            }}>
+              {activeTab === "label" && (
+                <div style={{ textAlign: "center" }}>
+                  <div style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "6px 14px", borderRadius: 20, background: "rgba(0,228,121,0.1)", color: "var(--primary)", fontWeight: 700, fontSize: 12, marginBottom: 16 }}>
+                    <span className="material-symbols-outlined" style={{ fontSize: 16 }}>auto_awesome</span>
+                    Moondream VLM Auto-Label Active
+                  </div>
+                  <div style={{ background: "#000", border: "1px dashed var(--primary)", borderRadius: 8, padding: 24, display: "inline-block", maxWidth: 380 }}>
+                    <div style={{ width: 140, height: 95, border: "2px solid #00e479", margin: "0 auto", position: "relative", background: "rgba(0,228,121,0.12)" }}>
+                      <span style={{ position: "absolute", top: -18, left: 0, background: "#00e479", color: "#000", fontSize: 10, fontWeight: 800, padding: "2px 6px" }}>
+                        hardhat · 98%
+                      </span>
+                    </div>
+                    <p style={{ fontSize: 12, color: "var(--text-2)", marginTop: 14, margin: 0 }}>
+                      Detects target objects automatically with zero manual coordinate clicks required.
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {activeTab === "health" && (
+                <div>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+                    <span style={{ fontWeight: 700, fontSize: 15 }}>Dataset Health Report</span>
+                    <span style={{ background: "rgba(0,228,121,0.15)", color: "var(--primary)", fontWeight: 800, padding: "4px 12px", borderRadius: 20, fontSize: 12 }}>
+                      Quality Score: 94 / 100
+                    </span>
+                  </div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                    <div>
+                      <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, marginBottom: 4 }}>
+                        <span>Class Balance Ratio</span>
+                        <span style={{ color: "var(--primary)" }}>92% Optimal</span>
+                      </div>
+                      <div style={{ width: "100%", height: 8, background: "var(--surface-high)", borderRadius: 4, overflow: "hidden" }}>
+                        <div style={{ width: "92%", height: "100%", background: "var(--primary)" }} />
+                      </div>
+                    </div>
+                    <div style={{ fontSize: 12, color: "var(--text-2)", background: "var(--surface-low)", padding: 12, borderRadius: 6, border: "1px solid var(--border)" }}>
+                      ✓ 0 Null Annotation Tasks • ✓ 0 Duplicate Images • ✓ Balanced Box Sizes
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {activeTab === "train" && (
+                <div>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: "var(--primary)", marginBottom: 10 }}>
+                    PyTorch YOLOv8 Training Output
+                  </div>
+                  <div style={{ fontFamily: "'Space Grotesk', monospace", fontSize: 12, background: "#000", padding: 16, borderRadius: 8, border: "1px solid var(--border)", color: "#a78bfa", display: "flex", flexDirection: "column", gap: 6 }}>
+                    <div>Epoch 1/10 — box_loss: 0.421, mAP50: 68.2%</div>
+                    <div>Epoch 5/10 — box_loss: 0.184, mAP50: 89.5%</div>
+                    <div style={{ color: "var(--primary)" }}>Epoch 10/10 — box_loss: 0.042, mAP50: 96.8% ✓</div>
+                    <div style={{ color: "#fff", marginTop: 6 }}>Exported best.pt → Pinned to 0G Storage (Root: 0x8a92...)</div>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ── 4. NUMBERS & STATS ── */}
+      <section style={{ padding: "50px 24px", borderTop: "1px solid var(--border)", borderBottom: "1px solid var(--border)", background: "var(--surface)" }}>
+        <div style={{ maxWidth: 1200, margin: "0 auto", display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 24, textAlign: "center" }}>
+          <div>
+            <div style={{ fontSize: 36, fontWeight: 800, color: "var(--primary)", fontFamily: "'Space Grotesk', monospace" }}>{stats.totalJobs}</div>
+            <div style={{ fontSize: 11, color: "var(--text-3)", textTransform: "uppercase", marginTop: 4 }}>Active Bounty Jobs</div>
+          </div>
+          <div>
+            <div style={{ fontSize: 36, fontWeight: 800, color: "#60a5fa", fontFamily: "'Space Grotesk', monospace" }}>{stats.storageMB}</div>
+            <div style={{ fontSize: 11, color: "var(--text-3)", textTransform: "uppercase", marginTop: 4 }}>Pinned to 0G Storage</div>
+          </div>
+          <div>
+            <div style={{ fontSize: 36, fontWeight: 800, color: "#ffd700", fontFamily: "'Space Grotesk', monospace" }}>{stats.activeAnnotators}</div>
+            <div style={{ fontSize: 11, color: "var(--text-3)", textTransform: "uppercase", marginTop: 4 }}>Verified Annotators</div>
+          </div>
+          <div>
+            <div style={{ fontSize: 36, fontWeight: 800, color: "#a78bfa", fontFamily: "'Space Grotesk', monospace" }}>{stats.modelsTrained}</div>
+            <div style={{ fontSize: 11, color: "var(--text-3)", textTransform: "uppercase", marginTop: 4 }}>Trained YOLO Models</div>
+          </div>
+        </div>
+      </section>
+
+      {/* ── 5. CALL TO ACTION BANNER ── */}
+      <section style={{ padding: "80px 24px", textAlign: "center" }}>
         <div style={{
-          background: "linear-gradient(135deg, rgba(0,228,121,0.12) 0%, rgba(96,255,153,0.05) 100%)",
-          border: "1px solid rgba(0,228,121,0.3)", borderRadius: 16, padding: 48,
+          maxWidth: 850, margin: "0 auto", padding: "50px 28px", borderRadius: 16,
+          background: "linear-gradient(135deg, rgba(0,228,121,0.12) 0%, rgba(0,0,0,0.85) 100%)",
+          border: "1px solid rgba(0,228,121,0.3)", boxShadow: "0 25px 70px rgba(0,228,121,0.12)",
         }}>
-          <h2 style={{ fontSize: 32, fontWeight: 800, color: "#fff", marginBottom: 16 }}>
-            Ready to Build Decentralized AI Datasets?
+          <h2 style={{ fontSize: "clamp(26px, 3.5vw, 38px)", fontWeight: 800, marginBottom: 14 }}>
+            Build Computer Vision Models on 0G
           </h2>
-          <p style={{ color: "var(--text-2)", fontSize: 15, maxWidth: 600, margin: "0 auto 28px" }}>
-            Earn 0G tokens by contributing high-quality annotations, or post bounties to label your machine learning datasets securely onchain.
+          <p style={{ color: "var(--text-2)", fontSize: 16, maxWidth: 550, margin: "0 auto 28px" }}>
+            Create custom image annotation jobs, fine-tune PyTorch YOLO models, and access open datasets.
           </p>
-          <div style={{ display: "flex", gap: 16, justifyContent: "center" }}>
-            <button className="btn-primary" onClick={() => navigate("/jobs")} style={{ padding: "14px 28px", fontSize: 15 }}>
-              Browse Available Jobs
+          <div style={{ display: "flex", gap: 14, justifyContent: "center", flexWrap: "wrap" }}>
+            <button
+              className="btn-primary"
+              onClick={() => navigate("/create")}
+              style={{ padding: "12px 28px", fontSize: 15, fontWeight: 700, borderRadius: 8 }}
+            >
+              Create Annotation Job
             </button>
-            <button className="btn-secondary" onClick={() => navigate("/submissions")} style={{ padding: "14px 28px", fontSize: 15 }}>
-              Check My Work & Earnings
+            <button
+              className="btn-secondary"
+              onClick={() => navigate("/models")}
+              style={{ padding: "12px 24px", fontSize: 15, fontWeight: 600, borderRadius: 8 }}
+            >
+              Test Model Universe
             </button>
           </div>
         </div>

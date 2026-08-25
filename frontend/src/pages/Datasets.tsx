@@ -51,12 +51,23 @@ export default function Datasets() {
           } catch { /* fallback */ }
         }
 
-        // Fetch sample preview image if dataset is image type
+        // Fetch real uploaded sample image if dataset is image type
         if (d.dataType === 0 && d.rootHash) {
           try {
-            const files = await fetchFrom0GStorage(d.rootHash, 3);
-            if (Array.isArray(files) && files[0]?.data && files[0]?.type) {
-              base.previewImage = `data:${files[0].type};base64,${files[0].data}`;
+            const rawData = await fetchFrom0GStorage(d.rootHash, 3);
+            if (rawData && typeof rawData === "object") {
+              let b64 = rawData.images?.[0]?.base64;
+              const dataRoot = rawData.info?.data_root_hash ?? base.dataRootHash;
+              if (!b64 && dataRoot) {
+                const sourceFiles = await fetchFrom0GStorage(dataRoot, 3).catch(() => []);
+                if (Array.isArray(sourceFiles) && sourceFiles[0]?.data) {
+                  const f = sourceFiles[0];
+                  b64 = f.data.startsWith("data:") ? f.data : `data:${f.type || "image/jpeg"};base64,${f.data}`;
+                }
+              }
+              if (b64) {
+                base.previewImage = b64.startsWith("data:") ? b64 : `data:image/jpeg;base64,${b64}`;
+              }
             }
           } catch { /* ignore fallback */ }
         }
@@ -141,24 +152,33 @@ export default function Datasets() {
                 onMouseEnter={(e) => (e.currentTarget.style.borderColor = "var(--primary)")}
                 onMouseLeave={(e) => (e.currentTarget.style.borderColor = "var(--border)")}>
                 {/* Image / Thumbnail Preview */}
-                <div style={{ height: 192, background: "#0b120c", display: "flex", alignItems: "center", justifyContent: "center", position: "relative", overflow: "hidden" }}>
+                <div style={{ height: 192, background: "#050806", display: "flex", alignItems: "center", justifyContent: "center", position: "relative", overflow: "hidden" }}>
                   {(d as any).previewImage ? (
                     <img src={(d as any).previewImage} alt="Dataset Sample" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
                   ) : (
-                    <span className="material-symbols-outlined" style={{ fontSize: 64, color: "var(--border)" }}>
-                      {d.dataType === 0 ? "image" : "article"}
-                    </span>
+                    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 8, color: "var(--text-3)" }}>
+                      <span className="material-symbols-outlined" style={{ fontSize: 48 }}>
+                        {d.dataType === 0 ? "image" : "article"}
+                      </span>
+                      <span style={{ fontSize: 11, fontFamily: "'Space Grotesk', monospace" }}>0G Storage Binary File</span>
+                    </div>
                   )}
                   {d.hasLicense && (
-                    <div style={{ position: "absolute", top: 12, left: 12 }}>
-                      <span className="badge badge-licensed">Licensed</span>
+                    <div style={{ position: "absolute", top: 12, left: 12, zIndex: 10 }}>
+                      <span style={{
+                        fontSize: 10, fontWeight: 800, padding: "4px 10px", borderRadius: 20,
+                        background: "rgba(0,228,121,0.25)", color: "#00e479", border: "1px solid #00e479",
+                        backdropFilter: "blur(6px)", boxShadow: "0 2px 8px rgba(0,0,0,0.6)", textTransform: "uppercase"
+                      }}>
+                        Licensed
+                      </span>
                     </div>
                   )}
                 </div>
 
                 {/* Content */}
                 <div style={{ padding: 20, flex: 1, display: "flex", flexDirection: "column", borderLeft: "2px solid var(--primary)" }}>
-                  <h3 style={{ fontSize: 16, fontWeight: 600, marginBottom: 16 }}>
+                  <h3 style={{ fontSize: 16, fontWeight: 600, marginBottom: 12 }}>
                     {(d as any).name || `${d.dataType === 0 ? "Image" : "Text"} Dataset #${d.datasetId}`}
                   </h3>
                   <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 16 }}>
@@ -172,15 +192,26 @@ export default function Datasets() {
                     </div>
                     {(d as any).taskCount && (
                       <div>
-                        <span className="label-caps" style={{ display: "block", marginBottom: 2 }}>Tasks</span>
-                        <span style={{ fontFamily: "'Space Grotesk', monospace", fontSize: 13 }}>{(d as any).taskCount}</span>
+                        <span className="label-caps" style={{ display: "block", marginBottom: 2 }}>Images</span>
+                        <span style={{ fontFamily: "'Space Grotesk', monospace", fontSize: 13 }}>{(d as any).taskCount} Images</span>
                       </div>
                     )}
                     <div>
                       <span className="label-caps" style={{ display: "block", marginBottom: 2 }}>Publisher</span>
-                      <span className="mono-tag">{d.publisher.slice(0, 6)}…{d.publisher.slice(-4)}</span>
+                      <span className="mono-tag" style={{ fontSize: 12 }}>{d.publisher.slice(0, 6)}…{d.publisher.slice(-4)}</span>
                     </div>
                   </div>
+
+                  {/* Class Pills */}
+                  {Array.isArray((d as any).labels) && (d as any).labels.length > 0 && (
+                    <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 16 }}>
+                      {(d as any).labels.map((lbl: string) => (
+                        <span key={lbl} style={{ fontSize: 11, background: "var(--surface-high)", color: "var(--text-2)", padding: "2px 8px", borderRadius: 4, border: "1px solid var(--border)", fontFamily: "'Space Grotesk', monospace" }}>
+                          {lbl}
+                        </span>
+                      ))}
+                    </div>
+                  )}
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", paddingTop: 16, borderTop: "1px solid var(--border)", marginTop: "auto" }}>
                     <div>
                       <span className="label-caps" style={{ display: "block", marginBottom: 2 }}>Price</span>
