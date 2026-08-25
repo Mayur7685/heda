@@ -9,9 +9,9 @@ export const GALILEO = {
   storageExplorer: "https://storagescan-galileo.0g.ai",
   faucet: "https://faucet.0g.ai",
   contracts: {
-    annotationMarket: import.meta.env.VITE_ANNOTATION_MARKET || "0x4d0E12D93c3EE2fe301F9F43Eb6b6ce50d098a39",
-    datasetRegistry: import.meta.env.VITE_DATASET_REGISTRY || "0x4f7Ffd227E3EB49BE79c89c02dFD67F0D04B9068",
-    modelRegistry: import.meta.env.VITE_MODEL_REGISTRY || "0x707De61B03948Ac28AA8175aa88AdE582c57c1b9",
+    annotationMarket: import.meta.env.VITE_MARKET_ADDRESS ?? "0x83281b1a16DbA12ACC983e47FdbFD682Fd2A3F48",
+    datasetRegistry:  import.meta.env.VITE_DATASET_REGISTRY_ADDRESS ?? "0xE0F020329C1c968f44B72360e45FA2EB9F35e96E",
+    modelRegistry:    import.meta.env.VITE_MODEL_REGISTRY_ADDRESS ?? "0x91A033BDEb12c335DacA8Ed3c7A52cf780aF75D3",
   },
 } as const;
 
