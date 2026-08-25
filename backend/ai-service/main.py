@@ -173,56 +173,82 @@ class PredictRequest(BaseModel):
 
 @app.post("/predict")
 def predict_objects(req: PredictRequest):
-    """Runs live object detection inference on an input image using PyTorch YOLO"""
+    """Runs live object detection inference on an input image using local trained PyTorch YOLO model weights"""
     try:
-        # Load PyTorch / Ultralytics YOLO model if available
-        try:
-            from ultralytics import YOLO
-            model = YOLO("yolov8n.pt")
-            # If imageBase64 is data URL, extract raw base64
-            img_data = req.imageBase64
-            if "," in img_data:
-                img_data = img_data.split(",")[1]
-            raw_bytes = base64.b64decode(img_data)
+        from ultralytics import YOLO
+        
+        # 1. Determine weights file path (check local active_jobs or download from 0G Storage)
+        weights_path = "yolov8n.pt" # default base fallback
+        
+        cache_dir = Path(__file__).parent / ".weights_cache"
+        cache_dir.mkdir(exist_ok=True)
+        
+        if req.weightsRootHash and req.weightsRootHash != "0x":
+            clean_hash = req.weightsRootHash if req.weightsRootHash.startswith("0x") else f"0x{req.weightsRootHash}"
+            local_cached_pt = cache_dir / f"{clean_hash}.pt"
             
-            tmp_img_path = Path(__file__).parent / f"tmp_infer_{int(time.time())}.jpg"
-            with open(tmp_img_path, "wb") as f:
-                f.write(raw_bytes)
-                
-            results = model(str(tmp_img_path), verbose=False)
-            boxes = []
-            if len(results) > 0 and results[0].boxes is not None:
-                img_w, img_h = results[0].orig_shape[1], results[0].orig_shape[0]
-                for box in results[0].boxes:
-                    coords = box.xyxy[0].tolist() # x1, y1, x2, y2
-                    cls_id = int(box.cls[0].item())
-                    conf = float(box.conf[0].item())
-                    label = model.names.get(cls_id, f"class_{cls_id}")
+            # Check active training jobs for matching weights
+            for j in active_jobs.values():
+                if j.get("weightsRootHash") == clean_hash and "weights_file" in j and Path(j["weights_file"]).exists():
+                    weights_path = j["weights_file"]
+                    break
                     
-                    boxes.append({
-                        "x_min": round((coords[0] / img_w) * 100, 2),
-                        "y_min": round((coords[1] / img_h) * 100, 2),
-                        "x_max": round((coords[2] / img_w) * 100, 2),
-                        "y_max": round((coords[3] / img_h) * 100, 2),
-                        "label": label,
-                        "confidence": round(conf, 4)
-                    })
-            if tmp_img_path.exists():
-                tmp_img_path.unlink()
+            if weights_path == "yolov8n.pt" and local_cached_pt.exists():
+                weights_path = str(local_cached_pt)
+            elif weights_path == "yolov8n.pt":
+                # Try downloading trained model weights from 0G Storage Indexer
+                try:
+                    url = f"https://indexer-storage-testnet-turbo.0g.ai/file?root={clean_hash}"
+                    r = urllib.request.Request(url, headers={"User-Agent": "HedaInference/1.0"})
+                    with urllib.request.urlopen(r, timeout=15) as resp:
+                        content = resp.read()
+                        # If content is valid binary .pt, save to cache
+                        if len(content) > 100:
+                            with open(local_cached_pt, "wb") as f:
+                                f.write(content)
+                            weights_path = str(local_cached_pt)
+                except Exception as dl_err:
+                    print(f"[AI Service] Could not fetch 0G weights ({dl_err}), falling back to local base model")
+
+        print(f"[AI Service] ⚡ Running live inference with model weights: {weights_path}")
+        model = YOLO(weights_path)
+        
+        # Extract base64 image data
+        img_data = req.imageBase64
+        if "," in img_data:
+            img_data = img_data.split(",")[1]
+        raw_bytes = base64.b64decode(img_data)
+        
+        tmp_img_path = Path(__file__).parent / f"tmp_infer_{int(time.time())}_{os.urandom(2).hex()}.jpg"
+        with open(tmp_img_path, "wb") as f:
+            f.write(raw_bytes)
+            
+        results = model(str(tmp_img_path), verbose=False)
+        boxes = []
+        if len(results) > 0 and results[0].boxes is not None:
+            img_w, img_h = results[0].orig_shape[1], results[0].orig_shape[0]
+            for box in results[0].boxes:
+                coords = box.xyxy[0].tolist() # x1, y1, x2, y2
+                cls_id = int(box.cls[0].item())
+                conf = float(box.conf[0].item())
+                label = model.names.get(cls_id, f"class_{cls_id}")
                 
-            return {"ok": True, "boxes": boxes}
-        except Exception as py_err:
-            print(f"[AI Service] PyTorch YOLO inference fallback: {py_err}")
-            # Realistic bounding box prediction fallback
-            return {
-                "ok": True,
-                "boxes": [
-                    {"x_min": 18.5, "y_min": 22.4, "x_max": 52.1, "y_max": 76.8, "label": "car", "confidence": 0.9450},
-                    {"x_min": 56.2, "y_min": 28.1, "x_max": 84.6, "y_max": 79.5, "label": "car", "confidence": 0.8920},
-                    {"x_min": 41.0, "y_min": 14.5, "x_max": 56.3, "y_max": 44.2, "label": "person", "confidence": 0.8710}
-                ]
-            }
+                boxes.append({
+                    "x_min": round((coords[0] / img_w) * 100, 2),
+                    "y_min": round((coords[1] / img_h) * 100, 2),
+                    "x_max": round((coords[2] / img_w) * 100, 2),
+                    "y_max": round((coords[3] / img_h) * 100, 2),
+                    "label": label,
+                    "confidence": round(conf, 4)
+                })
+                
+        if tmp_img_path.exists():
+            tmp_img_path.unlink()
+            
+        return {"ok": True, "weights": weights_path, "boxes": boxes}
+
     except Exception as e:
+        print(f"[AI Service] ❌ Inference error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 if __name__ == "__main__":
