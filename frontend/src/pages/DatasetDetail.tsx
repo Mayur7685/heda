@@ -153,7 +153,7 @@ export default function DatasetDetail() {
                   ["Publisher Address", <span className="mono-tag">{dataset.publisher.slice(0, 10)}…{dataset.publisher.slice(-6)}</span>],
                   metadata?.labels && ["Classes", <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>{metadata.labels.map((l: string) => <span key={l} className="badge badge-verified">{l}</span>)}</div>],
                   metadata?.taskCount && ["Total Tasks", `${metadata.taskCount} Annotations`],
-                  ["Root Hash", <a href={GALILEO.storageExplorer} target="_blank" rel="noreferrer" style={{ fontFamily: "'Space Grotesk', monospace", fontSize: 12, color: "var(--primary)" }}>{dataset.rootHash.slice(0, 20)}…{dataset.rootHash.slice(-8)}</a>],
+                  ["Root Hash", <div style={{ display: "flex", gap: 10, alignItems: "center" }}><a href={`https://indexer-storage-testnet-turbo.0g.ai/file?root=${dataset.rootHash}`} target="_blank" rel="noreferrer" style={{ fontFamily: "'Space Grotesk', monospace", fontSize: 12, color: "var(--primary)" }}>Raw File ↗</a><a href={`${GALILEO.storageExplorer}/file/${dataset.rootHash}`} target="_blank" rel="noreferrer" style={{ fontFamily: "'Space Grotesk', monospace", fontSize: 12, color: "var(--text-2)" }}>StorageScan ↗</a></div>],
                   dataset.sourceJobId > 0 && ["Source Job", `#${Number(dataset.sourceJobId)}`],
                 ].filter(Boolean).map(([k, v]: any) => (
                   <tr key={k}>

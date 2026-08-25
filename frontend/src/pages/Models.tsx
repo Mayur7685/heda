@@ -248,12 +248,28 @@ export default function Models() {
                 </div>
               </div>
 
-              {/* Publisher & Storage Root Hash info */}
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 11, color: "var(--text-3)", marginBottom: 20, paddingTop: 12, borderTop: "1px solid var(--border)" }}>
-                <span>Publisher: <code style={{ color: "var(--text-2)" }}>{m.publisher.slice(0, 6)}…{m.publisher.slice(-4)}</code></span>
-                <a href={`${GALILEO.storageExplorer}/file/${m.weightsRootHash}`} target="_blank" rel="noreferrer" style={{ color: "var(--primary)", textDecoration: "none" }}>
-                  0G Root ↗
-                </a>
+              {/* Publisher, 0G Chain Tx & Storage Root Hash info */}
+              <div style={{ display: "flex", flexDirection: "column", gap: 6, fontSize: 11, color: "var(--text-3)", marginBottom: 20, paddingTop: 12, borderTop: "1px solid var(--border)" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <span>Publisher: <code style={{ color: "var(--text-2)" }}>{m.publisher.slice(0, 6)}…{m.publisher.slice(-4)}</code></span>
+                  {m.txHash && (
+                    <a href={`${GALILEO.explorer}/tx/${m.txHash}`} target="_blank" rel="noreferrer" style={{ color: "#60a5fa", textDecoration: "none", display: "flex", alignItems: "center", gap: 3 }}>
+                      <span>Tx: <code>{m.txHash.slice(0, 6)}…{m.txHash.slice(-4)}</code></span>
+                      <span className="material-symbols-outlined" style={{ fontSize: 12 }}>open_in_new</span>
+                    </a>
+                  )}
+                </div>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <span>0G Storage Root:</span>
+                  <div style={{ display: "flex", gap: 10 }}>
+                    <a href={`https://indexer-storage-testnet-turbo.0g.ai/file?root=${m.weightsRootHash}`} target="_blank" rel="noreferrer" style={{ color: "var(--primary)", textDecoration: "none" }}>
+                      Raw File ↗
+                    </a>
+                    <a href={`${GALILEO.storageExplorer}/file/${m.weightsRootHash}`} target="_blank" rel="noreferrer" style={{ color: "var(--text-2)", textDecoration: "none" }}>
+                      StorageScan ↗
+                    </a>
+                  </div>
+                </div>
               </div>
 
               {/* Action Button */}
