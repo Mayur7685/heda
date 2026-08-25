@@ -3,6 +3,7 @@ import { useWallet } from "../hooks/useWallet";
 import { useModelRegistry, ModelTypeNames } from "../hooks/useModelRegistry";
 import { fetchFrom0GStorage, uploadJson } from "../hooks/useStorage";
 import { GALILEO } from "../config";
+import InferenceModal from "../components/InferenceModal";
 
 type ModelCardRow = {
   modelId: number;
@@ -33,6 +34,7 @@ export default function Models() {
   const [filter, setFilter] = useState<Filter>("all");
   const [loading, setLoading] = useState(false);
   const [showRegisterModal, setShowRegisterModal] = useState(false);
+  const [activeInferenceModel, setActiveInferenceModel] = useState<ModelCardRow | null>(null);
 
   // Form state for publishing new model
   const [pubName, setPubName] = useState("");
@@ -267,8 +269,20 @@ export default function Models() {
                 </div>
               </div>
 
-              {/* Action Button */}
-              <div style={{ marginTop: "auto" }}>
+              {/* Action Buttons: Live Test & Download / Purchase */}
+              <div style={{ marginTop: "auto", display: "flex", flexDirection: "column", gap: 8 }}>
+                <button
+                  className="btn-ghost"
+                  onClick={() => setActiveInferenceModel(m)}
+                  style={{
+                    width: "100%", justifyContent: "center", border: "1px solid var(--primary)",
+                    color: "var(--primary)", background: "rgba(0,228,121,0.06)", fontWeight: 700, fontSize: 13,
+                  }}
+                >
+                  <span className="material-symbols-outlined" style={{ fontSize: 18 }}>bolt</span>
+                  Test Model (Live Inference)
+                </button>
+
                 {m.hasLicense || parseFloat(m.price) === 0 ? (
                   <a
                     href={`https://indexer-storage-testnet-turbo.0g.ai/file?root=${m.weightsRootHash}`}
@@ -359,6 +373,14 @@ export default function Models() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Live Inference Testing Modal */}
+      {activeInferenceModel && (
+        <InferenceModal
+          model={activeInferenceModel}
+          onClose={() => setActiveInferenceModel(null)}
+        />
       )}
     </div>
   );
