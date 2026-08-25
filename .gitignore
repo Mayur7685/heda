@@ -1,35 +1,55 @@
-# Dependencies
-**/node_modules/
+# ── Dependencies ─────────────────────────────────────────────────────────────
 node_modules/
+**/node_modules/
+.venv/
+**/venv/
+**/env/
+**/ENV/
 
-# Environment — NEVER commit
+# ── Environment & Secrets — NEVER COMMIT ────────────────────────────────────
 .env
 .env.local
 .env.*.local
+**/.env
+**/.env.local
 
-# Build outputs
+# ── Build Outputs & Caches ──────────────────────────────────────────────────
 dist/
+**/dist/
 out/
 build/
+.vite/
+**/.vite/
+__pycache__/
+**/__pycache__/
+*.pyc
+*.pyo
+*.pyd
 
-# Foundry
+# ── Foundry / Smart Contracts ───────────────────────────────────────────────
 contracts/out/
 contracts/cache/
 contracts/broadcast/
 contracts/lib/
 
-# Vite
-frontend/.vite/
+# ── Python ML Training Artifacts & Runs ─────────────────────────────────────
+**/runs/
+**/runs/*
+*.pt
+*.onnx
+*.engine
 
-# OS
+# ── OS & IDE Files ──────────────────────────────────────────────────────────
 .DS_Store
 **/.DS_Store
 Thumbs.db
+.vscode/
+.idea/
 
-# Logs
+# ── Logs & Temp Files ───────────────────────────────────────────────────────
 *.log
 npm-debug.log*
-
-# Temp files
+yarn-debug.log*
+yarn-error.log*
 tmp/
 *.tmp

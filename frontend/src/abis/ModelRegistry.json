@@ -1,0 +1,11 @@
+[
+  {"type":"function","name":"publish","inputs":[{"name":"weightsRootHash","type":"bytes32"},{"name":"reportRootHash","type":"bytes32"},{"name":"metadataURI","type":"string"},{"name":"price","type":"uint256"},{"name":"modelType","type":"uint8"},{"name":"sourceDatasetId","type":"uint256"}],"outputs":[{"name":"modelId","type":"uint256"}],"stateMutability":"nonpayable"},
+  {"type":"function","name":"purchase","inputs":[{"name":"modelId","type":"uint256"}],"outputs":[],"stateMutability":"payable"},
+  {"type":"function","name":"setInferenceEndpoint","inputs":[{"name":"modelId","type":"uint256"},{"name":"endpoint","type":"string"}],"outputs":[],"stateMutability":"nonpayable"},
+  {"type":"function","name":"hasLicense","inputs":[{"name":"modelId","type":"uint256"},{"name":"user","type":"address"}],"outputs":[{"name":"","type":"bool"}],"stateMutability":"view"},
+  {"type":"function","name":"getModel","inputs":[{"name":"modelId","type":"uint256"}],"outputs":[{"name":"","type":"tuple","components":[{"name":"publisher","type":"address"},{"name":"weightsRootHash","type":"bytes32"},{"name":"reportRootHash","type":"bytes32"},{"name":"metadataURI","type":"string"},{"name":"price","type":"uint256"},{"name":"modelType","type":"uint8"},{"name":"sourceDatasetId","type":"uint256"},{"name":"exists","type":"bool"},{"name":"downloadCount","type":"uint256"},{"name":"inferenceEndpoint","type":"string"}]}],"stateMutability":"view"},
+  {"type":"function","name":"totalModels","inputs":[],"outputs":[{"name":"","type":"uint256"}],"stateMutability":"view"},
+  {"type":"event","name":"ModelPublished","inputs":[{"name":"modelId","type":"uint256","indexed":true},{"name":"publisher","type":"address","indexed":true},{"name":"weightsRootHash","type":"bytes32","indexed":false},{"name":"modelType","type":"uint8","indexed":false}]},
+  {"type":"event","name":"ModelLicensed","inputs":[{"name":"modelId","type":"uint256","indexed":true},{"name":"buyer","type":"address","indexed":true},{"name":"price","type":"uint256","indexed":false}]},
+  {"type":"event","name":"InferenceEndpointUpdated","inputs":[{"name":"modelId","type":"uint256","indexed":true},{"name":"endpoint","type":"string","indexed":false}]}
+]
