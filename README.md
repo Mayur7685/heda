@@ -1,166 +1,115 @@
-# Heda — Decentralized Annotation Marketplace
+# 🏋️ Heda — Decentralized Data Intelligence & Model Training Platform
 
-> **Label Studio, but onchain.** Annotate datasets, earn crypto, fine-tune AI models — all on the 0G stack.
+> **Label Studio + Roboflow Universe, onchain.** Annotate datasets, check dataset health, train YOLO models, and publish weights — all powered by the **0G Stack**.
 
 [![Built on 0G](https://img.shields.io/badge/Built%20on-0G%20Stack-00e479)](https://0g.ai)
 [![Network](https://img.shields.io/badge/Network-Galileo%20Testnet-00e479)](https://chainscan-galileo.0g.ai)
 
 ---
 
-## What is Heda?
+## 🌟 What is Heda?
 
-Heda is a decentralized data annotation marketplace where:
+Heda is a decentralized computer vision annotation marketplace and model training platform where:
 
-- **Job Creators** upload raw data (images or text), post annotation jobs with ETH bounties
-- **Annotators** pick up jobs, label data, and get paid instantly onchain per approved task
-- **Developers** purchase verified datasets and fine-tune LLMs on 0G Compute
-
-Every piece of data lives on **0G Storage** (permanent, verifiable). Every payment is settled on **0G Chain** (trustless, instant). Every fine-tune runs on **0G Compute** (decentralized GPU).
+- **Job Creators** upload raw image datasets, define bounding box classes, and lock 0G ETH bounties in escrow.
+- **Annotators** claim tasks, annotate images with bounding box tools (with 1-click **Moondream AI Auto-Label Assist**), and get paid instantly per approved task.
+- **Data Engineers** inspect **Dataset Health Check** scores (class balance, box size, null warnings) and publish COCO JSON datasets to the **Dataset Universe (`/datasets`)**.
+- **ML Engineers** fine-tune **YOLOv8** models locally or on GPU infra, stream live mAP50 training metrics, and publish `.pt` model weights to the **Model Universe (`/models`)** backed by **0G Storage**.
 
 ---
 
-## 0G Stack Usage
+## 🏗️ 0G Stack Integration
 
 | Layer | What Heda uses it for |
 |---|---|
-| **0G Chain** (EVM, Chain ID 16602) | Job escrow, per-task payments, dataset registry, license purchases |
-| **0G Storage** | Raw data uploads, annotation results, COCO JSON + JSONL dataset packages |
-| **0G Compute** | LLM fine-tuning on annotated text datasets (Qwen2.5-0.5B, Qwen3-32B) |
+| **0G Chain** (Galileo Testnet, Chain ID 16602) | Job Escrow, Task Bounties, Dataset Registry, Model Registry, Onchain Model Weights Licensing |
+| **0G Storage** | Raw image store, COCO JSON datasets, trained `.pt` YOLO model weights, metadata hashes |
+| **0G Compute / Local AI Microservice** | Moondream VLM AI Auto-Labeling assist + Python PyTorch YOLOv8 model training engine |
 
 ---
 
-## Architecture
-
-![workflow](/frontend/public/image.png)
+## 🛠️ Microservice Architecture
 
 ```
-Creator uploads data → 0G Storage (root hash)
-Creator posts job → AnnotationMarket.sol (bounty locked onchain)
-Annotator claims task → claimTask() (30-min reservation, prevents wasted work)
-Annotator annotates → Workspace UI (bbox/polygon for images, classification for text)
-Annotator submits batch → submitBatch() (1 MetaMask signature for all tasks)
-Creator approves → approveWork() (instant ETH payment, auto-closes when complete)
-Creator publishes → COCO JSON (images) or JSONL (text) → 0G Storage
-Developer purchases → DatasetRegistry.sol (royalty to creator)
-Developer downloads → ZIP with images + annotations (image) or JSONL (text)
-Developer fine-tunes → 0G Compute Router API (text datasets only)
+┌─────────────────────────┐       1. POST /train/start        ┌─────────────────────────┐
+│                         │ ─────────────────────────────────> │   Python AI Service     │
+│   Heda React Frontend   │                                   │    (ai-service:8000)    │
+│   (TrainingModal.tsx)   │ <──────────────────────────────── │    (FastAPI + PyTorch)  │
+└─────────────────────────┘       4. Stream Logs & Metrics    └────────────┬────────────┘
+             │                                                             │ 3. Relay Weights Upload
+             │ 5. Publish to Model Universe                                ▼
+             ▼                                                ┌─────────────────────────┐
+┌─────────────────────────┐                                   │   Node.js 0G Relayer    │
+│    ModelRegistry.sol    │ <──────────────────────────────── │      (relayer:3001)     │
+│  (0G Galileo Testnet)   │       0G Storage Merkle Root      └─────────────────────────┘
+└─────────────────────────┘
 ```
 
 ---
 
-## Deployed Contracts (Galileo Testnet)
+## 📜 Deployed Contracts (0G Galileo Testnet)
 
 | Contract | Address | Explorer |
 |---|---|---|
-| AnnotationMarket | `0x4822c5F0617665543B94a0668837CdbBDEb54C90` | [View](https://chainscan-galileo.0g.ai/address/0x4822c5F0617665543B94a0668837CdbBDEb54C90) |
-| DatasetRegistry | `0x46d4a89e496f3A01785ac5B38ecAc40B081c933c` | [View](https://chainscan-galileo.0g.ai/address/0x46d4a89e496f3A01785ac5B38ecAc40B081c933c) |
+| **AnnotationMarket** | `0x4822c5F0617665543B94a0668837CdbBDEb54C90` | [View](https://chainscan-galileo.0g.ai/address/0x4822c5F0617665543B94a0668837CdbBDEb54C90) |
+| **DatasetRegistry** | `0x46d4a89e496f3A01785ac5B38ecAc40B081c933c` | [View](https://chainscan-galileo.0g.ai/address/0x46d4a89e496f3A01785ac5B38ecAc40B081c933c) |
+| **ModelRegistry** | `0x10840B8F0cb9ee5Fa30fa13979e7ddf4D57891a4` | [View](https://chainscan-galileo.0g.ai/address/0x10840B8F0cb9ee5Fa30fa13979e7ddf4D57891a4) |
 
 ---
 
-## Repository Structure
+## 🚀 Quick Start (Local Setup)
 
+### 1. Terminal 1 — 0G Relayer Service
+```bash
+cd heda/backend/relayer
+npm install
+npm start
 ```
-heda/
-├── contracts/           # Foundry — AnnotationMarket.sol + DatasetRegistry.sol
-├── frontend/            # React + Vite + ethers v6 + RainbowKit
-├── backend/             # Node.js upload server (0G Storage)
-├── scripts/             # Demo seed script
-├── sample-data/         # Ready-to-use test files for all flows
-│   ├── text-sentiment/  # 10 product reviews → positive/negative/neutral
-│   ├── text-instruction/# 8 Q&A prompts → instruction schema
-│   └── text-completion/ # 5 story prompts → completion schema
-└── phala-integration.md # Future GPU pipeline plan (vision model fine-tuning)
+*Runs Node.js 0G Storage Upload Relayer on `http://localhost:3001`*
+
+### 2. Terminal 2 — Python AI & YOLO Training Microservice
+```bash
+cd heda/backend/ai-service
+bash setup_env.sh
+source .venv/bin/activate
+python main.py
 ```
+*Runs Python FastAPI ML Service on `http://localhost:8000`*
+
+### 3. Terminal 3 — React Frontend
+```bash
+cd heda/frontend
+npm install
+npm run dev
+```
+*Opens Heda DApp on `http://localhost:5173`*
 
 ---
 
-## Quick Start
+## 🧪 Automated Test Suite
 
-See [TESTING_GUIDE.md](TESTING_GUIDE.md) for the full judge walkthrough.
+Run the automated test suite for the AI trainer engine:
 
 ```bash
-# 1. Clone
-git clone <repo> && cd heda
+python3 heda/backend/ai-service/test_trainer.py
+```
 
-# 2. Start backend (handles 0G Storage uploads)
-cd backend && cp .env.example .env  # add PRIVATE_KEY
-npm install && npm run dev
+Expected Output:
+```
+..
+----------------------------------------------------------------------
+Ran 2 tests in 0.001s
 
-# 3. Start frontend
-cd ../frontend && cp .env.example .env
-# Set: VITE_UPLOAD_API=http://localhost:3001
-# Set: VITE_WALLETCONNECT_PROJECT_ID=<from cloud.walletconnect.com>
-npm install && npm run dev
-
-# 4. Open http://localhost:5173
+OK
 ```
 
 ---
 
-## Key Features
+## 🐳 Docker Deployment
 
-### Annotation
-- **Image annotation** — bounding boxes (draw, drag, resize with handles), polygons
-- **Text annotation** — single-label classification with configurable labels
-- **Batch submit** — annotate all tasks, sign once (1 MetaMask popup for N tasks)
-- **Task claiming** — 30-min reservation prevents multiple annotators wasting work on same task
-- **Draft saving** — annotations saved to localStorage, restored on page reload
-- **Preview before submit** — review all tasks (done/pending) before signing
+To launch all microservices in containers with GPU support:
 
-### Jobs
-- **Auto-close** — jobs automatically close when all tasks are approved
-- **Multi-annotator support** — each task claimed independently, parallel work on different tasks
-- **Instant payment** — annotator receives ETH immediately on approval
-
-### Datasets
-- **COCO JSON export** — image datasets: standard COCO format with `images`, `annotations`, `categories`
-- **JSONL export** — text datasets: 3 schemas supported (Chat Messages, Instruction, Text Completion)
-- **ZIP download** — image datasets download as ZIP with `images/` folder + `annotations/instances.json`
-- **Onchain provenance** — every dataset root hash links to source data and annotations on 0G Storage
-- **Royalties** — purchase price goes directly to publisher (no platform cut)
-
-### Fine-Tuning (Text only)
-- **0G Compute integration** — fetches JSONL from 0G Storage, uploads to 0G Compute, polls status
-- **Supported models** — Qwen2.5-0.5B-Instruct ($0.5/M tokens), Qwen3-32B ($4/M tokens)
-- **Schema-aware** — JSONL output matches selected schema (chat/instruction/completion)
-
-### Wallet
-- **RainbowKit** — MetaMask, WalletConnect, Coinbase Wallet, any injected wallet
-- **Custom UI** — styled to match Precision Core design system
-
----
-
-## Supported Data Formats
-
-| Input | Annotation type | Output format |
-|---|---|---|
-| Images (PNG/JPG/WEBP) | Bounding boxes, polygons | COCO JSON + ZIP |
-| Text files (TXT/JSONL) | Classification | JSONL (chat/instruction/completion) |
-
----
-
-## Networks
-
-| | Value |
-|---|---|
-| Network | 0G Galileo Testnet |
-| Chain ID | 16602 |
-| RPC | https://evmrpc-testnet.0g.ai |
-| Explorer | https://chainscan-galileo.0g.ai |
-| Storage Indexer | https://indexer-storage-testnet-turbo.0g.ai |
-| Faucet | https://faucet.0g.ai (0.1 0G/day) |
-
----
-
-## Future: Vision Model Fine-Tuning (Phala)
-
-Image dataset fine-tuning (YOLOv8, CLIP) is planned via **Phala Cloud GPU TEE** — see [phala-integration.md](phala-integration.md). When 0G Compute adds vision model support, the pipeline will migrate to 0G.
-
----
-
-## Links
-
-- [0G Documentation](https://docs.0g.ai)
-- [Testing Guide for Judges](TESTING_GUIDE.md)
-- [Phala GPU Pipeline Plan](phala-integration.md)
-- [Sample Data](sample-data/README.md)
+```bash
+cd heda/backend
+docker compose up -d
+```
