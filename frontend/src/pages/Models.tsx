@@ -261,14 +261,9 @@ export default function Models() {
                 </div>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                   <span>0G Storage Root:</span>
-                  <div style={{ display: "flex", gap: 10 }}>
-                    <a href={`https://indexer-storage-testnet-turbo.0g.ai/file?root=${m.weightsRootHash}`} target="_blank" rel="noreferrer" style={{ color: "var(--primary)", textDecoration: "none" }}>
-                      Raw File ↗
-                    </a>
-                    <a href={`${GALILEO.storageExplorer}/file/${m.weightsRootHash}`} target="_blank" rel="noreferrer" style={{ color: "var(--text-2)", textDecoration: "none" }}>
-                      StorageScan ↗
-                    </a>
-                  </div>
+                  <a href={`${GALILEO.storageExplorer}/file/${m.weightsRootHash}`} target="_blank" rel="noreferrer" style={{ color: "var(--primary)", textDecoration: "none" }}>
+                    {m.weightsRootHash.slice(0, 8)}…{m.weightsRootHash.slice(-6)} ↗
+                  </a>
                 </div>
               </div>
 
