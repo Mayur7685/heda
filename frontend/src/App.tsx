@@ -67,6 +67,7 @@ import FineTune from "./pages/FineTune";
 import Submissions from "./pages/Submissions";
 import DatasetDetail from "./pages/DatasetDetail";
 import Models from "./pages/Models";
+import Leaderboard from "./pages/Leaderboard";
 
 function Header() {
   const { address, isCorrectChain, switchToGalileo } = useWallet();
@@ -77,6 +78,7 @@ function Header() {
     { to: "/create", label: "Create Job" },
     { to: "/datasets", label: "Datasets" },
     { to: "/models", label: "Models" },
+    { to: "/leaderboard", label: "Leaderboard" },
     { to: "/dashboard", label: "Dashboard" },
     { to: "/submissions", label: "My Work" },
   ];
@@ -135,6 +137,7 @@ export default function App() {
           <Route path="/datasets" element={<Datasets />} />
           <Route path="/datasets/:datasetId" element={<DatasetDetail />} />
           <Route path="/models" element={<Models />} />
+          <Route path="/leaderboard" element={<Leaderboard />} />
           <Route path="/finetune" element={<FineTune />} />
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/submissions" element={<Submissions />} />
