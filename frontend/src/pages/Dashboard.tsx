@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useWallet } from "../hooks/useWallet";
 import { useAnnotationMarket } from "../hooks/useAnnotationMarket";
 import { useDatasetRegistry } from "../hooks/useDatasetRegistry";
-import { uploadJson, uploadBlob } from "../hooks/useStorage";
+import { uploadJson, uploadBlob, fetchFrom0GStorage } from "../hooks/useStorage";
 import { GALILEO } from "../config";
 import DatasetHealthCard from "../components/DatasetHealthCard";
 
@@ -34,6 +34,8 @@ export default function Dashboard() {
   // annotation cache for health check: maps taskId → annotation data fetched from 0G Storage
   const [annotationCache, setAnnotationCache] = useState<Record<number, any>>({});
   const [healthLabels, setHealthLabels] = useState<string[]>([]);
+  const [publishedJobIds, setPublishedJobIds] = useState<Set<number>>(new Set());
+  const [pubBusy, setPubBusy] = useState(false);
   const loaded = useRef(false);
 
   useEffect(() => {
@@ -53,6 +55,14 @@ export default function Dashboard() {
         return { jobId: e.jobId, dataRootHash: e.dataRootHash, rewardPerTask: e.rewardPerTask, taskCount: Number(j.taskCount), approvedCount: Number(j.approvedCount), active: j.active, dataType: Number(j.dataType) };
       }));
       setMyJobs(withState);
+
+      if (registry) {
+        try {
+          const list = await registry.listDatasets();
+          const pubSet = new Set(list.map((d: any) => Number(d.sourceJobId)));
+          setPublishedJobIds(pubSet);
+        } catch {}
+      }
     } finally { setLoading(false); }
   }
 
@@ -71,9 +81,8 @@ export default function Dashboard() {
 
     // Fetch metadata to get labels for health check
     try {
-      const metaRes = await fetch(`${GALILEO.storageIndexer}/file?root=${job.dataRootHash}`).catch(() => null);
-      const jobMeta: any = metaRes?.ok ? await metaRes.json() : {};
-      const labels: string[] = jobMeta.labels ?? [];
+      const jobMeta: any = await fetchFrom0GStorage(job.dataRootHash, 3).catch(() => ({}));
+      const labels: string[] = jobMeta?.labels ?? [];
       setHealthLabels(labels);
 
       // Fetch annotation data for approved subs to build health cache
@@ -81,11 +90,8 @@ export default function Dashboard() {
         const cache: Record<number, any> = {};
         await Promise.all(rows.map(async (sub) => {
           try {
-            const res = await fetch(`${GALILEO.storageIndexer}/file?root=${sub.annotationRootHash}`).catch(() => null);
-            if (res?.ok) {
-              const data = await res.json();
-              cache[sub.taskId] = data?.annotation ?? null;
-            }
+            const data = await fetchFrom0GStorage(sub.annotationRootHash, 3).catch(() => null);
+            if (data) cache[sub.taskId] = data?.annotation ?? null;
           } catch { /* skip failed fetches */ }
         }));
         setAnnotationCache(cache);
@@ -151,6 +157,25 @@ export default function Dashboard() {
     setSelectedSubs((prev) => prev.size === pending.length ? new Set() : new Set(pending));
   }
 
+  // ── Close / Archive Job (refunds unspent bounty) ───────────────────
+  async function handleCloseJob(jobId: number) {
+    if (!market) return;
+    if (!window.confirm(`Are you sure you want to archive Job #${jobId}? All unspent bounty ETH will be refunded to your wallet.`)) return;
+    setTxMsg("Closing job & refunding unspent bounty onchain…");
+    setTxErr(false);
+    try {
+      const receipt = await market.closeJob(jobId);
+      setTxMsg(`✓ Job #${jobId} archived & unspent bounty refunded — ${GALILEO.explorer}/tx/${receipt.hash}`);
+      await loadMyJobs();
+      if (selected?.jobId === jobId) {
+        setSelected((prev) => prev ? { ...prev, active: false } : null);
+      }
+    } catch (e: any) {
+      setTxMsg(`Archive failed: ${e.message}`);
+      setTxErr(true);
+    }
+  }
+
   // ── Annotated image preview ────────────────────────────────────────
   async function openPreview(sub: SubRow) {
     if (!selected) return;
@@ -160,16 +185,16 @@ export default function Dashboard() {
     setPreviewAnnotations([]);
     setPreviewImgSize(null);
     try {
-      // Fetch annotation JSON (contains bboxes)
-      const annRes = await fetch(`${GALILEO.storageIndexer}/file?root=${sub.annotationRootHash}`).catch(() => null);
-      const annData = annRes?.ok ? await annRes.json() : null;
+      // Fetch annotation JSON (contains bboxes) & raw dataset data files in parallel
+      const [annData, files] = await Promise.all([
+        fetchFrom0GStorage(sub.annotationRootHash, 5).catch(() => null),
+        fetchFrom0GStorage(selected.dataRootHash, 5).catch(() => null),
+      ]);
+
       const boxes: any[] = Array.isArray(annData?.annotation) ? annData.annotation : [];
       setPreviewAnnotations(boxes);
 
-      // Fetch raw image data from job's data files
-      const dataRes = await fetch(`${GALILEO.storageIndexer}/file?root=${selected.dataRootHash}`).catch(() => null);
-      if (dataRes?.ok) {
-        const files: Array<{ name: string; type: string; data: string }> = await dataRes.json();
+      if (Array.isArray(files)) {
         const file = files[sub.taskId];
         if (file?.data) setPreviewImageUrl(`data:${file.type};base64,${file.data}`);
       }
@@ -181,14 +206,14 @@ export default function Dashboard() {
   async function publishDataset(job: JobRow) {
     if (!registry || !signer) return;
     setTxErr(false);
+    setPubBusy(true);
 
     try {
       const approvedSubs = subs.filter((s) => s.approved);
 
       // Fetch job metadata to get jsonlSchema and labels
       setTxMsg("Fetching job metadata…");
-      const metaRes = await fetch(`${GALILEO.storageIndexer}/file?root=${job.dataRootHash}`).catch(() => null);
-      const jobMeta: any = metaRes?.ok ? await metaRes.json() : {};
+      const jobMeta: any = await fetchFrom0GStorage(job.dataRootHash, 3).catch(() => ({}));
       const labels: string[] = publishForm.labels?.split(",").map((l: string) => l.trim()).filter(Boolean) ?? jobMeta.labels ?? [];
       const jsonlSchema: string = jobMeta.jsonlSchema ?? "chat";
 
@@ -196,8 +221,7 @@ export default function Dashboard() {
       setTxMsg("Fetching annotations…");
       const annotationData = await Promise.all(
         approvedSubs.map(async (sub) => {
-          const res = await fetch(`${GALILEO.storageIndexer}/file?root=${sub.annotationRootHash}`).catch(() => null);
-          return res?.ok ? res.json() : null;
+          return fetchFrom0GStorage(sub.annotationRootHash, 3).catch(() => null);
         })
       );
 
@@ -208,8 +232,7 @@ export default function Dashboard() {
         setTxMsg("Building JSONL dataset…");
 
         // Fetch original text files
-        const dataRes = await fetch(`${GALILEO.storageIndexer}/file?root=${job.dataRootHash}`).catch(() => null);
-        const allFiles: Array<{ name: string; data: string }> = dataRes?.ok ? await dataRes.json() : [];
+        const allFiles: Array<{ name: string; data: string }> = await fetchFrom0GStorage(job.dataRootHash, 3).catch(() => []);
 
         const lines: string[] = [];
         annotationData.forEach((ann) => {
@@ -239,8 +262,7 @@ export default function Dashboard() {
       } else {
         // ── IMAGE → COCO ──────────────────────────────────────────────
         setTxMsg("Building COCO dataset…");
-        const dataRes = await fetch(`${GALILEO.storageIndexer}/file?root=${job.dataRootHash}`).catch(() => null);
-        const allFiles: Array<{ name: string; type: string; data: string }> = dataRes?.ok ? await dataRes.json() : [];
+        const allFiles: Array<{ name: string; type: string; data: string }> = await fetchFrom0GStorage(job.dataRootHash, 3).catch(() => []);
 
         const labelToId = Object.fromEntries(labels.map((l, i) => [l, i + 1]));
         const cocoImages: any[] = [];
@@ -285,8 +307,9 @@ export default function Dashboard() {
       setTxMsg("Publishing onchain…");
       const r = await registry.publish(datasetRootHash, metaHash, publishForm.price, job.dataType as 0 | 1, job.jobId);
       setTxMsg(`Published ✓ — ${GALILEO.explorer}/tx/${r.hash}`);
+      setPublishedJobIds((prev) => new Set([...prev, job.jobId]));
       setPublishing(false);
-    } catch (e: any) { setTxMsg(e.message); setTxErr(true); }
+    } catch (e: any) { setTxMsg(e.message); setTxErr(true); } finally { setPubBusy(false); }
   }
 
     
@@ -367,13 +390,37 @@ export default function Dashboard() {
                   ))}
                 </div>
               </div>
-              {selected.approvedCount === selected.taskCount && selected.taskCount > 0 && (
-                <button className="btn-primary" onClick={() => setPublishing(true)}
-                  disabled={publishing || txMsg.startsWith("Building") || txMsg.startsWith("Fetching") || txMsg.startsWith("Uploading") || txMsg.startsWith("Publishing")}>
-                  {txMsg && !txErr && txMsg !== "" && !txMsg.includes("✓") ? txMsg : "Publish Dataset"}
-                  <span className="material-symbols-outlined" style={{ fontSize: 16 }}>arrow_forward</span>
-                </button>
-              )}
+              <div style={{ display: "flex", gap: 10 }}>
+                {selected.active && (
+                  <button
+                    className="btn-ghost"
+                    onClick={() => handleCloseJob(selected.jobId)}
+                    title="Archive this job and refund unspent bounty 0G"
+                    style={{
+                      display: "flex", alignItems: "center", gap: 6,
+                      padding: "8px 14px", border: "1px solid var(--border)",
+                      color: "var(--text-2)", borderRadius: 6, fontSize: 13, fontWeight: 600,
+                    }}
+                  >
+                    <span className="material-symbols-outlined" style={{ fontSize: 16, color: "var(--warn)" }}>archive</span>
+                    Archive & Refund Job
+                  </button>
+                )}
+                {publishedJobIds.has(selected.jobId) ? (
+                  <a href="/datasets" className="badge badge-approved" style={{ display: "inline-flex", alignItems: "center", gap: 6, textDecoration: "none", padding: "8px 14px", borderRadius: 6, fontSize: 13, fontWeight: 600 }}>
+                    <span className="material-symbols-outlined" style={{ fontSize: 16 }}>check_circle</span>
+                    Dataset Published ✓
+                  </a>
+                ) : (
+                  selected.approvedCount === selected.taskCount && selected.taskCount > 0 && (
+                    <button className="btn-primary" onClick={() => setPublishing(true)}
+                      disabled={publishing || pubBusy || txMsg.startsWith("Building") || txMsg.startsWith("Fetching") || txMsg.startsWith("Uploading") || txMsg.startsWith("Publishing")}>
+                      {pubBusy ? "Publishing onchain…" : "Publish Dataset"}
+                      <span className="material-symbols-outlined" style={{ fontSize: 16 }}>arrow_forward</span>
+                    </button>
+                  )
+                )}
+              </div>
             </div>
 
             {txMsg && (
@@ -596,21 +643,23 @@ export default function Dashboard() {
                 <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
                   <div>
                     <label className="label-caps" style={{ display: "block", marginBottom: 6 }}>Name</label>
-                    <input type="text" placeholder={`Dataset from Job #${selected.jobId}`} value={publishForm.name} onChange={(e) => setPublishForm((f) => ({ ...f, name: e.target.value }))} />
+                    <input type="text" disabled={pubBusy} placeholder={`Dataset from Job #${selected.jobId}`} value={publishForm.name} onChange={(e) => setPublishForm((f) => ({ ...f, name: e.target.value }))} />
                   </div>
                   <div>
                     <label className="label-caps" style={{ display: "block", marginBottom: 6 }}>Labels (comma-separated)</label>
-                    <input type="text" placeholder="car, person, building" value={publishForm.labels}
+                    <input type="text" disabled={pubBusy} placeholder="car, person, building" value={publishForm.labels}
                       onChange={(e) => setPublishForm((f) => ({ ...f, labels: e.target.value }))} />
                     <p className="hint" style={{ marginTop: 4 }}>Used to build COCO categories</p>
                   </div>
                   <div>
                     <label className="label-caps" style={{ display: "block", marginBottom: 6 }}>Price (0G) — 0 for free</label>
-                    <input type="number" step="0.01" min="0" value={publishForm.price} onChange={(e) => setPublishForm((f) => ({ ...f, price: e.target.value }))} />
+                    <input type="number" disabled={pubBusy} step="0.01" min="0" value={publishForm.price} onChange={(e) => setPublishForm((f) => ({ ...f, price: e.target.value }))} />
                   </div>
                   <div style={{ display: "flex", gap: 8 }}>
-                    <button className="btn-primary" onClick={() => publishDataset(selected)}>Publish</button>
-                    <button className="btn-secondary" onClick={() => setPublishing(false)}>Cancel</button>
+                    <button className="btn-primary" onClick={() => publishDataset(selected)} disabled={pubBusy}>
+                      {pubBusy ? "Uploading to 0G Storage…" : "Publish Dataset"}
+                    </button>
+                    <button className="btn-secondary" onClick={() => setPublishing(false)} disabled={pubBusy}>Cancel</button>
                   </div>
                 </div>
               </div>

@@ -5,6 +5,8 @@ import { useWallet } from "../hooks/useWallet";
 import { useDatasetRegistry } from "../hooks/useDatasetRegistry";
 import { GALILEO } from "../config";
 
+import TrainingModal from "../components/TrainingModal";
+
 export default function DatasetDetail() {
   const { datasetId } = useParams<{ datasetId: string }>();
   const navigate = useNavigate();
@@ -16,6 +18,7 @@ export default function DatasetDetail() {
   const [txMsg, setTxMsg] = useState("");
   const [txErr, setTxErr] = useState(false);
   const [downloading, setDownloading] = useState(false);
+  const [showTrainingModal, setShowTrainingModal] = useState(false);
 
   useEffect(() => {
     if (!registry || !datasetId) return;
@@ -201,6 +204,15 @@ export default function DatasetDetail() {
                 {isFree ? "Get Free" : `Buy for ${price} 0G`}
               </button>
             )}
+
+            <button
+              className="btn-secondary"
+              style={{ width: "100%", justifyContent: "center", marginTop: 12, borderColor: "var(--primary)", color: "var(--primary)" }}
+              onClick={() => setShowTrainingModal(true)}
+            >
+              <span className="material-symbols-outlined" style={{ fontSize: 16 }}>model_training</span>
+              Train YOLO Model
+            </button>
             <p className="hint" style={{ textAlign: "center", marginTop: 8 }}>Gas fees apply in 0G token</p>
           </div>
 
@@ -230,6 +242,15 @@ export default function DatasetDetail() {
           </div>
         </div>
       </div>
+
+      {showTrainingModal && dataset && (
+        <TrainingModal
+          datasetId={Number(datasetId)}
+          datasetName={metadata?.name || `Dataset #${datasetId}`}
+          datasetRootHash={dataset.rootHash}
+          onClose={() => setShowTrainingModal(false)}
+        />
+      )}
     </div>
   );
 }

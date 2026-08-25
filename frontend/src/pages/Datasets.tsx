@@ -2,7 +2,10 @@ import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { useWallet } from "../hooks/useWallet";
 import { useDatasetRegistry } from "../hooks/useDatasetRegistry";
+import { fetchFrom0GStorage } from "../hooks/useStorage";
 import { GALILEO } from "../config";
+
+import TrainingModal from "../components/TrainingModal";
 
 type DatasetRow = { datasetId: number; publisher: string; rootHash: string; price: string; dataType: number; txHash: string; hasLicense?: boolean };
 type Filter = "all" | "image" | "text" | "free" | "paid";
@@ -14,6 +17,7 @@ export default function Datasets() {
   const [filter, setFilter] = useState<Filter>("all");
   const [loading, setLoading] = useState(false);
   const [txMsg, setTxMsg] = useState("");
+  const [trainingDataset, setTrainingDataset] = useState<DatasetRow | null>(null);
   const loaded = useRef(false);
 
   useEffect(() => {
@@ -37,14 +41,24 @@ export default function Datasets() {
         };
         if (d.metadataURI) {
           try {
-            const metaRes = await fetch(`https://indexer-storage-testnet-turbo.0g.ai/file?root=${d.metadataURI}`, { signal: AbortSignal.timeout(5000) });
-            if (metaRes.ok) {
-              const meta = await metaRes.json();
+            const meta = await fetchFrom0GStorage(d.metadataURI, 3);
+            if (meta) {
               base.name = meta.name;
               base.format = meta.format;
               base.taskCount = meta.taskCount;
+              base.labels = meta.labels;
             }
           } catch { /* fallback */ }
+        }
+
+        // Fetch sample preview image if dataset is image type
+        if (d.dataType === 0 && d.rootHash) {
+          try {
+            const files = await fetchFrom0GStorage(d.rootHash, 3);
+            if (Array.isArray(files) && files[0]?.data && files[0]?.type) {
+              base.previewImage = `data:${files[0].type};base64,${files[0].data}`;
+            }
+          } catch { /* ignore fallback */ }
         }
         return base;
       }));
@@ -126,11 +140,15 @@ export default function Datasets() {
               <div key={d.datasetId} className="card" style={{ display: "flex", flexDirection: "column", overflow: "hidden", transition: "border-color 0.15s" }}
                 onMouseEnter={(e) => (e.currentTarget.style.borderColor = "var(--primary)")}
                 onMouseLeave={(e) => (e.currentTarget.style.borderColor = "var(--border)")}>
-                {/* Image placeholder */}
-                <div style={{ height: 192, background: "var(--surface-high)", display: "flex", alignItems: "center", justifyContent: "center", position: "relative" }}>
-                  <span className="material-symbols-outlined" style={{ fontSize: 64, color: "var(--border)" }}>
-                    {d.dataType === 0 ? "image" : "article"}
-                  </span>
+                {/* Image / Thumbnail Preview */}
+                <div style={{ height: 192, background: "#0b120c", display: "flex", alignItems: "center", justifyContent: "center", position: "relative", overflow: "hidden" }}>
+                  {(d as any).previewImage ? (
+                    <img src={(d as any).previewImage} alt="Dataset Sample" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                  ) : (
+                    <span className="material-symbols-outlined" style={{ fontSize: 64, color: "var(--border)" }}>
+                      {d.dataType === 0 ? "image" : "article"}
+                    </span>
+                  )}
                   {d.hasLicense && (
                     <div style={{ position: "absolute", top: 12, left: 12 }}>
                       <span className="badge badge-licensed">Licensed</span>
@@ -171,6 +189,15 @@ export default function Datasets() {
                       </span>
                     </div>
                     <div style={{ display: "flex", gap: 8 }}>
+                      <button
+                        className="btn-ghost btn-sm"
+                        style={{ border: "1px solid var(--border)", color: "var(--primary)" }}
+                        onClick={() => setTrainingDataset(d)}
+                        title="Train YOLO model on this dataset"
+                      >
+                        <span className="material-symbols-outlined" style={{ fontSize: 14 }}>model_training</span>
+                        Train
+                      </button>
                       <Link to={`/datasets/${d.datasetId}`} className="btn-secondary btn-sm">Details</Link>
                       {!d.hasLicense && (
                         <button className="btn-primary btn-sm" onClick={() => purchase(d)}>
@@ -185,6 +212,15 @@ export default function Datasets() {
           })}
         </div>
       </div>
+
+      {trainingDataset && (
+        <TrainingModal
+          datasetId={trainingDataset.datasetId}
+          datasetName={(trainingDataset as any).name || `Dataset #${trainingDataset.datasetId}`}
+          datasetRootHash={trainingDataset.rootHash}
+          onClose={() => setTrainingDataset(null)}
+        />
+      )}
     </>
   );
 }

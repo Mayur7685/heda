@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useWallet } from "../hooks/useWallet";
 import { useAnnotationMarket } from "../hooks/useAnnotationMarket";
-import { uploadBlob, uploadJson } from "../hooks/useStorage";
+import { uploadBlob, uploadJson, cache0GData } from "../hooks/useStorage";
 import { GALILEO } from "../config";
 
 type Step = 1 | 2 | 3;
@@ -56,8 +56,8 @@ export default function CreateJob() {
 
   const [step, setStep] = useState<Step>(1);
   const [files, setFiles] = useState<File[]>([]);
-  const [dataType, setDataType] = useState<0 | 1>(0);
-  const [jsonlSchema, setJsonlSchema] = useState<"chat" | "instruction" | "completion">("chat");
+  const [dataType] = useState<0 | 1>(0);
+  const [jsonlSchema] = useState<"chat" | "instruction" | "completion">("chat");
   const [instructions, setInstructions] = useState("");
   const [labelInput, setLabelInput] = useState("");
   const [labels, setLabels] = useState<string[]>([]);
@@ -81,6 +81,12 @@ export default function CreateJob() {
     if (!market || !signer) return;
     setError("");
     setBalanceWarn(null);
+
+    // Mandatory fields check
+    if (files.length === 0 || !instructions.trim() || labels.length === 0 || !rewardPerTask || parseFloat(rewardPerTask) <= 0) {
+      setError("All fields are mandatory: Files, Instructions, at least 1 Class Label, and Reward per Task.");
+      return;
+    }
 
     // ── Balance pre-check ──────────────────────────────────────────────────
     // Gas buffer: 0.005 ETH covers createJob gas on Galileo (~1M gas × 4 gwei)
@@ -112,6 +118,7 @@ export default function CreateJob() {
         })
       );
       const dataRootHash = await uploadBlob(new Blob([JSON.stringify(fileContents)], { type: "application/json" }));
+      cache0GData(dataRootHash, fileContents);
       const metadataRootHash = await uploadJson({ instructions, labels, dataType: dataType === 0 ? "image" : "text", jsonlSchema: dataType === 1 ? jsonlSchema : undefined, fileCount: files.length, dataRootHash });
 
       setStatus("posting");
@@ -160,55 +167,9 @@ export default function CreateJob() {
         {/* Step 1: Upload */}
         {step === 1 && (
           <>
-            <h2 style={{ fontSize: 20, fontWeight: 600, marginBottom: 6 }}>Upload Dataset</h2>
-            <p style={{ color: "var(--text-2)", fontSize: 14, marginBottom: 24 }}>Upload the raw data files that annotators will label.</p>
+            <h2 style={{ fontSize: 20, fontWeight: 600, marginBottom: 6 }}>Upload Image Dataset</h2>
+            <p style={{ color: "var(--text-2)", fontSize: 14, marginBottom: 24 }}>Upload the raw images (PNG, JPG, WEBP) that annotators will label with bounding boxes.</p>
 
-            {/* Data type toggle */}
-            <div style={{ display: "flex", gap: 8, marginBottom: 20 }}>
-              {([0, 1] as const).map((t) => (
-                <button key={t} onClick={() => setDataType(t)}
-                  style={{
-                    padding: "6px 20px", borderRadius: 4, border: "1px solid",
-                    borderColor: dataType === t ? "var(--primary)" : "var(--border)",
-                    background: dataType === t ? "var(--primary-bg)" : "transparent",
-                    color: dataType === t ? "var(--primary)" : "var(--text-2)",
-                    fontWeight: 600, fontSize: 13, cursor: "pointer",
-                  }}>
-                  <span className="material-symbols-outlined" style={{ fontSize: 16, marginRight: 6 }}>
-                    {t === 0 ? "image" : "article"}
-                  </span>
-                  {t === 0 ? "Images" : "Text"}
-                </button>
-              ))}
-            </div>
-
-            {/* JSONL schema selector — only for text */}
-            {dataType === 1 && (
-              <div style={{ marginBottom: 20 }}>
-                <label className="label-caps" style={{ display: "block", marginBottom: 8 }}>Output Schema (for fine-tuning)</label>
-                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                  {([
-                    { key: "chat", label: "Chat Messages", example: '{"messages": [{"role": "user", "content": "..."}, {"role": "assistant", "content": "..."}]}', desc: "Recommended — works with all 0G models" },
-                    { key: "instruction", label: "Instruction", example: '{"instruction": "...", "input": "...", "output": "..."}', desc: "For instruction-following tasks" },
-                    { key: "completion", label: "Text Completion", example: '{"text": "..."}', desc: "For generative/completion tasks" },
-                  ] as const).map(({ key, label, example, desc }) => (
-                    <div key={key} onClick={() => setJsonlSchema(key)}
-                      style={{
-                        padding: "10px 14px", borderRadius: 4, cursor: "pointer",
-                        border: `1px solid ${jsonlSchema === key ? "var(--primary)" : "var(--border)"}`,
-                        background: jsonlSchema === key ? "var(--primary-bg)" : "var(--surface)",
-                      }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
-                        <div style={{ width: 14, height: 14, borderRadius: "50%", border: `2px solid ${jsonlSchema === key ? "var(--primary)" : "var(--border)"}`, background: jsonlSchema === key ? "var(--primary)" : "transparent", flexShrink: 0 }} />
-                        <span style={{ fontSize: 13, fontWeight: 600, color: jsonlSchema === key ? "var(--primary)" : "var(--text)" }}>{label}</span>
-                        <span className="hint">{desc}</span>
-                      </div>
-                      <code style={{ fontSize: 11, color: "var(--text-3)", fontFamily: "'Space Grotesk', monospace" }}>{example}</code>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
             <label style={{
               display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
               border: "2px dashed var(--border)", borderRadius: 4, padding: "40px 24px",
@@ -217,19 +178,19 @@ export default function CreateJob() {
             }}>
               <span className="material-symbols-outlined" style={{ fontSize: 40, color: "var(--text-3)", marginBottom: 12 }}>upload_file</span>
               <span style={{ color: "var(--text-2)", fontSize: 14 }}>
-                {files.length > 0 ? `${files.length} file(s) selected` : "Drop files here or click to browse"}
+                {files.length > 0 ? `${files.length} file(s) selected` : "Drop image files here or click to browse"}
               </span>
               <span className="hint" style={{ marginTop: 4 }}>
-                {dataType === 0 ? "PNG, JPG, WEBP" : "TXT, JSONL, JSON"}
+                PNG, JPG, WEBP • Max 10MB per file
               </span>
-              <input type="file" multiple accept={dataType === 0 ? "image/*" : ".txt,.jsonl,.json"}
+              <input type="file" multiple accept="image/*"
                 style={{ display: "none" }} onChange={(e) => setFiles(Array.from(e.target.files ?? []))} />
             </label>
 
             {files.length > 0 && (
               <div style={{ background: "var(--primary-bg)", border: "1px solid rgba(0,228,121,0.3)", borderRadius: 4, padding: "8px 12px", fontSize: 13, color: "var(--primary)" }}>
                 <span className="material-symbols-outlined" style={{ fontSize: 16, marginRight: 6 }}>check_circle</span>
-                {files.length} file(s) ready — {files.length} annotation tasks will be created
+                {files.length} file(s) ready — {files.length} image annotation tasks will be created
               </div>
             )}
 
@@ -245,17 +206,14 @@ export default function CreateJob() {
         {step === 2 && (
           <>
             <h2 style={{ fontSize: 20, fontWeight: 600, marginBottom: 6 }}>
-              {dataType === 0 ? "Image Annotation Config" : "Text Annotation Config"}
+              Image Bounding Box Config
             </h2>
             <p style={{ color: "var(--text-2)", fontSize: 14, marginBottom: 24 }}>
-              {dataType === 0
-                ? "Define what annotators should label and how much they earn per image."
-                : "Define the classification task and output schema for fine-tuning."}
+              Define instructions and bounding box class labels for annotators.
             </p>
 
             <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
 
-              {/* Text: show selected schema as reminder */}
               {dataType === 1 && (
                 <div style={{ background: "var(--primary-bg)", border: "1px solid rgba(0,228,121,0.3)", borderRadius: 4, padding: "10px 14px", fontSize: 13 }}>
                   <span className="material-symbols-outlined" style={{ fontSize: 14, marginRight: 6, color: "var(--primary)" }}>schema</span>
@@ -320,13 +278,21 @@ export default function CreateJob() {
                   </div>
                 </div>
               </div>
+
+              {labels.length === 0 && (
+                <div style={{ fontSize: 12, color: "var(--error)", display: "flex", alignItems: "center", gap: 4 }}>
+                  <span className="material-symbols-outlined" style={{ fontSize: 14 }}>info</span>
+                  At least 1 {dataType === 0 ? "bounding box class label" : "classification label"} is required.
+                </div>
+              )}
             </div>
 
             <div style={{ display: "flex", justifyContent: "space-between", marginTop: 24 }}>
               <button className="btn-secondary" onClick={() => setStep(1)}>
                 <span className="material-symbols-outlined" style={{ fontSize: 16 }}>arrow_back</span> Back
               </button>
-              <button className="btn-primary" onClick={() => setStep(3)} disabled={!instructions.trim()}>
+              <button className="btn-primary" onClick={() => setStep(3)}
+                disabled={!instructions.trim() || labels.length === 0 || !rewardPerTask || parseFloat(rewardPerTask) <= 0}>
                 Continue to Review <span className="material-symbols-outlined" style={{ fontSize: 16 }}>arrow_forward</span>
               </button>
             </div>

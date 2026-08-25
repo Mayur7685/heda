@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useWallet } from "../hooks/useWallet";
 import { useAnnotationMarket } from "../hooks/useAnnotationMarket";
+import { fetchFrom0GStorage } from "../hooks/useStorage";
 
 type JobRow = {
   jobId: number;
@@ -45,27 +46,27 @@ export default function Jobs() {
           const j = await market.getJob(e.jobId);
           const base: JobRow = { ...e, approvedCount: Number(j.approvedCount), active: j.active };
 
-          // Fetch metadata from 0G Storage (non-blocking — don't fail if unavailable)
+          // Fetch metadata & raw data files in parallel from 0G Storage
           try {
-            const metaRes = await fetch(`https://indexer-storage-testnet-turbo.0g.ai/file?root=${j.metadataURI}`, { signal: AbortSignal.timeout(5000) });
-            if (metaRes.ok) {
-              const meta = await metaRes.json();
+            const [metaResult, dataResult] = await Promise.allSettled([
+              fetchFrom0GStorage(j.metadataURI, 4),
+              fetchFrom0GStorage(j.dataRootHash, 4),
+            ]);
+
+            if (metaResult.status === "fulfilled" && metaResult.value) {
+              const meta = metaResult.value;
               base.name = meta.name;
               base.instructions = meta.instructions;
               base.labels = meta.labels;
+            }
 
-              // Fetch first image as preview (image jobs only)
-              if (Number(j.dataType) === 0 && meta.dataRootHash) {
-                const dataRes = await fetch(`https://indexer-storage-testnet-turbo.0g.ai/file?root=${meta.dataRootHash}`, { signal: AbortSignal.timeout(5000) });
-                if (dataRes.ok) {
-                  const files = await dataRes.json();
-                  if (files?.[0]?.data && files[0].type) {
-                    base.previewImage = `data:${files[0].type};base64,${files[0].data}`;
-                  }
-                }
+            if (Number(j.dataType) === 0 && dataResult.status === "fulfilled" && dataResult.value) {
+              const files = dataResult.value;
+              if (Array.isArray(files) && files[0]?.data && files[0]?.type) {
+                base.previewImage = `data:${files[0].type};base64,${files[0].data}`;
               }
             }
-          } catch { /* metadata fetch failed — show fallback */ }
+          } catch { /* fetch failed — show fallback */ }
 
           return base;
         })
@@ -122,9 +123,9 @@ export default function Jobs() {
         display: "flex", justifyContent: "space-between", alignItems: "center", gap: 16,
       }}>
         <div className="filter-bar">
-          {(["all", "image", "text"] as Filter[]).map((f) => (
+          {(["all", "image"] as Filter[]).map((f) => (
             <button key={f} className={`filter-pill ${filter === f ? "active" : ""}`} onClick={() => setFilter(f)}>
-              {f === "all" ? "All" : f === "image" ? "Image" : "Text"}
+              {f === "all" ? "All Jobs" : "Image Bounding Box Jobs"}
             </button>
           ))}
         </div>
@@ -234,21 +235,33 @@ export default function Jobs() {
               </div>
 
               {job.active ? (
-                <button className="btn-secondary" style={{ width: "100%", justifyContent: "center", borderColor: "var(--primary)", color: "var(--primary)" }}
-                  onClick={async () => {
-                    if (!market) { navigate(`/jobs/${job.jobId}/0`); return; }
-                    // Find first available (unclaimed or expired) task
-                    for (let i = 0; i < job.taskCount; i++) {
-                      const available = await market.isTaskAvailable(job.jobId, i).catch(() => true);
-                      if (available) { navigate(`/jobs/${job.jobId}/${i}`); return; }
-                    }
-                    alert('All tasks are currently claimed. Try again in 30 minutes.');
-                  }}>
-                  Accept Work
-                </button>
+                <div style={{ display: "flex", gap: 8 }}>
+                  <button className="btn-secondary" style={{ flex: 1, justifyContent: "center", borderColor: "var(--primary)", color: "var(--primary)" }}
+                    onClick={async () => {
+                      if (!market) { navigate(`/jobs/${job.jobId}/0`); return; }
+                      // Find first available (unclaimed or expired) task
+                      for (let i = 0; i < job.taskCount; i++) {
+                        const available = await market.isTaskAvailable(job.jobId, i).catch(() => true);
+                        if (available) { navigate(`/jobs/${job.jobId}/${i}`); return; }
+                      }
+                      alert('All tasks are currently claimed. Try again in 30 minutes.');
+                    }}>
+                    Accept Work
+                  </button>
+                  {signer && (
+                    <button
+                      className="btn-ghost"
+                      title="Archive job & refund unspent bounty"
+                      onClick={() => navigate("/dashboard")}
+                      style={{ border: "1px solid var(--border)", padding: "0 10px", borderRadius: 4, display: "flex", alignItems: "center", gap: 4, fontSize: 11, color: "var(--text-3)" }}
+                    >
+                      <span className="material-symbols-outlined" style={{ fontSize: 14 }}>settings</span>
+                    </button>
+                  )}
+                </div>
               ) : (
                 <button className="btn-secondary" style={{ width: "100%", justifyContent: "center" }} disabled>
-                  Task Completed
+                  Archived / Completed
                 </button>
               )}
             </div>
