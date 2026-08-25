@@ -10,21 +10,19 @@ const app = express();
 app.use(cors());
 app.use(express.json({ limit: '50mb' }));
 
-const GALILEO_RPC = 'https://evmrpc-testnet.0g.ai';
-const STORAGE_INDEXER = 'https://indexer-storage-testnet-turbo.0g.ai';
+const GALILEO_RPC = process.env.GALILEO_RPC || 'https://evmrpc-testnet.0g.ai';
+const STORAGE_INDEXER = process.env.STORAGE_INDEXER || 'https://indexer-storage-testnet-turbo.0g.ai';
 const UPLOAD_TIMEOUT_MS = 60_000;
 
 // Serial queue — same wallet, nonce must increment one at a time.
-// Parallel uploads cause "replacement transaction underpriced" errors.
 let uploadQueue = Promise.resolve();
 
-async function doUpload(data) {
+export async function doUpload(data) {
   let tempPath = null;
   try {
     const provider = new ethers.JsonRpcProvider(GALILEO_RPC);
     const signer = new ethers.Wallet(process.env.PRIVATE_KEY, provider);
 
-    // Bump gas 20% to avoid replacement errors on retry
     const feeData = await provider.getFeeData();
     const gasPrice = feeData.gasPrice
       ? (feeData.gasPrice * 120n) / 100n
@@ -52,7 +50,7 @@ async function doUpload(data) {
       const [, uploadErr] = await Promise.race([uploadPromise, timeoutPromise]);
       if (uploadErr) throw new Error(`Upload failed: ${uploadErr.message ?? uploadErr}`);
 
-      console.log('Upload OK:', rootHash);
+      console.log('[Relayer] Upload OK:', rootHash);
       return { rootHash };
     } finally {
       await file.close();
@@ -67,18 +65,17 @@ app.post('/upload', (req, res) => {
   const { data } = req.body;
   if (!data) return res.status(400).json({ error: 'Missing data field' });
 
-  // Enqueue — each upload waits for the previous to finish
   uploadQueue = uploadQueue
     .then(() => doUpload(data))
     .then((result) => res.json(result))
     .catch((err) => {
-      console.error('Upload error:', err.message);
+      console.error('[Relayer] Upload error:', err.message);
       res.status(500).json({ error: err.message });
     });
 });
 
 // Health check
-app.get('/health', (_, res) => res.json({ ok: true }));
+app.get('/health', (_, res) => res.json({ ok: true, service: "Heda 0G Storage Relayer" }));
 
 const PORT = process.env.PORT || 3001;
-app.listen(PORT, () => console.log(`Heda upload server on :${PORT}`));
+app.listen(PORT, () => console.log(`🚀 Heda 0G Relayer listening on :${PORT}`));

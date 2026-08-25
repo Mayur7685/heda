@@ -1,0 +1,33 @@
+version: '3.8'
+
+services:
+  relayer:
+    build:
+      context: ./relayer
+    container_name: heda-relayer
+    restart: unless-stopped
+    ports:
+      - "3001:3001"
+    environment:
+      - PORT=3001
+      - PRIVATE_KEY=${PRIVATE_KEY}
+      - GALILEO_RPC=https://evmrpc-testnet.0g.ai
+      - STORAGE_INDEXER=https://indexer-storage-testnet-turbo.0g.ai
+
+  ai-service:
+    build:
+      context: ./ai-service
+    container_name: heda-ai-service
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      - PORT=8000
+      - RELAYER_URL=http://relayer:3001/upload
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
