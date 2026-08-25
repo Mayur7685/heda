@@ -94,6 +94,7 @@ export default function TrainingModal({ datasetId, datasetName, datasetRootHash,
         architecture: modelType === 0 ? "YOLOv8n" : modelType === 1 ? "YOLOv8s" : "YOLOv8m",
         metrics: jobData.metrics,
         sourceDatasetId: datasetId,
+        labels: jobData?.labels ?? [],
       });
 
       // 2. Call ModelRegistry.sol.publish(...)
@@ -270,14 +271,14 @@ export default function TrainingModal({ datasetId, datasetName, datasetRootHash,
               <input type="text" value={pubName} onChange={(e) => setPubName(e.target.value)} />
             </div>
 
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+            <div style={{ display: "grid", gridTemplateColumns: "140px 1fr", gap: 16, alignItems: "flex-start" }}>
               <div>
-                <label className="label-caps" style={{ display: "block", marginBottom: 6 }}>License Price (0G)</label>
-                <input type="number" step="0.01" value={pubPrice} onChange={(e) => setPubPrice(e.target.value)} />
+                <label className="label-caps" style={{ display: "block", marginBottom: 6, whiteSpace: "nowrap" }}>Price (0G ETH)</label>
+                <input type="number" step="0.01" value={pubPrice} onChange={(e) => setPubPrice(e.target.value)} style={{ width: "100%" }} />
               </div>
               <div>
-                <label className="label-caps" style={{ display: "block", marginBottom: 6 }}>0G Weights Root Hash</label>
-                <div style={{ fontFamily: "'Space Grotesk', monospace", fontSize: 11, padding: "8px 10px", background: "var(--surface-low)", border: "1px solid var(--border)", borderRadius: 4, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                <label className="label-caps" style={{ display: "block", marginBottom: 6, whiteSpace: "nowrap" }}>0G Weights Root Hash</label>
+                <div style={{ fontFamily: "'Space Grotesk', monospace", fontSize: 11, padding: "10px 12px", background: "var(--surface-low)", border: "1px solid var(--border)", borderRadius: 6, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: "var(--primary)", fontWeight: 600 }}>
                   {jobData?.weightsRootHash}
                 </div>
               </div>

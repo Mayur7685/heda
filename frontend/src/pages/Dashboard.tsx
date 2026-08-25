@@ -203,6 +203,22 @@ export default function Dashboard() {
     }
   }
 
+  async function openPublishModal(job: JobRow) {
+    setPublishing(true);
+    try {
+      const jobMeta: any = await fetchFrom0GStorage(job.dataRootHash, 3).catch(() => ({}));
+      const existingLabels = Array.isArray(jobMeta.labels) ? jobMeta.labels.join(", ") : jobMeta.labels || "";
+      setPublishForm({
+        name: `Dataset from Job #${job.jobId}`,
+        labels: existingLabels || "",
+        price: "0",
+        description: jobMeta.instructions || `Annotated dataset from Job #${job.jobId}`,
+      });
+    } catch (e) {
+      console.warn("Could not prefill publish form:", e);
+    }
+  }
+
   async function publishDataset(job: JobRow) {
     if (!registry || !signer) return;
     setTxErr(false);
@@ -273,7 +289,14 @@ export default function Dashboard() {
           if (!ann) return;
           const { taskId, annotation } = ann;
           const file = allFiles[taskId];
-          cocoImages.push({ id: taskId, file_name: file?.name ?? `task_${taskId}.jpg`, width: 640, height: 480, task_id: taskId });
+          cocoImages.push({
+            id: taskId,
+            file_name: file?.name ?? `task_${taskId}.jpg`,
+            width: 640,
+            height: 480,
+            task_id: taskId,
+            base64: file?.data ? (file.data.startsWith("data:") ? file.data : `data:${file?.type || "image/jpeg"};base64,${file.data}`) : undefined,
+          });
           if (Array.isArray(annotation)) {
             annotation.forEach((bbox: any) => {
               if (bbox.type !== "bbox") return;
@@ -413,7 +436,7 @@ export default function Dashboard() {
                   </a>
                 ) : (
                   selected.approvedCount === selected.taskCount && selected.taskCount > 0 && (
-                    <button className="btn-primary" onClick={() => setPublishing(true)}
+                    <button className="btn-primary" onClick={() => openPublishModal(selected)}
                       disabled={publishing || pubBusy || txMsg.startsWith("Building") || txMsg.startsWith("Fetching") || txMsg.startsWith("Uploading") || txMsg.startsWith("Publishing")}>
                       {pubBusy ? "Publishing onchain…" : "Publish Dataset"}
                       <span className="material-symbols-outlined" style={{ fontSize: 16 }}>arrow_forward</span>
@@ -624,42 +647,67 @@ export default function Dashboard() {
             )}
 
 
-            {/* Publish form */}
+            {/* Publish Modal Overlay */}
             {publishing && (
-              <div className="card" style={{ padding: 24 }}>
-                <h3 style={{ fontSize: 16, fontWeight: 600, marginBottom: 16 }}>Publish as Dataset</h3>
-
-                {/* Dataset Health Check — shown above publish form */}
-                {selected.dataType === 0 && healthLabels.length > 0 && (
-                  <div style={{ marginBottom: 20 }}>
-                    <DatasetHealthCard
-                      annotations={annotationCache}
-                      totalTasks={selected.taskCount}
-                      labels={healthLabels}
-                    />
-                  </div>
-                )}
-
-                <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-                  <div>
-                    <label className="label-caps" style={{ display: "block", marginBottom: 6 }}>Name</label>
-                    <input type="text" disabled={pubBusy} placeholder={`Dataset from Job #${selected.jobId}`} value={publishForm.name} onChange={(e) => setPublishForm((f) => ({ ...f, name: e.target.value }))} />
-                  </div>
-                  <div>
-                    <label className="label-caps" style={{ display: "block", marginBottom: 6 }}>Labels (comma-separated)</label>
-                    <input type="text" disabled={pubBusy} placeholder="car, person, building" value={publishForm.labels}
-                      onChange={(e) => setPublishForm((f) => ({ ...f, labels: e.target.value }))} />
-                    <p className="hint" style={{ marginTop: 4 }}>Used to build COCO categories</p>
-                  </div>
-                  <div>
-                    <label className="label-caps" style={{ display: "block", marginBottom: 6 }}>Price (0G) — 0 for free</label>
-                    <input type="number" disabled={pubBusy} step="0.01" min="0" value={publishForm.price} onChange={(e) => setPublishForm((f) => ({ ...f, price: e.target.value }))} />
-                  </div>
-                  <div style={{ display: "flex", gap: 8 }}>
-                    <button className="btn-primary" onClick={() => publishDataset(selected)} disabled={pubBusy}>
-                      {pubBusy ? "Uploading to 0G Storage…" : "Publish Dataset"}
+              <div style={{
+                position: "fixed", inset: 0, zIndex: 1000,
+                background: "rgba(0,0,0,0.85)", backdropFilter: "blur(6px)",
+                display: "flex", alignItems: "center", justifyContent: "center", padding: 24,
+              }}>
+                <div style={{
+                  background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 12,
+                  maxWidth: 600, width: "100%", maxHeight: "90vh", overflowY: "auto", padding: 28,
+                  boxShadow: "0 24px 64px rgba(0,0,0,0.8)", display: "flex", flexDirection: "column", gap: 16,
+                }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                      <span className="material-symbols-outlined" style={{ color: "var(--primary)", fontSize: 24 }}>publish</span>
+                      <h3 style={{ fontSize: 18, fontWeight: 700, margin: 0, color: "var(--text)" }}>Publish as Decentralized Dataset</h3>
+                    </div>
+                    <button className="btn-ghost" onClick={() => setPublishing(false)} disabled={pubBusy} style={{ padding: 4 }}>
+                      <span className="material-symbols-outlined">close</span>
                     </button>
-                    <button className="btn-secondary" onClick={() => setPublishing(false)} disabled={pubBusy}>Cancel</button>
+                  </div>
+
+                  {/* Dataset Health Check — shown in modal */}
+                  {selected.dataType === 0 && healthLabels.length > 0 && (
+                    <div>
+                      <DatasetHealthCard
+                        annotations={annotationCache}
+                        totalTasks={selected.taskCount}
+                        labels={healthLabels}
+                      />
+                    </div>
+                  )}
+
+                  <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+                    <div>
+                      <label className="label-caps" style={{ display: "block", marginBottom: 6 }}>Dataset Name</label>
+                      <input type="text" disabled={pubBusy} placeholder={`Dataset from Job #${selected.jobId}`} value={publishForm.name} onChange={(e) => setPublishForm((f) => ({ ...f, name: e.target.value }))} />
+                    </div>
+                    <div>
+                      <label className="label-caps" style={{ display: "block", marginBottom: 6 }}>Labels (comma-separated)</label>
+                      <input type="text" disabled={pubBusy} placeholder="car, person, building" value={publishForm.labels}
+                        onChange={(e) => setPublishForm((f) => ({ ...f, labels: e.target.value }))} />
+                      <p className="hint" style={{ marginTop: 4 }}>Used to build COCO categories</p>
+                    </div>
+                    <div>
+                      <label className="label-caps" style={{ display: "block", marginBottom: 6 }}>Price (0G) — 0 for free</label>
+                      <input type="number" disabled={pubBusy} step="0.01" min="0" value={publishForm.price} onChange={(e) => setPublishForm((f) => ({ ...f, price: e.target.value }))} />
+                    </div>
+
+                    {txMsg && (
+                      <div style={{ padding: "8px 12px", borderRadius: 6, fontSize: 12, background: txErr ? "rgba(255,107,107,0.1)" : "rgba(0,228,121,0.1)", color: txErr ? "var(--error)" : "var(--primary)", border: `1px solid ${txErr ? "var(--error)" : "var(--primary)"}` }}>
+                        {txMsg}
+                      </div>
+                    )}
+
+                    <div style={{ display: "flex", gap: 10, marginTop: 8 }}>
+                      <button className="btn-primary" onClick={() => publishDataset(selected)} disabled={pubBusy} style={{ flex: 1, justifyContent: "center" }}>
+                        {pubBusy ? "Uploading & Registering on 0G Storage…" : "Publish Dataset to Universe"}
+                      </button>
+                      <button className="btn-secondary" onClick={() => setPublishing(false)} disabled={pubBusy}>Cancel</button>
+                    </div>
                   </div>
                 </div>
               </div>

@@ -16,25 +16,6 @@ interface InferenceResult {
   boxes: DetectedBox[];
 }
 
-// Preset sample demo images
-const SAMPLE_IMAGES = [
-  {
-    id: "traffic",
-    name: "Urban Traffic & Vehicles",
-    url: "https://images.unsplash.com/photo-1568605117036-5fe5e7bab0b7?auto=format&fit=crop&w=800&q=80",
-  },
-  {
-    id: "pedestrians",
-    name: "Street Pedestrians & People",
-    url: "https://images.unsplash.com/photo-1519501025264-65ba15a82390?auto=format&fit=crop&w=800&q=80",
-  },
-  {
-    id: "office",
-    name: "Indoor Workspace & Objects",
-    url: "https://images.unsplash.com/photo-1497366216548-37526070297c?auto=format&fit=crop&w=800&q=80",
-  },
-];
-
 interface Props {
   model: {
     modelId: number;
@@ -46,28 +27,27 @@ interface Props {
 }
 
 export default function InferenceModal({ model, onClose }: Props) {
-  const [selectedImage, setSelectedImage] = useState<string>(SAMPLE_IMAGES[0].url);
-  const [customImage, setCustomImage] = useState<string | null>(null);
+  const [testImage, setTestImage] = useState<string | null>(null);
   const [inferring, setInferring] = useState(false);
   const [result, setResult] = useState<InferenceResult | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const activeImage = customImage || selectedImage;
-
-  function handleCustomUpload(e: React.ChangeEvent<HTMLInputElement>) {
+  function handleImageUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
     const reader = new FileReader();
     reader.onload = (evt) => {
       if (evt.target?.result) {
-        setCustomImage(evt.target.result as string);
+        setTestImage(evt.target.result as string);
         setResult(null);
+        setError(null);
       }
     };
     reader.readAsDataURL(file);
   }
 
   async function runInference() {
+    if (!testImage) return;
     setInferring(true);
     setError(null);
     setResult(null);
@@ -75,19 +55,21 @@ export default function InferenceModal({ model, onClose }: Props) {
     const startTime = performance.now();
 
     try {
-      // Call backend FastAPI Python AI service
+      // Call local backend FastAPI Python AI service
       const res = await fetch(`${AI_SERVICE_API}/predict`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          imageBase64: activeImage,
+          imageBase64: testImage,
           weightsRootHash: model.weightsRootHash,
           modelType: "YOLOv8n",
+          labels: (model as any).labels ?? [],
         }),
       });
 
       if (!res.ok) {
-        throw new Error(`Inference server responded with ${res.status}`);
+        const errText = await res.text().catch(() => "");
+        throw new Error(`AI Service Error (${res.status}): ${errText || "Ensure python main.py is running in backend/ai-service"}`);
       }
 
       const data = await res.json();
@@ -98,19 +80,7 @@ export default function InferenceModal({ model, onClose }: Props) {
         boxes: data.boxes ?? [],
       });
     } catch (err: any) {
-      console.warn("[Inference] Falling back to client-side detection prediction:", err.message);
-
-      // Client-side fallback detection generator if local AI service is offline
-      const endTime = performance.now();
-      const mockBoxes: DetectedBox[] = [
-        { x_min: 15, y_min: 25, x_max: 48, y_max: 75, label: "car", confidence: 0.942 },
-        { x_min: 52, y_min: 30, x_max: 82, y_max: 78, label: "car", confidence: 0.891 },
-        { x_min: 42, y_min: 15, x_max: 58, y_max: 42, label: "person", confidence: 0.865 },
-      ];
-      setResult({
-        latencyMs: Math.round(endTime - startTime),
-        boxes: mockBoxes,
-      });
+      setError(err.message || "Failed to connect to local AI service on http://localhost:8000");
     } finally {
       setInferring(false);
     }
@@ -126,7 +96,7 @@ export default function InferenceModal({ model, onClose }: Props) {
     }}>
       <div style={{
         background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 12,
-        maxWidth: 900, width: "100%", maxHeight: "90vh", overflowY: "auto", display: "flex", flexDirection: "column",
+        maxWidth: 850, width: "100%", maxHeight: "90vh", overflowY: "auto", display: "flex", flexDirection: "column",
         boxShadow: "0 20px 50px rgba(0,0,0,0.6)",
       }}>
         {/* Header */}
@@ -139,9 +109,9 @@ export default function InferenceModal({ model, onClose }: Props) {
               bolt
             </span>
             <div>
-              <h3 style={{ fontSize: 16, fontWeight: 700, margin: 0 }}>Live Model Inference Test</h3>
+              <h3 style={{ fontSize: 16, fontWeight: 700, margin: 0 }}>Live Trained YOLO Model Test</h3>
               <span className="hint" style={{ fontSize: 11 }}>
-                Model #{model.modelId} • 0G Root: <code>{model.weightsRootHash.slice(0, 10)}…</code>
+                Model #{model.modelId} • Weights Root: <code>{model.weightsRootHash.slice(0, 12)}…</code>
               </span>
             </div>
           </div>
@@ -152,45 +122,22 @@ export default function InferenceModal({ model, onClose }: Props) {
 
         {/* Body */}
         <div style={{ padding: 24, display: "flex", flexDirection: "column", gap: 20 }}>
-          {/* Image Selector Controls */}
+          {/* Custom Image Upload Selector */}
           <div>
             <label className="label-caps" style={{ display: "block", marginBottom: 8 }}>
-              Select Test Image
+              Select Image From Computer
             </label>
-            <div style={{ display: "flex", gap: 12, flexWrap: "wrap", alignItems: "center" }}>
-              {SAMPLE_IMAGES.map((img) => (
-                <button
-                  key={img.id}
-                  onClick={() => {
-                    setCustomImage(null);
-                    setSelectedImage(img.url);
-                    setResult(null);
-                  }}
-                  style={{
-                    padding: "8px 14px", borderRadius: 6, border: "1px solid",
-                    borderColor: !customImage && selectedImage === img.url ? "var(--primary)" : "var(--border)",
-                    background: !customImage && selectedImage === img.url ? "var(--primary-bg)" : "var(--surface-low)",
-                    color: !customImage && selectedImage === img.url ? "var(--primary)" : "var(--text-2)",
-                    fontSize: 12, fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", gap: 6,
-                  }}
-                >
-                  <span className="material-symbols-outlined" style={{ fontSize: 16 }}>image</span>
-                  {img.name}
-                </button>
-              ))}
-
-              {/* Upload Custom Image Button */}
-              <label style={{
-                padding: "8px 14px", borderRadius: 6, border: "1px dashed var(--primary)",
-                background: customImage ? "var(--primary-bg)" : "rgba(0,228,121,0.06)",
-                color: "var(--primary)", fontSize: 12, fontWeight: 600, cursor: "pointer",
-                display: "inline-flex", alignItems: "center", gap: 6,
-              }}>
-                <span className="material-symbols-outlined" style={{ fontSize: 16 }}>upload_file</span>
-                {customImage ? "Custom Upload Active ✓" : "Upload Computer Image"}
-                <input type="file" accept="image/*" onChange={handleCustomUpload} style={{ display: "none" }} />
-              </label>
-            </div>
+            <label style={{
+              display: "flex", alignItems: "center", justifyContent: "center", gap: 10,
+              padding: "14px 20px", border: "2px dashed var(--primary)", borderRadius: 8,
+              background: testImage ? "var(--primary-bg)" : "rgba(0,228,121,0.04)",
+              color: "var(--primary)", fontWeight: 700, fontSize: 13, cursor: "pointer",
+              transition: "all 0.15s ease",
+            }}>
+              <span className="material-symbols-outlined" style={{ fontSize: 20 }}>upload_file</span>
+              {testImage ? "Click to change image file" : "Upload Test Image (PNG, JPG, WEBP)"}
+              <input type="file" accept="image/*" onChange={handleImageUpload} style={{ display: "none" }} />
+            </label>
           </div>
 
           {/* Canvas Preview Area with Bounding Box Overlays */}
@@ -199,14 +146,23 @@ export default function InferenceModal({ model, onClose }: Props) {
             borderRadius: 8, overflow: "hidden", display: "flex", alignItems: "center", justifyContent: "center",
             border: "1px solid var(--border)",
           }}>
-            <img
-              src={activeImage}
-              alt="Inference Test Target"
-              style={{ maxWidth: "100%", maxHeight: "100%", objectFit: "contain" }}
-            />
+            {testImage ? (
+              <img
+                src={testImage}
+                alt="Inference Target"
+                style={{ maxWidth: "100%", maxHeight: "100%", objectFit: "contain" }}
+              />
+            ) : (
+              <div style={{ textAlign: "center", color: "var(--text-3)", padding: 32 }}>
+                <span className="material-symbols-outlined" style={{ fontSize: 48, display: "block", marginBottom: 12 }}>
+                  image_search
+                </span>
+                <p style={{ margin: 0, fontSize: 14 }}>Upload an image above to test your trained model</p>
+              </div>
+            )}
 
-            {/* Bounding Box Overlays */}
-            {result && result.boxes.map((box, i) => {
+            {/* Live Bounding Box Overlays from PyTorch inference */}
+            {testImage && result && result.boxes.map((box, i) => {
               const color = COLORS[i % COLORS.length];
               return (
                 <div
@@ -237,14 +193,14 @@ export default function InferenceModal({ model, onClose }: Props) {
 
             {inferring && (
               <div style={{
-                position: "absolute", inset: 0, background: "rgba(0,0,0,0.65)",
+                position: "absolute", inset: 0, background: "rgba(0,0,0,0.75)",
                 display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 12,
               }}>
                 <span className="material-symbols-outlined spinning" style={{ fontSize: 36, color: "var(--primary)" }}>
                   sync
                 </span>
                 <span style={{ color: "var(--text)", fontWeight: 600, fontSize: 14 }}>
-                  Running PyTorch YOLO Inference…
+                  Executing Trained PyTorch Model Inference…
                 </span>
               </div>
             )}
@@ -255,21 +211,26 @@ export default function InferenceModal({ model, onClose }: Props) {
             <div>
               {result && (
                 <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-                  <span style={{ fontSize: 13, fontWeight: 700, color: "var(--primary)" }}>
-                    ✓ Detected {result.boxes.length} objects
+                  <span style={{ fontSize: 13, fontWeight: 700, color: result.boxes.length > 0 ? "var(--primary)" : "var(--warn)" }}>
+                    {result.boxes.length > 0 ? `✓ Detected ${result.boxes.length} objects` : "No objects detected"}
                   </span>
                   <span style={{ fontSize: 12, color: "var(--text-3)", fontFamily: "'Space Grotesk', monospace" }}>
                     Latency: {result.latencyMs}ms
                   </span>
                 </div>
               )}
-              {error && <span style={{ fontSize: 12, color: "var(--error)" }}>{error}</span>}
+              {error && (
+                <span style={{ fontSize: 12, color: "var(--error)", display: "flex", alignItems: "center", gap: 6 }}>
+                  <span className="material-symbols-outlined" style={{ fontSize: 16 }}>error</span>
+                  {error}
+                </span>
+              )}
             </div>
 
             <button
               className="btn-primary"
               onClick={runInference}
-              disabled={inferring}
+              disabled={inferring || !testImage}
               style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 24px" }}
             >
               <span className="material-symbols-outlined" style={{ fontSize: 18 }}>play_arrow</span>
@@ -280,7 +241,7 @@ export default function InferenceModal({ model, onClose }: Props) {
           {/* Predictions Table */}
           {result && result.boxes.length > 0 && (
             <div style={{ borderTop: "1px solid var(--border)", paddingTop: 16 }}>
-              <div className="label-caps" style={{ marginBottom: 8 }}>Detection Predictions</div>
+              <div className="label-caps" style={{ marginBottom: 8 }}>PyTorch Detection Predictions</div>
               <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                 {result.boxes.map((b, i) => (
                   <div key={i} style={{

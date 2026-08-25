@@ -170,6 +170,7 @@ class PredictRequest(BaseModel):
     imageBase64: str
     weightsRootHash: str = ""
     modelType: str = "YOLOv8n"
+    labels: list = []
 
 @app.post("/predict")
 def predict_objects(req: PredictRequest):
@@ -177,12 +178,22 @@ def predict_objects(req: PredictRequest):
     try:
         from ultralytics import YOLO
         
-        # 1. Determine weights file path (check local active_jobs or download from 0G Storage)
+        # 1. Determine weights file path (check local active_jobs, recent trained temp files, or 0G Storage)
         weights_path = "yolov8n.pt" # default base fallback
         
         cache_dir = Path(__file__).parent / ".weights_cache"
         cache_dir.mkdir(exist_ok=True)
         
+        # Check if any recent local trained weights file exists
+        latest_trained_pt = None
+        for p in Path("/tmp").glob("heda_train_*/best.pt"):
+            if p.stat().st_size > 1000:
+                latest_trained_pt = str(p)
+                break
+                
+        if latest_trained_pt:
+            weights_path = latest_trained_pt
+            
         if req.weightsRootHash and req.weightsRootHash != "0x":
             clean_hash = req.weightsRootHash if req.weightsRootHash.startswith("0x") else f"0x{req.weightsRootHash}"
             local_cached_pt = cache_dir / f"{clean_hash}.pt"
@@ -193,25 +204,38 @@ def predict_objects(req: PredictRequest):
                     weights_path = j["weights_file"]
                     break
                     
-            if weights_path == "yolov8n.pt" and local_cached_pt.exists():
+            if local_cached_pt.exists():
                 weights_path = str(local_cached_pt)
             elif weights_path == "yolov8n.pt":
                 # Try downloading trained model weights from 0G Storage Indexer
                 try:
                     url = f"https://indexer-storage-testnet-turbo.0g.ai/file?root={clean_hash}"
                     r = urllib.request.Request(url, headers={"User-Agent": "HedaInference/1.0"})
-                    with urllib.request.urlopen(r, timeout=15) as resp:
+                    with urllib.request.urlopen(r, timeout=20) as resp:
                         content = resp.read()
-                        # If content is valid binary .pt, save to cache
-                        if len(content) > 100:
+                        binary_data = None
+                        try:
+                            # 0G Storage Relayer returns {"data": "<base64>"}
+                            parsed = json.loads(content.decode("utf-8"))
+                            if isinstance(parsed, dict) and "data" in parsed:
+                                binary_data = base64.b64decode(parsed["data"])
+                        except Exception:
+                            binary_data = content
+                            
+                        if binary_data and len(binary_data) > 100:
                             with open(local_cached_pt, "wb") as f:
-                                f.write(content)
+                                f.write(binary_data)
                             weights_path = str(local_cached_pt)
+                            print(f"[AI Service] Successfully downloaded & decoded 0G model weights: {local_cached_pt} ({len(binary_data)} bytes)")
                 except Exception as dl_err:
-                    print(f"[AI Service] Could not fetch 0G weights ({dl_err}), falling back to local base model")
+                    print(f"[AI Service] Could not fetch 0G weights ({dl_err}), using local model")
 
         print(f"[AI Service] ⚡ Running live inference with model weights: {weights_path}")
-        model = YOLO(weights_path)
+        try:
+            model = YOLO(weights_path)
+        except Exception as load_err:
+            print(f"[AI Service] Warning loading custom weights {weights_path}: {load_err}. Falling back to yolov8n.pt")
+            model = YOLO("yolov8n.pt")
         
         # Extract base64 image data
         img_data = req.imageBase64
@@ -231,7 +255,14 @@ def predict_objects(req: PredictRequest):
                 coords = box.xyxy[0].tolist() # x1, y1, x2, y2
                 cls_id = int(box.cls[0].item())
                 conf = float(box.conf[0].item())
-                label = model.names.get(cls_id, f"class_{cls_id}")
+                
+                # Map class ID to custom labels dynamically
+                if hasattr(model, "names") and isinstance(model.names, dict) and cls_id in model.names:
+                    label = model.names[cls_id]
+                elif req.labels and len(req.labels) > 0:
+                    label = req.labels[cls_id % len(req.labels)]
+                else:
+                    label = f"class_{cls_id}"
                 
                 boxes.append({
                     "x_min": round((coords[0] / img_w) * 100, 2),

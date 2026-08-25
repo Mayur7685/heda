@@ -23,6 +23,7 @@ type ModelCardRow = {
   description?: string;
   architecture?: string;
   metrics?: { map50?: number; accuracy?: number; params?: string; latencyMs?: number };
+  labels?: string[];
 };
 
 type Filter = "all" | "yolo" | "llm" | "free";
@@ -70,8 +71,12 @@ export default function Models() {
                 base.description = meta.description;
                 base.architecture = meta.architecture;
                 base.metrics = meta.metrics;
+                base.labels = Array.isArray(meta.labels) ? meta.labels : [];
               }
             } catch {}
+          }
+          if (!base.labels) {
+            base.labels = [];
           }
           return base;
         })
