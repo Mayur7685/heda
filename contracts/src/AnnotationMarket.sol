@@ -35,7 +35,13 @@ contract AnnotationMarket {
     uint256 public constant CLAIM_DURATION = 30 minutes;
     uint256 public nextJobId;
 
+    // AI Assist Subscription System (Onchain Paywall)
+    mapping(address => uint256) public aiSubscriptionExpiry;
+    uint256 public constant AI_PASS_FEE = 0.005 ether;
+    uint256 public constant AI_PASS_DURATION = 30 days;
+
     event TaskClaimed(uint256 indexed jobId, uint256 indexed taskId, address indexed annotator);
+    event AISubscribed(address indexed subscriber, uint256 expiry);
 
     event JobCreated(
         uint256 indexed jobId,
@@ -49,6 +55,20 @@ contract AnnotationMarket {
     event WorkApproved(uint256 indexed jobId, uint256 indexed taskId, address indexed annotator, uint256 reward);
     event WorkRejected(uint256 indexed jobId, uint256 indexed taskId);
     event JobClosed(uint256 indexed jobId, uint256 unspentReturned);
+
+    /// @notice Pay 0.005 0G fee onchain to unlock AI Auto-Label Assist for 30 days
+    function subscribeAI() external payable {
+        require(msg.value >= AI_PASS_FEE, "insufficient subscription fee");
+        uint256 currentExpiry = aiSubscriptionExpiry[msg.sender];
+        uint256 newExpiry = (currentExpiry > block.timestamp ? currentExpiry : block.timestamp) + AI_PASS_DURATION;
+        aiSubscriptionExpiry[msg.sender] = newExpiry;
+        emit AISubscribed(msg.sender, newExpiry);
+    }
+
+    /// @notice Check if user has an active onchain AI subscription
+    function hasAISubscription(address user) external view returns (bool) {
+        return aiSubscriptionExpiry[user] > block.timestamp;
+    }
 
     function createJob(
         bytes32 dataRootHash,

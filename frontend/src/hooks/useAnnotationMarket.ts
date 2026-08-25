@@ -68,6 +68,15 @@ export function useAnnotationMarket(signer: ethers.Signer | null) {
       return tx.wait();
     },
 
+    async subscribeAI() {
+      const fee = ethers.parseEther("0.005");
+      const tx = await contract.subscribeAI({ value: fee });
+      return tx.wait();
+    },
+
+    hasAISubscription: (userAddress: string) =>
+      contract.hasAISubscription(userAddress),
+
     getTaskClaimer: (jobId: number, taskId: number) =>
       contract.getTaskClaimer(jobId, taskId),
 
