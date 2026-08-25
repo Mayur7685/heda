@@ -3,7 +3,7 @@ import { useParams, useNavigate } from "react-router-dom";
 import { Stage, Layer, Image as KonvaImage, Rect, Line, Circle, Text, Transformer } from "react-konva";
 import { useWallet } from "../hooks/useWallet";
 import { useAnnotationMarket } from "../hooks/useAnnotationMarket";
-import { uploadJson } from "../hooks/useStorage";
+import { uploadJson, fetchFrom0GStorage } from "../hooks/useStorage";
 import { GALILEO } from "../config";
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -73,6 +73,8 @@ function ImageWorkspace({
   onSubmit: (annotations: Annotation[]) => void;
   onNext: () => void; onPrev: () => void;
 }) {
+  const { signer, address } = useWallet();
+  const market = useAnnotationMarket(signer);
   const [img, setImg] = useState<HTMLImageElement | null>(null);
   const [tool, setTool] = useState<"bbox" | "polygon">("bbox");
   const [activeLabel, setActiveLabel] = useState(labels[0] ?? "object");
@@ -87,10 +89,14 @@ function ImageWorkspace({
   const trRef = useRef<any>(null);
   const rectRefs = useRef<Record<string, any>>({});
 
-  // ── Label Assist state ────────────────────────────────────────────────────
+  // ── Label Assist state & Paywall ─────────────────────────────────────────
   const [aiSuggestions, setAiSuggestions] = useState<AISuggestion[]>([]);
   const [aiLoading, setAiLoading] = useState(false);
   const [aiError, setAiError] = useState<string | null>(null);
+  const [aiUnlocked, setAiUnlocked] = useState<boolean>(
+    () => localStorage.getItem("heda_ai_unlocked") === "true"
+  );
+  const [showPaywall, setShowPaywall] = useState(false);
 
   // Attach transformer to selected bbox
   useEffect(() => {
@@ -199,6 +205,50 @@ function ImageWorkspace({
   function deleteAnnotation(id: string) {
     setAnnotations((a) => a.filter((x) => x.id !== id));
     if (selectedId === id) setSelectedId(null);
+  }
+
+  const [subscribingAI, setSubscribingAI] = useState(false);
+
+  // Check onchain AI subscription status
+  useEffect(() => {
+    if (!market || !address) return;
+    market.hasAISubscription(address).then((hasSub) => {
+      if (hasSub) {
+        setAiUnlocked(true);
+        localStorage.setItem("heda_ai_unlocked", "true");
+      }
+    }).catch(() => {});
+  }, [!!market, address]);
+
+  function handleAISuggestClick() {
+    if (!aiUnlocked) {
+      setShowPaywall(true);
+      return;
+    }
+    handleAISuggest();
+  }
+
+  async function unlockAIOnChain() {
+    if (!market) {
+      // Demo fallback if wallet not connected
+      setAiUnlocked(true);
+      setShowPaywall(false);
+      handleAISuggest();
+      return;
+    }
+    setSubscribingAI(true);
+    setAiError(null);
+    try {
+      await market.subscribeAI();
+      setAiUnlocked(true);
+      localStorage.setItem("heda_ai_unlocked", "true");
+      setShowPaywall(false);
+      handleAISuggest();
+    } catch (e: any) {
+      setAiError(`AI Subscription failed: ${e.message}`);
+    } finally {
+      setSubscribingAI(false);
+    }
   }
 
   // ── Label Assist handlers ─────────────────────────────────────────────────
@@ -359,26 +409,26 @@ function ImageWorkspace({
               <><div className="divider-v" style={{ margin: "0 6px" }} />
               <button className="btn-primary btn-sm" onClick={closePolygon} style={{ fontSize: 11, padding: "3px 8px" }}>Close Shape</button></>
             )}
-            {/* AI Suggest */}
+            {/* AI Suggest button (with PRO Paywall badge) */}
             <div className="divider-v" style={{ margin: "0 6px" }} />
             <button
-              onClick={handleAISuggest}
+              onClick={handleAISuggestClick}
               disabled={aiLoading || !img}
-              title="AI Label Assist — Moondream"
+              title={aiUnlocked ? "AI Label Assist — Moondream" : "Unlock AI Assist Pass"}
               style={{
                 display: "flex", alignItems: "center", gap: 5,
                 padding: "5px 10px", borderRadius: 4, border: "1px solid",
-                borderColor: aiLoading ? "var(--border)" : "#7c3aed66",
-                background: aiLoading ? "transparent" : "rgba(124,58,237,0.12)",
-                color: aiLoading ? "var(--text-3)" : "#a78bfa",
+                borderColor: aiLoading ? "var(--border)" : aiUnlocked ? "#7c3aed66" : "rgba(255,215,0,0.5)",
+                background: aiLoading ? "transparent" : aiUnlocked ? "rgba(124,58,237,0.12)" : "rgba(255,215,0,0.12)",
+                color: aiLoading ? "var(--text-3)" : aiUnlocked ? "#a78bfa" : "#ffd700",
                 cursor: aiLoading ? "not-allowed" : "pointer",
                 fontSize: 12, fontWeight: 600, transition: "all 0.15s",
               }}
             >
               <span className="material-symbols-outlined" style={{ fontSize: 15, animation: aiLoading ? "spin 1s linear infinite" : "none" }}>
-                {aiLoading ? "progress_activity" : "smart_toy"}
+                {aiLoading ? "progress_activity" : aiUnlocked ? "smart_toy" : "lock"}
               </span>
-              {aiLoading ? "Detecting…" : "AI Suggest"}
+              {aiLoading ? "Detecting…" : aiUnlocked ? "AI Suggest" : "AI Suggest (PRO)"}
               {aiSuggestions.length > 0 && !aiLoading && (
                 <span style={{
                   background: "#7c3aed", color: "#fff", borderRadius: "50%",
@@ -619,6 +669,86 @@ function ImageWorkspace({
           <span className="label-caps">Fast Path Enabled</span>
         </div>
       </div>
+
+      {/* ── AI Assist Paywall Modal ── */}
+      {showPaywall && (
+        <div style={{ position: "fixed", inset: 0, zIndex: 200, background: "rgba(0,0,0,0.85)", display: "flex", alignItems: "center", justifyContent: "center", backdropFilter: "blur(6px)" }}
+          onClick={() => setShowPaywall(false)}>
+          <div style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 12, padding: 32, maxWidth: 460, width: "90vw", boxShadow: "0 24px 64px rgba(0,0,0,0.6)" }}
+            onClick={(e) => e.stopPropagation()}>
+            {/* Header */}
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <div style={{ width: 36, height: 36, borderRadius: 8, background: "rgba(255,215,0,0.15)", border: "1px solid rgba(255,215,0,0.4)", display: "flex", alignItems: "center", justifyContent: "center", color: "#ffd700" }}>
+                  <span className="material-symbols-outlined">smart_toy</span>
+                </div>
+                <div>
+                  <h3 style={{ fontSize: 18, fontWeight: 700, color: "#fff" }}>Unlock AI Label Assist</h3>
+                  <span style={{ fontSize: 11, color: "#ffd700", fontWeight: 700, letterSpacing: "0.05em" }}>PRO FEATURE</span>
+                </div>
+              </div>
+              <button className="btn-ghost btn-icon" onClick={() => setShowPaywall(false)}>
+                <span className="material-symbols-outlined">close</span>
+              </button>
+            </div>
+
+            <p style={{ fontSize: 13, color: "var(--text-2)", lineHeight: 1.6, marginBottom: 20 }}>
+              Moondream VLM auto-detects bounding box objects across classes with zero-shot vision intelligence. Speed up your annotation throughput by 10x.
+            </p>
+
+            {/* Feature highlights */}
+            <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 24, background: "var(--surface-low)", padding: 16, borderRadius: 8, border: "1px solid var(--border)" }}>
+              {[
+                "⚡ Zero-Shot Multi-Class Bounding Box Detection",
+                "🎯 1-Click Accept All Objects into Workspace",
+                "🧠 Instant Parallel Inference via Moondream API",
+                "🔐 Lifetime AI Pass for all Annotation Jobs",
+              ].map((feat, i) => (
+                <div key={i} style={{ fontSize: 12, color: "var(--text)", display: "flex", alignItems: "center", gap: 8 }}>
+                  <span className="material-symbols-outlined" style={{ fontSize: 16, color: "var(--primary)" }}>check_circle</span>
+                  {feat}
+                </div>
+              ))}
+            </div>
+
+            {/* Price badge */}
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 16px", borderRadius: 8, background: "rgba(0,228,121,0.06)", border: "1px solid rgba(0,228,121,0.2)", marginBottom: 20 }}>
+              <div>
+                <div style={{ fontSize: 11, color: "var(--text-3)" }}>PRO ACCESS TIERS</div>
+                <div style={{ fontSize: 14, fontWeight: 700, color: "var(--primary)", fontFamily: "'Space Grotesk', monospace" }}>0.005 0G / Pass</div>
+              </div>
+              <span style={{ fontSize: 11, background: "var(--primary-bg)", color: "var(--primary)", padding: "2px 8px", borderRadius: 4, fontWeight: 700 }}>
+                Testnet Active
+              </span>
+            </div>
+
+            {/* Actions */}
+            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+              <button
+                className="btn-primary"
+                style={{ width: "100%", justifyContent: "center", padding: "12px 0", fontSize: 14 }}
+                onClick={unlockAIOnChain}
+                disabled={subscribingAI}
+              >
+                {subscribingAI ? (
+                  <>
+                    <span className="material-symbols-outlined" style={{ fontSize: 18, animation: "spin 1s linear infinite" }}>progress_activity</span>
+                    Subscribing Onchain (0.005 0G)…
+                  </>
+                ) : (
+                  <>
+                    <span className="material-symbols-outlined" style={{ fontSize: 18 }}>account_balance_wallet</span>
+                    Subscribe Onchain (0.005 0G)
+                  </>
+                )}
+              </button>
+              <button className="btn-ghost" style={{ width: "100%", justifyContent: "center", fontSize: 12 }} onClick={() => setShowPaywall(false)}>
+                Continue with Manual Annotations
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -731,13 +861,15 @@ export default function Workspace() {
     try {
       const j = await market.getJob(jobId);
       setJob(j);
-      const metaRes = await fetch(`https://indexer-storage-testnet-turbo.0g.ai/file?root=${j.metadataURI}`).catch(() => null);
-      if (metaRes?.ok) {
-        const meta = await metaRes.json();
-        setMetadata(meta);
-        const dataRes = await fetch(`https://indexer-storage-testnet-turbo.0g.ai/file?root=${j.dataRootHash}`).catch(() => null);
-        if (dataRes?.ok) setAllTaskData(await dataRes.json());
-      }
+
+      // Resilient 0G storage fetching with retries and multiple indexer fallback
+      const [metaResult, dataResult] = await Promise.allSettled([
+        fetchFrom0GStorage(j.metadataURI, 5),
+        fetchFrom0GStorage(j.dataRootHash, 5),
+      ]);
+
+      if (metaResult.status === "fulfilled") setMetadata(metaResult.value);
+      if (dataResult.status === "fulfilled") setAllTaskData(dataResult.value);
 
       // Check on-chain claim status for tasks
       const count = Number(j.taskCount);
