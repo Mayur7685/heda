@@ -315,18 +315,25 @@ def chat_llm_assistant(req: ChatLLMRequest):
 
 @app.post("/autolabel")
 def autolabel_images(req: AutoLabelRequest):
-    """Generates zero-shot bounding boxes for unlabeled images using Moondream Cloud VLM API or image-content feature detection"""
-    results = []
-    classes = req.classes if req.classes else ["object"]
+    """Generates zero-shot bounding boxes for unlabeled images using Moondream Cloud VLM API"""
+    classes = req.classes if req.classes else ["hardhat"]
     moondream_api_key = os.getenv("MOONDREAM_API_KEY")
+    
+    if not moondream_api_key:
+        return {
+            "ok": False,
+            "error": "Moondream AI Auto-Labeling is not configured (MOONDREAM_API_KEY missing in backend .env). Please draw bounding boxes manually using Bounding Box (B) or Polygon (P) tool."
+        }
+
+    results = []
+    total_detected = 0
     
     for idx, img_item in enumerate(req.images):
         img_id = img_item.get("id", idx + 1)
         base64_str = img_item.get("base64", "")
         boxes = []
         
-        # 1. Moondream Cloud API Call across target classes
-        if moondream_api_key and base64_str:
+        if base64_str:
             try:
                 import urllib.request
                 headers = {
@@ -340,7 +347,7 @@ def autolabel_images(req: AutoLabelRequest):
                     }).encode('utf-8')
                     
                     http_req = urllib.request.Request("https://api.moondream.ai/v1/detect", data=body, headers=headers, method="POST")
-                    with urllib.request.urlopen(http_req, timeout=6) as response:
+                    with urllib.request.urlopen(http_req, timeout=8) as response:
                         res_data = json.loads(response.read().decode('utf-8'))
                         if "objects" in res_data and isinstance(res_data["objects"], list):
                             for obj in res_data["objects"]:
@@ -365,62 +372,15 @@ def autolabel_images(req: AutoLabelRequest):
                                     "confidence": round(float(obj.get("confidence", 0.95)), 2)
                                 })
             except Exception as e:
-                print(f"[Moondream API Note for image {img_id}]:", e)
+                print(f"[Moondream API Call Note for image {img_id}]:", e)
 
-        # 2. Dynamic Image-Feature Content Fallback (Guarantees unique distinct bounding boxes for EVERY image)
-        if not boxes and base64_str:
-            try:
-                img_bytes = base64.b64decode(base64_str)
-                img_hash = hashlib.md5(img_bytes).hexdigest()
-                hash_int = int(img_hash[:8], 16)
-                
-                # Analyze image resolution via PIL
-                pil_img = Image.open(io.BytesIO(img_bytes))
-                w, h = pil_img.size
-                
-                # Determine object count (1 to 3 distinct objects) based on image content hash
-                obj_count = 1 + (hash_int % 3)
-                
-                for i in range(obj_count):
-                    sub_hash = int(img_hash[(i*4):(i*4+4)], 16) if len(img_hash) >= (i*4+4) else hash_int + i
-                    
-                    # Generate image-specific x_min, y_min, x_max, y_max percentages
-                    box_w = 22.0 + (sub_hash % 32)
-                    box_h = 25.0 + ((sub_hash >> 3) % 38)
-                    
-                    # Position box dynamically based on image index and hash offset
-                    x_start = 5.0 + ((sub_hash * (i + 1) + idx * 17) % max(1, int(90 - box_w)))
-                    y_start = 8.0 + ((sub_hash * (i + 2) + idx * 23) % max(1, int(88 - box_h)))
-                    
-                    assigned_class = classes[i % len(classes)]
-                    
-                    boxes.append({
-                        "x_min": round(x_start, 2),
-                        "y_min": round(y_start, 2),
-                        "x_max": round(min(98.0, x_start + box_w), 2),
-                        "y_max": round(min(98.0, y_start + box_h), 2),
-                        "label": assigned_class,
-                        "confidence": round(0.88 + ((sub_hash % 10) / 100.0), 2)
-                    })
-            except Exception as e:
-                print("[PIL Auto-labeling note]:", e)
-                boxes = [
-                    {
-                        "x_min": 15.0 + (idx * 5) % 30,
-                        "y_min": 20.0 + (idx * 7) % 25,
-                        "x_max": 55.0 + (idx * 5) % 30,
-                        "y_max": 70.0 + (idx * 7) % 25,
-                        "label": classes[idx % len(classes)],
-                        "confidence": 0.94
-                    }
-                ]
-
+        total_detected += len(boxes)
         results.append({
             "id": img_id,
             "annotations": boxes
         })
         
-    return {"ok": True, "results": results}
+    return {"ok": True, "results": results, "totalDetected": total_detected}
 
 @app.post("/train/start")
 def start_training(req: TrainRequest, background_tasks: BackgroundTasks):

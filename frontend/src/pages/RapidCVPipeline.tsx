@@ -422,14 +422,16 @@ export default function RapidCVPipeline() {
     setStagedFiles((prev) => [...prev, ...parsed]);
   }
 
-  // Moondream Cloud API Auto-Labeling with Resilient Fallback & Auto-Trigger
+  const [errorNotification, setErrorNotification] = useState<string | null>(null);
+
+  // Moondream Cloud API Auto-Labeling (Live Zero-Shot VLM Detection Only - No Fake Annotations)
   async function triggerMoondreamAutoLabel() {
     if (stagedFiles.length === 0) {
       return;
     }
 
     setAutoLabeling(true);
-    let successBackend = false;
+    setErrorNotification(null);
 
     try {
       const payload = stagedFiles.map((f) => ({ id: f.id, base64: f.data }));
@@ -441,11 +443,12 @@ export default function RapidCVPipeline() {
       const data = await res.json();
 
       if (data.ok && Array.isArray(data.results)) {
-        successBackend = true;
+        let count = 0;
         setStagedFiles((prev) =>
           prev.map((f) => {
             const match = data.results.find((r: any) => r.id === f.id);
             if (match && Array.isArray(match.annotations) && match.annotations.length > 0) {
+              count += match.annotations.length;
               const canvasW = 820;
               const canvasH = f.width ? Math.round((f.height / f.width) * canvasW) : 520;
               const formattedBoxes: Annotation[] = match.annotations.map((a: any) => ({
@@ -463,54 +466,19 @@ export default function RapidCVPipeline() {
             return f;
           })
         );
+
+        if (count === 0) {
+          setErrorNotification("Moondream AI completed scan but found 0 objects matching your target classes. Please annotate objects manually using Bounding Box (B) or Polygon (P) tool.");
+        }
+      } else {
+        setErrorNotification(data.error || "Moondream AI Auto-Labeling is currently unreachable at the moment. Please draw annotations manually using Bounding Box (B) or Polygon (P) tool.");
       }
     } catch (err: any) {
-      console.warn("Auto-labeling backend note, using client generator:", err);
+      console.warn("Auto-labeling network error:", err);
+      setErrorNotification("Moondream AI Auto-Labeling service is currently unreachable (backend not running on port 8000 or MOONDREAM_API_KEY missing). Please draw annotations manually using Bounding Box (B) or Polygon (P) tool.");
+    } finally {
+      setAutoLabeling(false);
     }
-
-    // Resilient Fallback Generator (Guarantees every image gets unique auto-annotations if backend is offline/empty)
-    if (!successBackend) {
-      setStagedFiles((prev) =>
-        prev.map((f, idx) => {
-          if (f.annotations.length > 0) return f;
-          const canvasW = 820;
-          const canvasH = f.width ? Math.round((f.height / f.width) * canvasW) : 520;
-          const labelToUse = targetClasses[0] || "hardhat";
-
-          const box1: Annotation = {
-            id: uid(),
-            type: "bbox",
-            x: Math.round(canvasW * (0.15 + (idx * 0.13) % 0.30)),
-            y: Math.round(canvasH * (0.18 + (idx * 0.11) % 0.25)),
-            w: Math.round(canvasW * 0.32),
-            h: Math.round(canvasH * 0.38),
-            label: labelToUse,
-            confidence: 0.95,
-          };
-
-          const boxes: Annotation[] = [box1];
-
-          if (targetClasses.length > 1) {
-            const label2 = targetClasses[1] || labelToUse;
-            const box2: Annotation = {
-              id: uid(),
-              type: "bbox",
-              x: Math.round(canvasW * (0.50 - (idx * 0.09) % 0.20)),
-              y: Math.round(canvasH * (0.35 + (idx * 0.12) % 0.25)),
-              w: Math.round(canvasW * 0.28),
-              h: Math.round(canvasH * 0.32),
-              label: label2,
-              confidence: 0.92,
-            };
-            boxes.push(box2);
-          }
-
-          return { ...f, annotations: boxes, approved: true };
-        })
-      );
-    }
-
-    setAutoLabeling(false);
   }
 
   // Automatically trigger Moondream auto-labeling when user enters Step 3 (autolabel)
@@ -1281,6 +1249,27 @@ export default function RapidCVPipeline() {
 
             {/* Center Konva Stage Canvas */}
             <div className="card" style={{ padding: 0, background: "#050811", display: "flex", flexDirection: "column", overflow: "hidden", position: "relative" }}>
+              {/* Error Notification Popup Banner */}
+              {errorNotification && (
+                <div style={{
+                  padding: "10px 16px", background: "rgba(220, 38, 38, 0.95)", borderBottom: "1px solid #ef4444",
+                  color: "#ffffff", fontSize: 12, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "space-between",
+                  zIndex: 200, boxShadow: "0 4px 20px rgba(239, 68, 68, 0.4)", animation: "fadeIn 0.2s ease",
+                }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <span className="material-symbols-outlined" style={{ fontSize: 18, color: "#fff" }}>warning</span>
+                    <span>{errorNotification}</span>
+                  </div>
+                  <button
+                    onClick={() => setErrorNotification(null)}
+                    style={{ background: "transparent", border: "none", color: "#fff", cursor: "pointer", display: "flex", alignItems: "center" }}
+                    title="Dismiss"
+                  >
+                    <span className="material-symbols-outlined" style={{ fontSize: 16 }}>close</span>
+                  </button>
+                </div>
+              )}
+
               <div style={{
                 width: "100%", display: "flex", alignItems: "center", justifyContent: "center",
                 padding: "6px 12px", background: "rgba(12,22,14,0.92)", backdropFilter: "blur(12px)",
