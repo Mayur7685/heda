@@ -23,7 +23,7 @@ export const galileo = defineChain({
   testnet: true,
 });
 
-const PROJECT_ID = import.meta.env.VITE_WALLETCONNECT_PROJECT_ID ?? "";
+const PROJECT_ID = import.meta.env.VITE_WALLETCONNECT_PROJECT_ID || "3a8170812b534d0ff9d794f19a901d64";
 
 // Explicit wallet list — controls the order shown in the modal.
 // MetaMask is first so it's the default recommendation.
