@@ -56,6 +56,74 @@ export function HedaConnectButton() {
   );
 }
 
+const SAMPLE_REEL_ITEMS = [
+  { title: "Safety Helmets", img: "https://images.unsplash.com/photo-1504307651254-35680f356dfd?w=300&q=80", label: "hardhat" },
+  { title: "Soccer Pitch", img: "https://images.unsplash.com/photo-1508098682722-e99c43a406b2?w=300&q=80", label: "player" },
+  { title: "Warehouse Pallets", img: "https://images.unsplash.com/photo-1586528116311-ad8dd3c8310d?w=300&q=80", label: "pallet" },
+  { title: "Traffic Intersection", img: "https://images.unsplash.com/photo-1494522855154-9297ac14b55f?w=300&q=80", label: "car" },
+  { title: "Industrial Plant", img: "https://images.unsplash.com/photo-1581091226825-a6a2a5aee158?w=300&q=80", label: "equipment" },
+  { title: "Aerial Drone View", img: "https://images.unsplash.com/photo-1508614589041-895b88991e3e?w=300&q=80", label: "building" },
+  { title: "Forklift Cargo", img: "https://images.unsplash.com/photo-1578575437130-527eed3abbec?w=300&q=80", label: "forklift" },
+];
+
+function HorizontalReelFooter({ stagedFiles }: { stagedFiles: StagedFile[] }) {
+  let displayFiles: StagedFile[] = [];
+  if (stagedFiles.length > 0) {
+    const repeatCount = Math.max(3, Math.ceil(12 / stagedFiles.length));
+    displayFiles = Array(repeatCount).fill(stagedFiles).flat();
+  }
+
+  return (
+    <div style={{
+      height: 140, width: "100%", background: "#05070c", borderTop: "1px solid var(--border)",
+      padding: "10px 0", overflow: "hidden", position: "relative", flexShrink: 0,
+    }}>
+      <style>{`
+        @keyframes reelMarquee {
+          0% { transform: translateX(0); }
+          100% { transform: translateX(-33.333%); }
+        }
+        .reel-marquee-track {
+          display: flex;
+          gap: 16px;
+          width: max-content;
+          animation: reelMarquee 35s linear infinite;
+        }
+        .reel-marquee-track:hover {
+          animation-play-state: paused;
+        }
+      `}</style>
+      <div className="reel-marquee-track" style={{ paddingLeft: 16 }}>
+        {stagedFiles.length > 0 ? (
+          displayFiles.map((f, idx) => (
+            <div key={`${f.id}_${idx}`} style={{ minWidth: 190, height: 118, borderRadius: 12, overflow: "hidden", border: "1px solid var(--primary)", position: "relative", flexShrink: 0, boxShadow: "0 4px 16px rgba(0,0,0,0.5)" }}>
+              <img src={`data:${f.type};base64,${f.data}`} alt="Thumb" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+              <div style={{ position: "absolute", top: 8, left: 8, padding: "3px 8px", borderRadius: 6, background: "rgba(0,228,121,0.9)", color: "#000", fontSize: 10, fontWeight: 900 }}>
+                • uploaded
+              </div>
+              <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, padding: "4px 8px", background: "rgba(0,0,0,0.85)", fontSize: 11, color: "var(--primary)", fontWeight: 700, textOverflow: "ellipsis", overflow: "hidden", whiteSpace: "nowrap" }}>
+                {f.name}
+              </div>
+            </div>
+          ))
+        ) : (
+          [...SAMPLE_REEL_ITEMS, ...SAMPLE_REEL_ITEMS, ...SAMPLE_REEL_ITEMS].map((item, idx) => (
+            <div key={idx} style={{ minWidth: 190, height: 118, borderRadius: 12, overflow: "hidden", border: "1px solid var(--border)", position: "relative", flexShrink: 0, boxShadow: "0 4px 16px rgba(0,0,0,0.5)" }}>
+              <img src={item.img} alt={item.title} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+              <div style={{ position: "absolute", top: 8, left: 8, padding: "3px 8px", borderRadius: 6, background: "rgba(0,228,121,0.9)", color: "#000", fontSize: 10, fontWeight: 900 }}>
+                • {item.label}
+              </div>
+              <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, padding: "4px 8px", background: "rgba(0,0,0,0.85)", fontSize: 11, color: "#fff", fontWeight: 700, textOverflow: "ellipsis", overflow: "hidden", whiteSpace: "nowrap" }}>
+                {item.title}
+              </div>
+            </div>
+          ))
+        )}
+      </div>
+    </div>
+  );
+}
+
 type BBox = { id: string; type: "bbox"; x: number; y: number; w: number; h: number; label: string; confidence?: number };
 type Polygon = { id: string; type: "polygon"; points: number[]; label: string; closed: boolean };
 type Annotation = BBox | Polygon;
@@ -732,16 +800,6 @@ export default function RapidCVPipeline() {
   const CANVAS_W = 820;
   const CANVAS_H = imgElement ? Math.round((imgElement.naturalHeight / imgElement.naturalWidth) * CANVAS_W) : 520;
 
-const SAMPLE_REEL_ITEMS = [
-  { title: "Safety Helmets", img: "https://images.unsplash.com/photo-1504307651254-35680f356dfd?w=300&q=80", label: "hardhat" },
-  { title: "Soccer Pitch", img: "https://images.unsplash.com/photo-1508098682722-e99c43a406b2?w=300&q=80", label: "player" },
-  { title: "Warehouse Pallets", img: "https://images.unsplash.com/photo-1586528116311-ad8dd3c8310d?w=300&q=80", label: "pallet" },
-  { title: "Traffic Intersection", img: "https://images.unsplash.com/photo-1494522855154-9297ac14b55f?w=300&q=80", label: "car" },
-  { title: "Industrial Plant", img: "https://images.unsplash.com/photo-1581091226825-a6a2a5aee158?w=300&q=80", label: "equipment" },
-  { title: "Aerial Drone View", img: "https://images.unsplash.com/photo-1508614589041-895b88991e3e?w=300&q=80", label: "building" },
-  { title: "Forklift Cargo", img: "https://images.unsplash.com/photo-1578575437130-527eed3abbec?w=300&q=80", label: "forklift" },
-];
-
   return (
     <div style={{ width: "100%", height: "100vh", maxHeight: "100vh", background: "#090c12", display: "flex", overflow: "hidden", position: "relative" }}>
       {/* ── 1. Left Vertical Icon Sidebar (Matching Gemini Screenshot 1) ── */}
@@ -1080,40 +1138,8 @@ const SAMPLE_REEL_ITEMS = [
                 </div>
               )}
 
-              {/* Continuous Horizontal Image Thumbnail Reel (Roboflow Reference 2 Match - Infinite Scrolling Marquee) */}
-              <div style={{
-                height: 140, width: "100%", background: "#05070c", borderTop: "1px solid var(--border)",
-                padding: "10px 0", overflow: "hidden", position: "relative", flexShrink: 0,
-              }}>
-                <style>{`
-                  @keyframes reelMarquee {
-                    0% { transform: translateX(0); }
-                    100% { transform: translateX(-33.333%); }
-                  }
-                  .reel-marquee-track {
-                    display: flex;
-                    gap: 16px;
-                    width: max-content;
-                    animation: reelMarquee 35s linear infinite;
-                  }
-                  .reel-marquee-track:hover {
-                    animation-play-state: paused;
-                  }
-                `}</style>
-                <div className="reel-marquee-track" style={{ paddingLeft: 16 }}>
-                  {[...SAMPLE_REEL_ITEMS, ...SAMPLE_REEL_ITEMS, ...SAMPLE_REEL_ITEMS].map((item, idx) => (
-                    <div key={idx} style={{ minWidth: 190, height: 118, borderRadius: 12, overflow: "hidden", border: "1px solid var(--border)", position: "relative", flexShrink: 0, boxShadow: "0 4px 16px rgba(0,0,0,0.5)" }}>
-                      <img src={item.img} alt={item.title} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-                      <div style={{ position: "absolute", top: 8, left: 8, padding: "3px 8px", borderRadius: 6, background: "rgba(0,228,121,0.9)", color: "#000", fontSize: 10, fontWeight: 900 }}>
-                        • {item.label}
-                      </div>
-                      <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, padding: "4px 8px", background: "rgba(0,0,0,0.85)", fontSize: 11, color: "#fff", fontWeight: 700, textOverflow: "ellipsis", overflow: "hidden", whiteSpace: "nowrap" }}>
-                        {item.title}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
+              {/* Continuous Horizontal Image Thumbnail Reel */}
+              <HorizontalReelFooter stagedFiles={stagedFiles} />
             </div>
           )}
 
@@ -1168,36 +1194,8 @@ const SAMPLE_REEL_ITEMS = [
                 </div>
               </div>
 
-              {/* Bottom Horizontal Image Thumbnail Reel (Exact Match to Roboflow Screenshot 2 - Bigger Cards & Marquee Animation) */}
-              <div style={{
-                height: 140, width: "100%", background: "#05070c", borderTop: "1px solid var(--border)",
-                padding: "10px 0", overflow: "hidden", position: "relative", flexShrink: 0,
-              }}>
-                <div className="reel-marquee-track" style={{ paddingLeft: 16 }}>
-                  {stagedFiles.length > 0 ? (
-                    stagedFiles.map((f) => (
-                      <div key={f.id} style={{ minWidth: 190, height: 118, borderRadius: 12, overflow: "hidden", border: "1px solid var(--primary)", position: "relative", flexShrink: 0, boxShadow: "0 4px 16px rgba(0,0,0,0.5)" }}>
-                        <img src={`data:${f.type};base64,${f.data}`} alt="Thumb" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-                        <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, padding: "4px 8px", background: "rgba(0,0,0,0.85)", fontSize: 11, color: "var(--primary)", fontWeight: 700, textOverflow: "ellipsis", overflow: "hidden", whiteSpace: "nowrap" }}>
-                          {f.name}
-                        </div>
-                      </div>
-                    ))
-                  ) : (
-                    [...SAMPLE_REEL_ITEMS, ...SAMPLE_REEL_ITEMS, ...SAMPLE_REEL_ITEMS].map((item, idx) => (
-                      <div key={idx} style={{ minWidth: 190, height: 118, borderRadius: 12, overflow: "hidden", border: "1px solid var(--border)", position: "relative", flexShrink: 0, boxShadow: "0 4px 16px rgba(0,0,0,0.5)" }}>
-                        <img src={item.img} alt={item.title} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-                        <div style={{ position: "absolute", top: 8, left: 8, padding: "3px 8px", borderRadius: 6, background: "rgba(0,228,121,0.9)", color: "#000", fontSize: 10, fontWeight: 900 }}>
-                          • {item.label}
-                        </div>
-                        <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, padding: "4px 8px", background: "rgba(0,0,0,0.85)", fontSize: 11, color: "#fff", fontWeight: 700, textOverflow: "ellipsis", overflow: "hidden", whiteSpace: "nowrap" }}>
-                          {item.title}
-                        </div>
-                      </div>
-                    ))
-                  )}
-                </div>
-              </div>
+              {/* Bottom Horizontal Image Thumbnail Reel */}
+              <HorizontalReelFooter stagedFiles={stagedFiles} />
             </div>
           )}
 
