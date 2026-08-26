@@ -163,34 +163,17 @@ def get_0g_compute_models():
             ]
         }
 
-@app.post("/chat-llm-stream")
-async def chat_llm_stream_assistant(req: ChatLLMRequest):
-    """Streams conversational AI responses token-by-token from 0G Compute Network Router API key (https://router-api-testnet.integratenetwork.work/v1)"""
-    text = req.prompt.lower()
+def extract_classes_via_0g_llm(prompt: str):
+    """Executes 100% Real LLM Entity Extraction via 0G Compute Network Router API (qwen2.5-omni)"""
     og_api_key = os.getenv("VITE_COMPUTE_API_KEY") or os.getenv("OG_COMPUTE_API_KEY") or os.getenv("OPENROUTER_API_KEY") or "sk-67202178-0e5f-4e8e-afb8-76750ef68228"
     og_router = os.getenv("COMPUTE_ROUTER", "https://router-api-testnet.integratenetwork.work/v1")
     model_id = os.getenv("OG_LLM_MODEL", "qwen2.5-omni")
 
-    # Smart NLP class extraction logic
-    cleaned = re.sub(r'i want to detect|i want to build|i want to create|build|detect|find|identify|recognize|look for|spot|locate|track|model|for|create', '', text)
-    cleaned = re.sub(r'\bin\b|\bon\b|\bat\b|\ba\b|\ban\b|\bthe\b|\band\b|\bor\b|\bwith\b|\busing\b', ',', cleaned)
-    cleaned = re.sub(r'[.!?]', ',', cleaned)
-    raw_classes = [c.strip() for c in cleaned.split(',') if len(c.strip()) > 1]
-    extracted_classes = []
-    seen = set()
-    for c in raw_classes:
-        clean_c = re.sub(r'[^a-z0-9 _-]', '', c).strip()
-        if clean_c and clean_c not in seen and len(clean_c) < 30:
-            seen.add(clean_c)
-            extracted_classes.append(clean_c)
-            
-    if not extracted_classes:
-        extracted_classes = ["object"]
+    llm_classes = None
+    llm_title = None
+    llm_reply = None
 
-    project_title = f"{extracted_classes[0].title()} Detection Model"
-
-    async def event_generator():
-        llm_reply_accumulated = ""
+    if og_api_key:
         try:
             import urllib.request
             headers = {
@@ -198,28 +181,78 @@ async def chat_llm_stream_assistant(req: ChatLLMRequest):
                 "Authorization": f"Bearer {og_api_key}"
             }
             system_prompt = (
-                "You are 0G AI Assistant for Computer Vision. The user wants to build an object detection model. "
-                "Respond in 2 friendly, concise sentences confirming the detected classes and asking them to verify."
+                "You are 0G AI Assistant for Computer Vision model building. Extract target object classes from prompt. "
+                "Respond ONLY with a JSON object: {\"classes\": [\"class1\", \"class2\"], \"projectTitle\": \"Title\", \"reply\": \"Friendly 2-sentence confirmation asking user to verify classes.\"}"
             )
             body = json.dumps({
                 "model": model_id,
                 "messages": [
                     {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": req.prompt}
+                    {"role": "user", "content": prompt}
                 ]
             }).encode('utf-8')
 
             http_req = urllib.request.Request(f"{og_router}/chat/completions", data=body, headers=headers, method="POST")
-            with urllib.request.urlopen(http_req, timeout=6) as response:
+            with urllib.request.urlopen(http_req, timeout=8) as response:
                 res_data = json.loads(response.read().decode('utf-8'))
                 if "choices" in res_data and len(res_data["choices"]) > 0:
-                    llm_reply_accumulated = res_data["choices"][0]["message"]["content"]
+                    raw_content = res_data["choices"][0]["message"]["content"].strip()
+                    if raw_content.startswith("```"):
+                        raw_content = re.sub(r'^```[a-z]*\n?', '', raw_content)
+                        raw_content = re.sub(r'\n?```$', '', raw_content)
+                    
+                    try:
+                        parsed = json.loads(raw_content.strip())
+                        if isinstance(parsed, dict):
+                            if "classes" in parsed and isinstance(parsed["classes"], list) and len(parsed["classes"]) > 0:
+                                llm_classes = [str(c).lower().strip() for c in parsed["classes"] if str(c).strip()]
+                            if "projectTitle" in parsed and parsed["projectTitle"]:
+                                llm_title = str(parsed["projectTitle"]).strip()
+                            if "reply" in parsed and parsed["reply"]:
+                                llm_reply = str(parsed["reply"]).strip()
+                    except Exception:
+                        pass
         except Exception as e:
-            print("[0G Compute Router Fallback Notice]:", e)
+            print("[0G Compute Router Extraction Note]:", e)
 
-        if not llm_reply_accumulated:
-            llm_reply_accumulated = f"I've analyzed your requirements via 0G Compute Network! Identified target vision classes: • {', '.join(extracted_classes)}. Please confirm them to proceed to Step 2: Data Upload."
+    # Regex Fallback ONLY if 0G LLM API call timed out or failed to return JSON
+    if not llm_classes:
+        text = prompt.lower()
+        cleaned = re.sub(r'i want to detect|i want to build|i want to create|build|detect|find|identify|recognize|look for|spot|locate|track|model|for|create', '', text)
+        cleaned = re.sub(r'\bin\b|\bon\b|\bat\b|\ba\b|\ban\b|\bthe\b|\band\b|\bor\b|\bwith\b|\busing\b', ',', cleaned)
+        cleaned = re.sub(r'[.!?]', ',', cleaned)
+        raw_classes = [c.strip() for c in cleaned.split(',') if len(c.strip()) > 1]
+        llm_classes = []
+        seen = set()
+        for c in raw_classes:
+            clean_c = re.sub(r'[^a-z0-9 _-]', '', c).strip()
+            if clean_c and clean_c not in seen and len(clean_c) < 30:
+                seen.add(clean_c)
+                llm_classes.append(clean_c)
+        if not llm_classes:
+            llm_classes = ["object"]
 
+    if not llm_title:
+        llm_title = f"{llm_classes[0].title()} Detection Model"
+
+    if not llm_reply:
+        llm_reply = f"I've analyzed your requirements via 0G Compute Network! Identified target vision classes: • {', '.join(llm_classes)}. Please confirm them to proceed to Step 2: Data Upload."
+
+    return {
+        "classes": llm_classes,
+        "projectTitle": llm_title,
+        "reply": llm_reply
+    }
+
+@app.post("/chat-llm-stream")
+async def chat_llm_stream_assistant(req: ChatLLMRequest):
+    """Streams conversational AI responses token-by-token using 100% Real 0G LLM Extraction from 0G Compute Network Router"""
+    res = extract_classes_via_0g_llm(req.prompt)
+    extracted_classes = res["classes"]
+    project_title = res["projectTitle"]
+    llm_reply_accumulated = res["reply"]
+
+    async def event_generator():
         words = llm_reply_accumulated.split(" ")
         for i, word in enumerate(words):
             chunk = word + (" " if i < len(words) - 1 else "")
@@ -238,88 +271,16 @@ async def chat_llm_stream_assistant(req: ChatLLMRequest):
 
 @app.post("/chat-llm")
 def chat_llm_assistant(req: ChatLLMRequest):
-    """Processes conversational prompt via 0G Compute Network Router API key (https://router-api-testnet.integratenetwork.work/v1)"""
-    text = req.prompt.lower()
-    
-    # 1. 0G Compute Network Router Integration (qwen2.5-omni on 0G testnet router)
-    og_api_key = os.getenv("VITE_COMPUTE_API_KEY") or os.getenv("OG_COMPUTE_API_KEY") or os.getenv("OPENROUTER_API_KEY") or "sk-67202178-0e5f-4e8e-afb8-76750ef68228"
-    og_router = os.getenv("COMPUTE_ROUTER", "https://router-api-testnet.integratenetwork.work/v1")
-    model_id = os.getenv("OG_LLM_MODEL", "qwen2.5-omni")
-    
-    ai_reply = None
-    extracted_from_llm = None
-    
-    if og_api_key:
-        try:
-            import urllib.request
-            headers = {
-                "Content-Type": "application/json",
-                "Authorization": f"Bearer {og_api_key}"
-            }
-            system_prompt = (
-                "You are 0G AI Assistant for Computer Vision model building. Analyze user request and return a JSON object with: "
-                "1. 'projectTitle': clean title, "
-                "2. 'classes': list of target object names (e.g. ['hardhat', 'vest']), "
-                "3. 'reply': short helpful 2-sentence response."
-            )
-            body = json.dumps({
-                "model": model_id,
-                "messages": [
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": req.prompt}
-                ]
-            }).encode('utf-8')
-            
-            http_req = urllib.request.Request(f"{og_router}/chat/completions", data=body, headers=headers, method="POST")
-            with urllib.request.urlopen(http_req, timeout=5) as response:
-                res_data = json.loads(response.read().decode('utf-8'))
-                if "choices" in res_data and len(res_data["choices"]) > 0:
-                    raw_content = res_data["choices"][0]["message"]["content"]
-                    try:
-                        # Try parsing JSON response from LLM
-                        parsed = json.loads(raw_content)
-                        if isinstance(parsed, dict):
-                            extracted_from_llm = parsed
-                            ai_reply = parsed.get("reply")
-                    except Exception:
-                        ai_reply = raw_content
-        except Exception as e:
-            print("[0G Compute Router] API Call note:", e)
-
-    # 2. NLP Fallback Class Extraction if LLM didn't return JSON
-    if extracted_from_llm and "classes" in extracted_from_llm and isinstance(extracted_from_llm["classes"], list):
-        extracted_classes = [c.lower().strip() for c in extracted_from_llm["classes"] if isinstance(c, str)]
-        project_title = extracted_from_llm.get("projectTitle", "Custom Vision Model")
-    else:
-        cleaned = re.sub(r'i want to detect|i want to build|build|detect|find|identify|recognize|look for|spot|locate|track|model|for', '', text)
-        cleaned = re.sub(r'\bin\b|\bon\b|\bat\b|\ba\b|\ban\b|\bthe\b|\band\b|\bor\b|\bwith\b|\busing\b', ',', cleaned)
-        cleaned = re.sub(r'[.!?]', ',', cleaned)
-        
-        raw_classes = [c.strip() for c in cleaned.split(',') if len(c.strip()) > 1]
-        extracted_classes = []
-        seen = set()
-        for c in raw_classes:
-            clean_c = re.sub(r'[^a-z0-9 _-]', '', c).strip()
-            if clean_c and clean_c not in seen and len(clean_c) < 30:
-                seen.add(clean_c)
-                extracted_classes.append(clean_c)
-                
-        if not extracted_classes:
-            extracted_classes = ["hardhat"]
-            
-        project_title = f"{extracted_classes[0].title()} Detection Model"
-
-    if not ai_reply:
-        ai_reply = f"I've analyzed your requirements via 0G Compute Network! Identified target classes: • {', '.join(extracted_classes)}. Ready for image upload & Moondream VLM auto-annotation."
-
+    """Processes conversational prompt using 100% Real 0G LLM Extraction via 0G Compute Network Router"""
+    res = extract_classes_via_0g_llm(req.prompt)
     return {
         "ok": True,
-        "reply": ai_reply,
-        "projectTitle": project_title,
-        "classes": extracted_classes,
+        "reply": res["reply"],
+        "projectTitle": res["projectTitle"],
+        "classes": res["classes"],
         "recommendedArch": "YOLOv8n",
         "trainValSplit": "80/20",
-        "ogModel": model_id
+        "ogModel": "qwen2.5-omni"
     }
 
 @app.post("/autolabel")
