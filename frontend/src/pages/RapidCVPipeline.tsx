@@ -377,14 +377,14 @@ export default function RapidCVPipeline() {
             const match = data.results.find((r: any) => r.id === f.id);
             if (match && Array.isArray(match.annotations)) {
               const canvasW = 820;
-              const canvasH = 520;
+              const canvasH = f.width ? Math.round((f.height / f.width) * canvasW) : 520;
               const formattedBoxes: Annotation[] = match.annotations.map((a: any) => ({
                 id: uid(),
                 type: "bbox",
                 x: (a.x_min / 100) * canvasW,
                 y: (a.y_min / 100) * canvasH,
-                w: ((a.x_max - a.x_min) / 100) * canvasW,
-                h: ((a.y_max - a.y_min) / 100) * canvasH,
+                w: Math.max(20, ((a.x_max - a.x_min) / 100) * canvasW),
+                h: Math.max(20, ((a.y_max - a.y_min) / 100) * canvasH),
                 label: a.label || targetClasses[0] || "object",
                 confidence: a.confidence || 0.95,
               }));
