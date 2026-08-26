@@ -914,7 +914,7 @@ const SAMPLE_REEL_ITEMS = [
                         value={chatInput}
                         onChange={(e) => setChatInput(e.target.value)}
                         onKeyDown={(e) => e.key === "Enter" && handleSendChat()}
-                        placeholder="Ask Gemini to build a computer vision model..."
+                        placeholder="Ask Heda to build a computer vision model..."
                         style={{ flex: 1, background: "transparent", border: "none", color: "#fff", fontSize: 14, outline: "none" }}
                       />
                       <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -1071,7 +1071,7 @@ const SAMPLE_REEL_ITEMS = [
                     value={chatInput}
                     onChange={(e) => setChatInput(e.target.value)}
                     onKeyDown={(e) => e.key === "Enter" && handleSendChat()}
-                    placeholder="Ask Gemini to build a computer vision model..."
+                    placeholder="Ask Heda to build a computer vision model..."
                     style={{ flex: 1, background: "transparent", border: "none", color: "#fff", fontSize: 13, outline: "none" }}
                   />
                   <button className="btn-primary btn-sm" onClick={() => handleSendChat()} disabled={chatLoading} style={{ padding: "4px 14px" }}>
