@@ -54,6 +54,7 @@ Heda is a decentralized computer vision annotation marketplace and model trainin
 | **AnnotationMarket** | `0x83281b1a16DbA12ACC983e47FdbFD682Fd2A3F48` | [View](https://chainscan-galileo.0g.ai/address/0x83281b1a16DbA12ACC983e47FdbFD682Fd2A3F48) |
 | **DatasetRegistry** | `0xE0F020329C1c968f44B72360e45FA2EB9F35e96E` | [View](https://chainscan-galileo.0g.ai/address/0xE0F020329C1c968f44B72360e45FA2EB9F35e96E) |
 | **ModelRegistry** | `0x91A033BDEb12c335DacA8Ed3c7A52cf780aF75D3` | [View](https://chainscan-galileo.0g.ai/address/0x91A033BDEb12c335DacA8Ed3c7A52cf780aF75D3) |
+| **PipelineSubscription** | `0x80CBFA451F1E83a9DE9536e1CD0bd85406017FD6` | [View](https://chainscan-galileo.0g.ai/address/0x80CBFA451F1E83a9DE9536e1CD0bd85406017FD6) |
 
 ---
 

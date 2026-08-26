@@ -68,12 +68,16 @@ import Submissions from "./pages/Submissions";
 import DatasetDetail from "./pages/DatasetDetail";
 import Models from "./pages/Models";
 import Leaderboard from "./pages/Leaderboard";
+import RapidCVPipeline from "./pages/RapidCVPipeline";
+
+import { useLocation } from "react-router-dom";
 
 function Header() {
   const { address, isCorrectChain, switchToGalileo } = useWallet();
 
   const navLinks = [
     { to: "/", label: "Home" },
+    { to: "/pipeline", label: "Rapid CV Studio" },
     { to: "/jobs", label: "Jobs" },
     { to: "/create", label: "Create Job" },
     { to: "/datasets", label: "Datasets" },
@@ -108,6 +112,12 @@ function Header() {
 }
 
 function Footer() {
+  const location = useLocation();
+  // Hide footer on full-screen studio workspaces
+  if (location.pathname === "/pipeline" || location.pathname.includes("/jobs/")) {
+    return null;
+  }
+
   return (
     <footer className="heda-footer">
       <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
@@ -124,13 +134,23 @@ function Footer() {
   );
 }
 
-export default function App() {
+function AppContent() {
+  const location = useLocation();
+  const isWorkspaceRoute = location.pathname === "/pipeline" || location.pathname.includes("/jobs/");
+
   return (
-    <BrowserRouter>
-      <Header />
-      <main>
+    <>
+      {!isWorkspaceRoute && <Header />}
+      <main style={{
+        paddingTop: isWorkspaceRoute ? 0 : 64,
+        height: isWorkspaceRoute ? "100vh" : "auto",
+        minHeight: isWorkspaceRoute ? "100vh" : "100vh",
+        maxHeight: isWorkspaceRoute ? "100vh" : "none",
+        overflow: isWorkspaceRoute ? "hidden" : "visible",
+      }}>
         <Routes>
           <Route path="/" element={<Landing />} />
+          <Route path="/pipeline" element={<RapidCVPipeline />} />
           <Route path="/jobs" element={<Jobs />} />
           <Route path="/jobs/:jobId/:taskId" element={<Workspace />} />
           <Route path="/create" element={<CreateJob />} />
@@ -144,6 +164,14 @@ export default function App() {
         </Routes>
       </main>
       <Footer />
+    </>
+  );
+}
+
+export default function App() {
+  return (
+    <BrowserRouter>
+      <AppContent />
     </BrowserRouter>
   );
 }
