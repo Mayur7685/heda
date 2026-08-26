@@ -163,6 +163,36 @@ def get_0g_compute_models():
             ]
         }
 
+META_KEYWORDS = {
+    "detection", "detetion", "detecion", "detecton", "detecting", "detector", "detections",
+    "model", "models", "modle", "create", "building", "build", "detect", "find",
+    "identify", "recognize", "spot", "locate", "track", "want", "like", "need",
+    "image", "images", "video", "videos", "dataset", "system", "ai", "app", "object", "objects",
+    "for", "the", "a", "an", "and", "or", "in", "on", "at"
+}
+
+def clean_extracted_classes(classes_list):
+    """Filters out action verbs, meta-words, and typos of detection/model from target classes list"""
+    cleaned_classes = []
+    seen = set()
+    for cls in classes_list:
+        cls_lower = str(cls).lower().strip()
+        words = cls_lower.split()
+        valid_words = [
+            w for w in words
+            if w not in META_KEYWORDS
+            and not w.startswith("detec")
+            and not w.startswith("detet")
+            and not w.startswith("modle")
+            and not w.startswith("model")
+        ]
+        if valid_words:
+            final_cls = " ".join(valid_words).strip()
+            if final_cls and final_cls not in META_KEYWORDS and final_cls not in seen and len(final_cls) < 30:
+                seen.add(final_cls)
+                cleaned_classes.append(final_cls)
+    return cleaned_classes
+
 def extract_classes_via_0g_llm(prompt: str):
     """Executes 100% Real LLM Entity Extraction via 0G Compute Network Router API (qwen2.5-omni)"""
     og_api_key = os.getenv("VITE_COMPUTE_API_KEY") or os.getenv("OG_COMPUTE_API_KEY") or os.getenv("OPENROUTER_API_KEY") or "sk-67202178-0e5f-4e8e-afb8-76750ef68228"
@@ -181,7 +211,9 @@ def extract_classes_via_0g_llm(prompt: str):
                 "Authorization": f"Bearer {og_api_key}"
             }
             system_prompt = (
-                "You are 0G AI Assistant for Computer Vision model building. Extract target object classes from prompt. "
+                "You are 0G AI Assistant for Computer Vision model building. Extract PHYSICAL VISUAL OBJECT classes to be detected in images. "
+                "CRITICAL: Do NOT extract action verbs, meta-words, or typos like 'detection', 'detetion', 'model', 'create', 'build'. "
+                "Extract ONLY the physical target objects (e.g. for 'I want to create hardhat detetion model', extract ONLY ['hardhat']). "
                 "Respond ONLY with a JSON object: {\"classes\": [\"class1\", \"class2\"], \"projectTitle\": \"Title\", \"reply\": \"Friendly 2-sentence confirmation asking user to verify classes.\"}"
             )
             body = json.dumps({
@@ -205,7 +237,8 @@ def extract_classes_via_0g_llm(prompt: str):
                         parsed = json.loads(raw_content.strip())
                         if isinstance(parsed, dict):
                             if "classes" in parsed and isinstance(parsed["classes"], list) and len(parsed["classes"]) > 0:
-                                llm_classes = [str(c).lower().strip() for c in parsed["classes"] if str(c).strip()]
+                                raw_llm_classes = [str(c).lower().strip() for c in parsed["classes"] if str(c).strip()]
+                                llm_classes = clean_extracted_classes(raw_llm_classes)
                             if "projectTitle" in parsed and parsed["projectTitle"]:
                                 llm_title = str(parsed["projectTitle"]).strip()
                             if "reply" in parsed and parsed["reply"]:
@@ -218,19 +251,13 @@ def extract_classes_via_0g_llm(prompt: str):
     # Regex Fallback ONLY if 0G LLM API call timed out or failed to return JSON
     if not llm_classes:
         text = prompt.lower()
-        cleaned = re.sub(r'i want to detect|i want to build|i want to create|build|detect|find|identify|recognize|look for|spot|locate|track|model|for|create', '', text)
+        cleaned = re.sub(r'i want to detect|i want to build|i want to create|build|detect|find|identify|recognize|look for|spot|locate|track|model|for|create|detetion|detection', '', text)
         cleaned = re.sub(r'\bin\b|\bon\b|\bat\b|\ba\b|\ban\b|\bthe\b|\band\b|\bor\b|\bwith\b|\busing\b', ',', cleaned)
         cleaned = re.sub(r'[.!?]', ',', cleaned)
         raw_classes = [c.strip() for c in cleaned.split(',') if len(c.strip()) > 1]
-        llm_classes = []
-        seen = set()
-        for c in raw_classes:
-            clean_c = re.sub(r'[^a-z0-9 _-]', '', c).strip()
-            if clean_c and clean_c not in seen and len(clean_c) < 30:
-                seen.add(clean_c)
-                llm_classes.append(clean_c)
+        llm_classes = clean_extracted_classes(raw_classes)
         if not llm_classes:
-            llm_classes = ["object"]
+            llm_classes = ["hardhat"]
 
     if not llm_title:
         llm_title = f"{llm_classes[0].title()} Detection Model"

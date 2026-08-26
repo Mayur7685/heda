@@ -296,9 +296,9 @@ export default function RapidCVPipeline() {
         }
       }
     } catch {
-      const cleanPrompt = promptText.toLowerCase().replace(/i want to detect|i want to build|i want to create|build|detect|find|identify|model|for|create/g, "");
-      const rawWords = cleanPrompt.split(/[\s,.]+/).filter((w) => w.length > 2 && !["the", "and", "with", "using", "model"].includes(w));
-      const extracted = rawWords.length > 0 ? Array.from(new Set(rawWords)) : ["object"];
+      const metaWords = new Set(["detection", "detetion", "detecion", "detecton", "detecting", "detector", "model", "models", "create", "build", "detect", "find", "identify", "want", "like", "for", "the", "a", "an", "and", "or", "in", "on", "at"]);
+      const rawWords = promptText.toLowerCase().replace(/[^a-z0-9\s]/g, " ").split(/\s+/).filter((w) => w.length > 2 && !metaWords.has(w) && !w.startsWith("detec") && !w.startsWith("detet") && !w.startsWith("model"));
+      const extracted = rawWords.length > 0 ? Array.from(new Set(rawWords)) : ["hardhat"];
       setTargetClasses(extracted);
       if (!activeLabel) setActiveLabel(extracted[0]);
       setProjectTitle(`${extracted[0].charAt(0).toUpperCase() + extracted[0].slice(1)} Detection Model`);
