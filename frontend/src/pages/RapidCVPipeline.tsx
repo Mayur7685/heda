@@ -1940,50 +1940,33 @@ export default function RapidCVPipeline() {
 
       {/* ── STEP TRANSITION CONFIRMATION MODAL OVERLAY ── */}
       {pendingTransition && (
-        <div style={{
-          position: "fixed", top: 0, left: 0, right: 0, bottom: 0,
-          background: "rgba(0, 0, 0, 0.8)", backdropFilter: "blur(12px)",
-          display: "flex", alignItems: "center", justifyContent: "center",
-          zIndex: 9999, animation: "fadeIn 0.2s ease"
-        }}>
-          <div className="card" style={{
-            width: "90%", maxWidth: 500, padding: 26, background: "rgba(18, 26, 20, 0.98)",
-            border: "1px solid var(--primary)", borderRadius: 20,
-            boxShadow: "0 20px 60px rgba(0, 228, 121, 0.25), 0 0 30px rgba(0, 0, 0, 0.8)",
-          }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 12, color: "var(--primary)", marginBottom: 14 }}>
-              <div style={{
-                width: 40, height: 40, borderRadius: 12, background: "rgba(0,228,121,0.15)",
-                border: "1px solid var(--primary)", display: "flex", alignItems: "center", justifyContent: "center",
-              }}>
-                <span className="material-symbols-outlined" style={{ fontSize: 22, color: "var(--primary)" }}>lock_reset</span>
+        <div
+          style={{ position: "fixed", inset: 0, zIndex: 9999, background: "rgba(0,0,0,0.85)", display: "flex", alignItems: "center", justifyContent: "center", backdropFilter: "blur(6px)" }}
+          onClick={() => setPendingTransition(null)}
+        >
+          <div
+            style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 12, padding: 32, maxWidth: 520, width: "90vw", boxShadow: "0 24px 64px rgba(0,0,0,0.6)" }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16 }}>
+              <div style={{ width: 36, height: 36, borderRadius: 8, background: "rgba(0,228,121,0.12)", border: "1px solid rgba(0,228,121,0.3)", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--primary)" }}>
+                <span className="material-symbols-outlined" style={{ fontSize: 20 }}>lock_reset</span>
               </div>
               <div>
-                <h3 style={{ fontSize: 16, fontWeight: 900, margin: 0, color: "#fff" }}>{pendingTransition.title}</h3>
-                <div style={{ fontSize: 11, color: "var(--primary)", fontWeight: 700 }}>Sequential Pipeline Step Lock</div>
+                <h3 style={{ fontSize: 18, fontWeight: 700, margin: 0, color: "#fff" }}>{pendingTransition.title}</h3>
+                <span style={{ fontSize: 11, color: "var(--text-3)" }}>Sequential Pipeline Step Lock</span>
               </div>
             </div>
 
-            <div style={{
-              fontSize: 13, color: "var(--text-2)", lineHeight: 1.6, padding: 14,
-              background: "rgba(0,0,0,0.4)", borderRadius: 12, border: "1px solid var(--border)", marginBottom: 20,
-            }}>
+            <div style={{ fontSize: 13, color: "var(--text-2)", lineHeight: 1.6, padding: 14, background: "var(--surface-low)", borderRadius: 8, border: "1px solid var(--border)", marginBottom: 24 }}>
               {pendingTransition.summary}
             </div>
 
             <div style={{ display: "flex", gap: 12, justifyContent: "flex-end" }}>
-              <button
-                className="btn-secondary"
-                onClick={() => setPendingTransition(null)}
-                style={{ padding: "8px 18px", fontSize: 12 }}
-              >
-                Cancel / Back to Edit
+              <button className="btn-secondary btn-sm" onClick={() => setPendingTransition(null)}>
+                Cancel / Back
               </button>
-              <button
-                className="btn-primary"
-                onClick={confirmStageTransition}
-                style={{ padding: "8px 24px", fontSize: 12, display: "flex", alignItems: "center", gap: 6 }}
-              >
+              <button className="btn-primary btn-sm" onClick={confirmStageTransition} style={{ display: "flex", alignItems: "center", gap: 6 }}>
                 <span className="material-symbols-outlined" style={{ fontSize: 16 }}>lock</span>
                 Confirm & Lock Step →
               </button>
@@ -1994,38 +1977,35 @@ export default function RapidCVPipeline() {
 
       {/* ── CUSTOM DATASET PUBLISH NAME MODAL ── */}
       {showDatasetPublishModal && (
-        <div style={{
-          position: "fixed", top: 0, left: 0, right: 0, bottom: 0,
-          background: "rgba(0, 0, 0, 0.85)", backdropFilter: "blur(14px)",
-          display: "flex", alignItems: "center", justifyContent: "center",
-          zIndex: 9999, animation: "fadeIn 0.2s ease"
-        }}>
-          <div className="card" style={{
-            width: "90%", maxWidth: 480, padding: 26, background: "rgba(18, 26, 20, 0.98)",
-            border: "1px solid var(--primary)", borderRadius: 20,
-            boxShadow: "0 20px 60px rgba(0, 228, 121, 0.25), 0 0 30px rgba(0, 0, 0, 0.8)",
-          }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 12, color: "var(--primary)", marginBottom: 14 }}>
-              <div style={{
-                width: 40, height: 40, borderRadius: 12, background: "rgba(0,228,121,0.15)",
-                border: "1px solid var(--primary)", display: "flex", alignItems: "center", justifyContent: "center",
-              }}>
-                <span className="material-symbols-outlined" style={{ fontSize: 22, color: "var(--primary)" }}>database</span>
+        <div
+          style={{ position: "fixed", inset: 0, zIndex: 9999, background: "rgba(0,0,0,0.85)", display: "flex", alignItems: "center", justifyContent: "center", backdropFilter: "blur(6px)" }}
+          onClick={() => setShowDatasetPublishModal(false)}
+        >
+          <div
+            style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 12, padding: 32, maxWidth: 520, width: "90vw", boxShadow: "0 24px 64px rgba(0,0,0,0.6)" }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <div style={{ width: 36, height: 36, borderRadius: 8, background: "rgba(0,228,121,0.12)", border: "1px solid rgba(0,228,121,0.3)", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--primary)" }}>
+                  <span className="material-symbols-outlined" style={{ fontSize: 20 }}>database</span>
+                </div>
+                <div>
+                  <h3 style={{ fontSize: 18, fontWeight: 700, margin: 0, color: "#fff" }}>Publish Dataset to 0G Storage</h3>
+                  <span style={{ fontSize: 11, color: "var(--text-3)" }}>Enter Dataset Title for Marketplace</span>
+                </div>
               </div>
-              <div>
-                <h3 style={{ fontSize: 16, fontWeight: 900, margin: 0, color: "#fff" }}>Publish Dataset to 0G Storage</h3>
-                <div style={{ fontSize: 11, color: "var(--primary)", fontWeight: 700 }}>Enter Dataset Title for Marketplace</div>
-              </div>
+              <button className="btn-ghost btn-icon" onClick={() => setShowDatasetPublishModal(false)}>
+                <span className="material-symbols-outlined">close</span>
+              </button>
             </div>
 
-            <p style={{ fontSize: 12, color: "var(--text-2)", marginBottom: 16, lineHeight: 1.5 }}>
+            <p style={{ fontSize: 13, color: "var(--text-2)", marginBottom: 20, lineHeight: 1.5 }}>
               Choose a public title for your dataset. This name will be registered on 0G Storage and listed on the <b>Datasets Marketplace</b>.
             </p>
 
-            <div style={{ marginBottom: 20 }}>
-              <label style={{ display: "block", fontSize: 11, fontWeight: 800, color: "var(--text-3)", marginBottom: 6, textTransform: "uppercase" }}>
-                Dataset Name / Title
-              </label>
+            <div style={{ marginBottom: 24 }}>
+              <label className="label-caps" style={{ display: "block", marginBottom: 8 }}>Dataset Name / Title</label>
               <input
                 type="text"
                 className="input-field"
@@ -2033,26 +2013,22 @@ export default function RapidCVPipeline() {
                 onChange={(e) => setCustomDatasetName(e.target.value)}
                 placeholder="e.g. Construction Hardhat Detection Dataset"
                 autoFocus
-                style={{ width: "100%", padding: "10px 14px", fontSize: 13, background: "rgba(0,0,0,0.5)", border: "1px solid var(--border)", color: "#fff", borderRadius: 8 }}
+                style={{ width: "100%" }}
               />
             </div>
 
             <div style={{ display: "flex", gap: 12, justifyContent: "flex-end" }}>
-              <button
-                className="btn-secondary"
-                onClick={() => setShowDatasetPublishModal(false)}
-                style={{ padding: "8px 18px", fontSize: 12 }}
-              >
+              <button className="btn-secondary btn-sm" onClick={() => setShowDatasetPublishModal(false)}>
                 Cancel
               </button>
               <button
-                className="btn-primary"
+                className="btn-primary btn-sm"
                 onClick={() => {
                   setShowDatasetPublishModal(false);
                   handleUploadApprovedDatasetTo0G(customDatasetName);
                 }}
                 disabled={!customDatasetName.trim()}
-                style={{ padding: "8px 24px", fontSize: 12, display: "flex", alignItems: "center", gap: 6 }}
+                style={{ display: "flex", alignItems: "center", gap: 6 }}
               >
                 <span className="material-symbols-outlined" style={{ fontSize: 16 }}>cloud_upload</span>
                 Publish Dataset to 0G →
@@ -2064,38 +2040,35 @@ export default function RapidCVPipeline() {
 
       {/* ── CUSTOM MODEL PUBLISH NAME MODAL ── */}
       {showModelPublishModal && (
-        <div style={{
-          position: "fixed", top: 0, left: 0, right: 0, bottom: 0,
-          background: "rgba(0, 0, 0, 0.85)", backdropFilter: "blur(14px)",
-          display: "flex", alignItems: "center", justifyContent: "center",
-          zIndex: 9999, animation: "fadeIn 0.2s ease"
-        }}>
-          <div className="card" style={{
-            width: "90%", maxWidth: 480, padding: 26, background: "rgba(18, 26, 20, 0.98)",
-            border: "1px solid var(--primary)", borderRadius: 20,
-            boxShadow: "0 20px 60px rgba(0, 228, 121, 0.25), 0 0 30px rgba(0, 0, 0, 0.8)",
-          }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 12, color: "var(--primary)", marginBottom: 14 }}>
-              <div style={{
-                width: 40, height: 40, borderRadius: 12, background: "rgba(0,228,121,0.15)",
-                border: "1px solid var(--primary)", display: "flex", alignItems: "center", justifyContent: "center",
-              }}>
-                <span className="material-symbols-outlined" style={{ fontSize: 22, color: "var(--primary)" }}>smart_toy</span>
+        <div
+          style={{ position: "fixed", inset: 0, zIndex: 9999, background: "rgba(0,0,0,0.85)", display: "flex", alignItems: "center", justifyContent: "center", backdropFilter: "blur(6px)" }}
+          onClick={() => setShowModelPublishModal(false)}
+        >
+          <div
+            style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 12, padding: 32, maxWidth: 520, width: "90vw", boxShadow: "0 24px 64px rgba(0,0,0,0.6)" }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <div style={{ width: 36, height: 36, borderRadius: 8, background: "rgba(0,228,121,0.12)", border: "1px solid rgba(0,228,121,0.3)", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--primary)" }}>
+                  <span className="material-symbols-outlined" style={{ fontSize: 20 }}>smart_toy</span>
+                </div>
+                <div>
+                  <h3 style={{ fontSize: 18, fontWeight: 700, margin: 0, color: "#fff" }}>Publish Trained Model to 0G Storage</h3>
+                  <span style={{ fontSize: 11, color: "var(--text-3)" }}>Enter Model Name for Onchain Registry</span>
+                </div>
               </div>
-              <div>
-                <h3 style={{ fontSize: 16, fontWeight: 900, margin: 0, color: "#fff" }}>Publish Trained Model to 0G Storage</h3>
-                <div style={{ fontSize: 11, color: "var(--primary)", fontWeight: 700 }}>Enter Model Name for Onchain Registry</div>
-              </div>
+              <button className="btn-ghost btn-icon" onClick={() => setShowModelPublishModal(false)}>
+                <span className="material-symbols-outlined">close</span>
+              </button>
             </div>
 
-            <p style={{ fontSize: 12, color: "var(--text-2)", marginBottom: 16, lineHeight: 1.5 }}>
+            <p style={{ fontSize: 13, color: "var(--text-2)", marginBottom: 20, lineHeight: 1.5 }}>
               Choose a public title for your trained vision model. This name will be stored on 0G Galileo Testnet and listed on the <b>Models Marketplace</b>.
             </p>
 
-            <div style={{ marginBottom: 20 }}>
-              <label style={{ display: "block", fontSize: 11, fontWeight: 800, color: "var(--text-3)", marginBottom: 6, textTransform: "uppercase" }}>
-                Model Name / Title
-              </label>
+            <div style={{ marginBottom: 24 }}>
+              <label className="label-caps" style={{ display: "block", marginBottom: 8 }}>Model Name / Title</label>
               <input
                 type="text"
                 className="input-field"
@@ -2103,26 +2076,22 @@ export default function RapidCVPipeline() {
                 onChange={(e) => setCustomModelName(e.target.value)}
                 placeholder="e.g. Hardhat Safety Detection YOLOv8n"
                 autoFocus
-                style={{ width: "100%", padding: "10px 14px", fontSize: 13, background: "rgba(0,0,0,0.5)", border: "1px solid var(--border)", color: "#fff", borderRadius: 8 }}
+                style={{ width: "100%" }}
               />
             </div>
 
             <div style={{ display: "flex", gap: 12, justifyContent: "flex-end" }}>
-              <button
-                className="btn-secondary"
-                onClick={() => setShowModelPublishModal(false)}
-                style={{ padding: "8px 18px", fontSize: 12 }}
-              >
+              <button className="btn-secondary btn-sm" onClick={() => setShowModelPublishModal(false)}>
                 Cancel
               </button>
               <button
-                className="btn-primary"
+                className="btn-primary btn-sm"
                 onClick={() => {
                   setShowModelPublishModal(false);
                   publishModelOnchain(customModelName);
                 }}
                 disabled={!customModelName.trim()}
-                style={{ padding: "8px 24px", fontSize: 12, display: "flex", alignItems: "center", gap: 6 }}
+                style={{ display: "flex", alignItems: "center", gap: 6 }}
               >
                 <span className="material-symbols-outlined" style={{ fontSize: 16 }}>rocket_launch</span>
                 Publish Model to 0G →
