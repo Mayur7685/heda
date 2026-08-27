@@ -426,6 +426,89 @@ def get_synonym_queries(cls_name: str):
     }
     return syn_map.get(cls_name.lower().strip(), [cls_name])
 
+class MoondreamDetectRequest(BaseModel):
+    image_url: str
+    object: str = "object"
+
+class MoondreamQueryRequest(BaseModel):
+    image_url: str
+    question: str = ""
+
+@app.post("/v1/detect")
+def moondream_detect_endpoint(req: MoondreamDetectRequest):
+    """Native local Moondream 2 VLM object detection endpoint embedded directly in Heda AI server"""
+    url_or_b64 = req.image_url
+    try:
+        if url_or_b64.startswith("data:image"):
+            header, encoded = url_or_b64.split(",", 1)
+            image_data = base64.b64decode(encoded)
+            pil_img = Image.open(BytesIO(image_data))
+        else:
+            req_http = urllib.request.Request(url_or_b64, headers={'User-Agent': 'Mozilla/5.0'})
+            with urllib.request.urlopen(req_http, timeout=15) as resp:
+                pil_img = Image.open(BytesIO(resp.read()))
+        
+        if local_moondream_model is not None:
+            res = local_moondream_model.detect(pil_img, req.object)
+            return {
+                "objects": [
+                    {
+                        "x_min": o["x_min"],
+                        "y_min": o["y_min"],
+                        "x_max": o["x_max"],
+                        "y_max": o["y_max"]
+                    } for o in res.get("objects", [])
+                ]
+            }
+        
+        # Fallback to cloud API if local model not loaded
+        api_key = os.getenv("MOONDREAM_API_KEY", "")
+        res_cloud = call_moondream_detect(req.image_url, req.object, api_key)
+        return res_cloud or {"objects": []}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Moondream detection error: {e}")
+
+@app.post("/v1/query")
+def moondream_query_endpoint(req: MoondreamQueryRequest):
+    """Native local Moondream 2 VLM visual QA query endpoint embedded directly in Heda AI server"""
+    try:
+        url_or_b64 = req.image_url
+        if url_or_b64.startswith("data:image"):
+            header, encoded = url_or_b64.split(",", 1)
+            image_data = base64.b64decode(encoded)
+            pil_img = Image.open(BytesIO(image_data))
+        else:
+            req_http = urllib.request.Request(url_or_b64, headers={'User-Agent': 'Mozilla/5.0'})
+            with urllib.request.urlopen(req_http, timeout=15) as resp:
+                pil_img = Image.open(BytesIO(resp.read()))
+        
+        if local_moondream_model is not None:
+            res = local_moondream_model.query(pil_img, req.question)
+            return {"answer": res.get("answer", "")}
+        return {"answer": "Local Moondream VLM engine not loaded."}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Moondream query error: {e}")
+
+@app.post("/v1/segment")
+def moondream_segment_endpoint(req: MoondreamDetectRequest):
+    """Native local Moondream VLM segmentation endpoint"""
+    try:
+        if local_moondream_model is not None:
+            url_or_b64 = req.image_url
+            if url_or_b64.startswith("data:image"):
+                header, encoded = url_or_b64.split(",", 1)
+                image_data = base64.b64decode(encoded)
+                pil_img = Image.open(BytesIO(image_data))
+            else:
+                req_http = urllib.request.Request(url_or_b64, headers={'User-Agent': 'Mozilla/5.0'})
+                with urllib.request.urlopen(req_http, timeout=15) as resp:
+                    pil_img = Image.open(BytesIO(resp.read()))
+            res = local_moondream_model.segment(pil_img, req.object)
+            return {"path": res.get("path", "")}
+    except Exception:
+        pass
+    raise HTTPException(status_code=501, detail="Segmentation requires Moondream model supporting polygon masks.")
+
 @app.post("/autolabel")
 def autolabel_images(req: AutoLabelRequest):
     """Generates zero-shot bounding boxes for unlabeled images using local Moondream VLM engine or cloud API"""
