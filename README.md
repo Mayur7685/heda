@@ -1,116 +1,110 @@
-# 🏋️ Heda — Decentralized Data Intelligence & Model Training Platform
+# ⚡ Heda Protocol — Decentralized AI Data & Model Training Marketplace on 0G
 
-> **Label Studio + Roboflow Universe, onchain.** Annotate datasets, check dataset health, train YOLO models, and publish weights — all powered by the **0G Stack**.
-
-[![Built on 0G](https://img.shields.io/badge/Built%20on-0G%20Stack-00e479)](https://0g.ai)
-[![Network](https://img.shields.io/badge/Network-Galileo%20Testnet-00e479)](https://chainscan-galileo.0g.ai)
+> **Heda Protocol** is a decentralized end-to-end AI data pipeline, bounding box annotation marketplace, and model training ecosystem built natively on **0G Storage** and **0G Galileo Testnet**. 
 
 ---
 
-## 🌟 What is Heda?
+## 🌟 Key Subsystems & Features
 
-Heda is a decentralized computer vision annotation marketplace and model training platform where:
+1. **Decentralized Data Bounties (`AnnotationMarket.sol`)**:
+   - Data scientists create image & text annotation jobs with ETH bounties locked in onchain escrow.
+   - Annotators claim tasks, draw bounding boxes / polygon masks, and submit annotations.
+   - Job creators review work, approve submissions, and automatically disburse ETH rewards.
 
-- **Job Creators** upload raw image datasets, define bounding box classes, and lock 0G ETH bounties in escrow.
-- **Annotators** claim tasks, annotate images with bounding box tools (with 1-click **Moondream AI Auto-Label Assist**), and get paid instantly per approved task.
-- **Data Engineers** inspect **Dataset Health Check** scores (class balance, box size, null warnings) and publish COCO JSON datasets to the **Dataset Universe (`/datasets`)**.
-- **ML Engineers** fine-tune **YOLOv8** models locally or on GPU infra, stream live mAP50 training metrics, and publish `.pt` model weights to the **Model Universe (`/models`)** backed by **0G Storage**.
+2. **0G Storage Verified Datasets (`DatasetRegistry.sol`)**:
+   - Published datasets are serialized into standard COCO / JSONL format and posted directly to 0G Storage Merkle Trees.
+   - Commercial data buyers can purchase dataset licenses onchain with automated royalty disbursement.
+
+3. **Autonomous PyTorch YOLOv8 Model Training (`backend/ai-service`)**:
+   - Fine-tunes vision models on user-annotated 0G datasets.
+   - Decodes base64 images, formats YOLO normalized bounding boxes `[class_id, x_center, y_center, w, h]`, runs PyTorch training on GPU (Apple Silicon MPS / CUDA), and streams real-time loss & mAP@50 metrics.
+
+4. **Local Moondream 2 VLM Zero-Shot Auto-Labeling (`moondream_server.py`)**:
+   - Dedicated local VLM server running on port `2020` loads Moondream 2 onto Mac GPU / CUDA for fast sub-second zero-shot object detection.
+
+5. **Decentralized AI Model Registry (`ModelRegistry.sol`)**:
+   - Fine-tuned PyTorch model weights (`.pt` / `.onnx`) are uploaded to 0G Storage and registered onchain.
+   - Includes live interactive model testing modal (`InferenceModal.tsx`).
 
 ---
 
-## 🏗️ 0G Stack Integration
+## 🚀 Deployed 0G Galileo Testnet Contracts
 
-| Layer | What Heda uses it for |
-|---|---|
-| **0G Chain** (Galileo Testnet, Chain ID 16602) | Job Escrow, Task Bounties, Dataset Registry, Model Registry, Onchain Model Weights Licensing |
-| **0G Storage** | Raw image store, COCO JSON datasets, trained `.pt` YOLO model weights, metadata hashes |
-| **0G Compute / Local AI Microservice** | Moondream VLM AI Auto-Labeling assist + Python PyTorch YOLOv8 model training engine |
+| Contract Name | Deployed Galileo Address | Explorer Link |
+| :--- | :--- | :--- |
+| **`AnnotationMarket`** | `0x999C386123c7BD76754756335C254b82EB51efe8` | [View on 0G Explorer](https://chainscan-galileo.0g.ai/address/0x999C386123c7BD76754756335C254b82EB51efe8) |
+| **`DatasetRegistry`** | `0xd22C7e9109E2fc4712eA990d100166834a2067A0` | [View on 0G Explorer](https://chainscan-galileo.0g.ai/address/0xd22C7e9109E2fc4712eA990d100166834a2067A0) |
+| **`ModelRegistry`** | `0xB828cfd2e57d2594Cbe54fE293991e48f6B5fbA7` | [View on 0G Explorer](https://chainscan-galileo.0g.ai/address/0xB828cfd2e57d2594Cbe54fE293991e48f6B5fbA7) |
+| **`PipelineSubscription`** | `0x0b52211F340aB9cd867be80ec9Fc2B45861229Ac` | [View on 0G Explorer](https://chainscan-galileo.0g.ai/address/0x0b52211F340aB9cd867be80ec9Fc2B45861229Ac) |
 
 ---
 
-## 🛠️ Microservice Architecture
+## 🛠️ System Architecture Overview
 
 ```
-┌─────────────────────────┐       1. POST /train/start        ┌─────────────────────────┐
-│                         │ ─────────────────────────────────> │   Python AI Service     │
-│   Heda React Frontend   │                                   │    (ai-service:8000)    │
-│   (TrainingModal.tsx)   │ <──────────────────────────────── │    (FastAPI + PyTorch)  │
-└─────────────────────────┘       4. Stream Logs & Metrics    └────────────┬────────────┘
-             │                                                             │ 3. Relay Weights Upload
-             │ 5. Publish to Model Universe                                ▼
-             ▼                                                ┌─────────────────────────┐
-┌─────────────────────────┐                                   │   Node.js 0G Relayer    │
-│    ModelRegistry.sol    │ <──────────────────────────────── │      (relayer:3001)     │
-│  (0G Galileo Testnet)   │       0G Storage Merkle Root      └─────────────────────────┘
-└─────────────────────────┘
+                          ┌────────────────────────┐
+                          │    React Vite UI       │
+                          │   (Frontend Port 5173) │
+                          └───────────┬────────────┘
+                                      │
+           ┌──────────────────────────┼──────────────────────────┐
+           ▼                          ▼                          ▼
+┌──────────────────┐       ┌────────────────────┐     ┌─────────────────────┐
+│ 0G Galileo EVM   │       │ 0G Storage Network │     │ Local AI Microservice│
+│ Smart Contracts  │       │ (Storage Nodes &   │     │ (FastAPI & PyTorch  │
+│ (Chain ID 16602) │       │ Turbo Indexer)     │     │ Port 8000 & 2020)   │
+└──────────┬───────┘       └──────────┬─────────┘     └──────────┬──────────┘
+           │                          │                          │
+           └──────────────────────────┼──────────────────────────┘
+                                      │
+                           ┌──────────▼─────────┐
+                           │ SQLite Event       │
+                           │ Relayer Indexer    │
+                           │ (Backend Port 3001)│
+                           └────────────────────┘
 ```
 
 ---
 
-## 📜 Deployed Contracts (0G Galileo Testnet)
+## 💻 Quick Start & Running Locally
 
-| Contract | Address | Explorer |
-|---|---|---|
-| **AnnotationMarket** | `0x993Ab9D8d254cCe045F00A642CCDE21145a77C2B` | [View](https://chainscan-galileo.0g.ai/address/0x993Ab9D8d254cCe045F00A642CCDE21145a77C2B) |
-| **DatasetRegistry** | `0x94353b3BDF015346802bc965e1FF807c09222Ede` | [View](https://chainscan-galileo.0g.ai/address/0x94353b3BDF015346802bc965e1FF807c09222Ede) |
-| **ModelRegistry** | `0xa3Eb0cfb5472944770142F4CB27Dd516DbC4c126` | [View](https://chainscan-galileo.0g.ai/address/0xa3Eb0cfb5472944770142F4CB27Dd516DbC4c126) |
-| **PipelineSubscription** | `0x9d7dcFAA625a1622C4042E2Eb9978c34F5BA7EDF` | [View](https://chainscan-galileo.0g.ai/address/0x9d7dcFAA625a1622C4042E2Eb9978c34F5BA7EDF) |
+### 1. Prerequisites
+- **Node.js**: v18+ & npm
+- **Python**: v3.10+ (with PyTorch installed)
+- **Foundry**: `forge` & `cast`
 
----
-
-## 🚀 Quick Start (Local Setup)
-
-### 1. Terminal 1 — 0G Relayer Service
+### 2. Frontend Launch
 ```bash
-cd heda/backend/relayer
-npm install
-npm start
-```
-*Runs Node.js 0G Storage Upload Relayer on `http://localhost:3001`*
-
-### 2. Terminal 2 — Python AI & YOLO Training Microservice
-```bash
-cd heda/backend/ai-service
-bash setup_env.sh
-source .venv/bin/activate
-python main.py
-```
-*Runs Python FastAPI ML Service on `http://localhost:8000`*
-
-### 3. Terminal 3 — React Frontend
-```bash
-cd heda/frontend
+cd frontend
 npm install
 npm run dev
+# Running on http://localhost:5173
 ```
-*Opens Heda DApp on `http://localhost:5173`*
+
+### 3. Backend Relayer & Event Indexer
+```bash
+cd backend/relayer
+npm install
+npm start
+# Running on http://localhost:3001
+```
+
+### 4. Local Moondream 2 VLM GPU Server
+```bash
+cd backend/ai-service
+python3 moondream_server.py
+# Running on http://localhost:2020
+```
+
+### 5. Python AI & Model Fine-Tuning Microservice
+```bash
+cd backend/ai-service
+python3 main.py
+# Running on http://localhost:8000
+```
 
 ---
 
-## 🧪 Automated Test Suite
+## 🧪 Comprehensive Testing Guide
 
-Run the automated test suite for the AI trainer engine:
-
-```bash
-python3 heda/backend/ai-service/test_trainer.py
-```
-
-Expected Output:
-```
-..
-----------------------------------------------------------------------
-Ran 2 tests in 0.001s
-
-OK
-```
-
----
-
-## 🐳 Docker Deployment
-
-To launch all microservices in containers with GPU support:
-
-```bash
-cd heda/backend
-docker compose up -d
-```
+Please see **[TESTING_GUIDE.md](TESTING_GUIDE.md)** for step-by-step instructions on testing data bounties, VLM auto-labeling, PyTorch fine-tuning, and model registration.

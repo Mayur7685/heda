@@ -1,94 +1,43 @@
-# Heda Contracts
+# 📜 Heda Protocol Smart Contracts
 
-Solidity smart contracts for the Heda annotation marketplace, deployed on 0G Chain (EVM-compatible).
+Solidity smart contracts deployed on **0G Galileo Testnet** (Chain ID `16602`) managing data bounty escrows, dataset registry licensing, model weights registry, and pipeline subscription quotas.
 
-## Deployed Addresses (Galileo Testnet, Chain ID 16602)
+---
 
-| Contract | Address |
-|---|---|
-| AnnotationMarket | `0x993Ab9D8d254cCe045F00A642CCDE21145a77C2B` |
-| DatasetRegistry | `0x94353b3BDF015346802bc965e1FF807c09222Ede` |
-| ModelRegistry | `0xa3Eb0cfb5472944770142F4CB27Dd516DbC4c126` |
-| PipelineSubscription | `0x9d7dcFAA625a1622C4042E2Eb9978c34F5BA7EDF` |
+## 🚀 Deployed Galileo Addresses
 
-## Contracts
+| Contract | Address | Explorer |
+| :--- | :--- | :--- |
+| **`AnnotationMarket`** | `0x999C386123c7BD76754756335C254b82EB51efe8` | [View Address](https://chainscan-galileo.0g.ai/address/0x999C386123c7BD76754756335C254b82EB51efe8) |
+| **`DatasetRegistry`** | `0xd22C7e9109E2fc4712eA990d100166834a2067A0` | [View Address](https://chainscan-galileo.0g.ai/address/0xd22C7e9109E2fc4712eA990d100166834a2067A0) |
+| **`ModelRegistry`** | `0xB828cfd2e57d2594Cbe54fE293991e48f6B5fbA7` | [View Address](https://chainscan-galileo.0g.ai/address/0xB828cfd2e57d2594Cbe54fE293991e48f6B5fbA7) |
+| **`PipelineSubscription`** | `0x0b52211F340aB9cd867be80ec9Fc2B45861229Ac` | [View Address](https://chainscan-galileo.0g.ai/address/0x0b52211F340aB9cd867be80ec9Fc2B45861229Ac) |
 
-### AnnotationMarket.sol
+---
 
-Trustless annotation job escrow. Handles the full lifecycle of annotation work.
+## 🧪 Testing Smart Contracts
 
-**Key functions:**
-
-| Function | Description |
-|---|---|
-| `createJob(dataRootHash, metadataURI, rewardPerTask, taskCount, dataType)` | Post a job with ETH bounty locked |
-| `claimTask(jobId, taskId)` | Reserve a task for 30 minutes (prevents wasted work) |
-| `isTaskAvailable(jobId, taskId)` | Check if a task is unclaimed or claim expired |
-| `submitWork(jobId, taskId, annotationRootHash)` | Submit single annotation |
-| `submitBatch(jobId, taskIds[], annotationRootHashes[])` | Submit multiple annotations — 1 tx |
-| `approveWork(jobId, taskId)` | Creator approves → annotator paid instantly |
-| `rejectWork(jobId, taskId)` | Creator rejects → task reopens |
-| `closeJob(jobId)` | Creator closes job, unspent bounty returned |
-
-**Auto-close:** When `approvedCount == taskCount`, the job automatically sets `active = false`.
-
-**Claim system:** Prevents multiple annotators wasting work on the same task. Claims expire after 30 minutes (`CLAIM_DURATION = 30 minutes`).
-
-### DatasetRegistry.sol
-
-Onchain marketplace for published datasets. Each dataset is identified by its 0G Storage Merkle root hash.
-
-**Key functions:**
-
-| Function | Description |
-|---|---|
-| `publish(rootHash, metadataURI, price, dataType, sourceJobId)` | List a dataset for sale |
-| `purchase(datasetId)` | Buy a license — payment goes directly to publisher |
-| `hasLicense(datasetId, address)` | Check if address has a license |
-| `getDataset(datasetId)` | Get full dataset info |
-
-**Note:** `rootHash` stores the COCO JSON root (image datasets) or JSONL root (text datasets) — not the raw data.
-
-## Setup
+Run the Foundry unit test suite:
 
 ```bash
-# Install Foundry
-curl -L https://foundry.paradigm.xyz | bash && foundryup
-
-# Install dependencies
-forge install
-
-# Run tests
 forge test
-
-# Deploy to Galileo
-source .env  # PRIVATE_KEY=0x...
-forge script script/Deploy.s.sol \
-  --rpc-url https://evmrpc-testnet.0g.ai \
-  --private-key $PRIVATE_KEY \
-  --broadcast \
-  --gas-price 15000000000
 ```
 
-## Tests
-
+**Output:**
 ```
-forge test --summary
+Ran 2 test suites in 16.77ms: 17 tests passed, 0 failed, 0 skipped
 ```
 
-All 17 tests pass:
-- `AnnotationMarketTest` — 8 tests (create, submit, approve, reject, close, batch)
-- `DatasetRegistryTest` — 9 tests (publish, purchase, license, refund, free datasets)
+---
 
-## Critical Rules (0G Chain)
+## 🛠️ Deploying to 0G Galileo Testnet
 
-- `evm_version = "cancun"` — mandatory in `foundry.toml`, causes `invalid opcode` otherwise
-- `ethers v6` only in frontend — never v5 patterns
-- Gas price minimum: ~4 Gneuron on Galileo testnet
-
-## Environment
+To re-deploy all smart contracts using Foundry script:
 
 ```bash
-# contracts/.env
-PRIVATE_KEY=0x...  # funded wallet
+forge script script/Deploy.s.sol:Deploy \
+  --rpc-url https://evmrpc-testnet.0g.ai \
+  --broadcast \
+  --legacy \
+  --private-key <YOUR_PRIVATE_KEY>
 ```

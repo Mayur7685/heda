@@ -4,9 +4,9 @@ import path from 'path';
 
 const GALILEO_RPC = process.env.GALILEO_RPC || 'https://evmrpc-testnet.0g.ai';
 
-const ANNOTATION_MARKET_ADDR = process.env.VITE_MARKET_ADDRESS || '0x993Ab9D8d254cCe045F00A642CCDE21145a77C2B';
-const DATASET_REGISTRY_ADDR  = process.env.VITE_DATASET_REGISTRY_ADDRESS || '0x94353b3BDF015346802bc965e1FF807c09222Ede';
-const MODEL_REGISTRY_ADDR    = process.env.VITE_MODEL_REGISTRY_ADDRESS || '0xa3Eb0cfb5472944770142F4CB27Dd516DbC4c126';
+const ANNOTATION_MARKET_ADDR = process.env.VITE_MARKET_ADDRESS || '0x999C386123c7BD76754756335C254b82EB51efe8';
+const DATASET_REGISTRY_ADDR  = process.env.VITE_DATASET_REGISTRY_ADDRESS || '0xd22C7e9109E2fc4712eA990d100166834a2067A0';
+const MODEL_REGISTRY_ADDR    = process.env.VITE_MODEL_REGISTRY_ADDRESS || '0xB828cfd2e57d2594Cbe54fE293991e48f6B5fbA7';
 
 // Minimal ABIs for event indexing
 const MARKET_ABI = [
@@ -109,7 +109,7 @@ export async function syncEvents() {
     const latestBlock = await provider.getBlockNumber();
 
     const storedLastBlock = stmtGetState.get('last_indexed_block')?.value;
-    let fromBlock = storedLastBlock ? parseInt(storedLastBlock, 10) + 1 : 51600000;
+    let fromBlock = storedLastBlock ? parseInt(storedLastBlock, 10) + 1 : 51650000;
 
     if (fromBlock > latestBlock) {
       isSyncing = false;

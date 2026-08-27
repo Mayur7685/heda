@@ -14,7 +14,7 @@ const SUBSCRIPTION_ABI = [
 export function usePipelineSubscription(signer: ethers.Signer | null) {
   return useMemo(() => {
     const address = GALILEO.contracts.pipelineSubscription;
-    if (!address || address === "0x0000000000000000000000000000000000000000") return null;
+    if (!address || (address as string) === "0x0000000000000000000000000000000000000000") return null;
 
     const providerOrSigner = signer ?? new ethers.JsonRpcProvider(GALILEO.rpc);
     const contract = new ethers.Contract(address, SUBSCRIPTION_ABI, providerOrSigner);
