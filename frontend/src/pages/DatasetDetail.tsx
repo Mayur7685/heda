@@ -29,16 +29,61 @@ export default function DatasetDetail() {
   }, [!!registry, datasetId]);
 
   async function loadDataset() {
-    if (!registry || !datasetId) return;
-    const d = await registry.getDataset(Number(datasetId));
-    setDataset(d);
-    if (address) setHasLicense(await registry.hasLicense(Number(datasetId), address));
-    
-    let meta: any = null;
-    try {
-      meta = await fetchFrom0GStorage(d.metadataURI, 3);
-      setMetadata(meta);
-    } catch {}
+    if (!datasetId) return;
+    let d: any = null;
+    if (registry) {
+      try {
+        d = await registry.getDataset(Number(datasetId));
+        if (d && d.publisher && d.publisher !== "0x0000000000000000000000000000000000000000") {
+          setDataset(d);
+          if (address) setHasLicense(await registry.hasLicense(Number(datasetId), address));
+        } else {
+          d = null;
+        }
+      } catch {
+        d = null;
+      }
+    }
+
+    // Fallback: check localStorage custom datasets if not found on-chain
+    if (!d) {
+      try {
+        const stored = localStorage.getItem("hedaprotocol_custom_datasets");
+        if (stored) {
+          const list = JSON.parse(stored);
+          const found = list.find((x: any) => String(x.datasetId) === String(datasetId));
+          if (found) {
+            setDataset({
+              publisher: found.publisher ?? "0x0000000000000000000000000000000000000000",
+              rootHash: found.rootHash,
+              metadataURI: found.metadataURI ?? "",
+              price: found.price ? ethers.parseEther(String(found.price)) : 0n,
+              dataType: found.dataType ?? 0,
+              sourceJobId: found.sourceJobId ?? 0,
+              active: true,
+            });
+            setMetadata({
+              name: found.name ?? `Custom Dataset #${datasetId}`,
+              format: found.format ?? "COCO JSON",
+              taskCount: found.taskCount ?? 1,
+              labels: found.labels ?? ["object"],
+            });
+            setHasLicense(true);
+            if (found.previewImage) {
+              setRealImages([{ name: "Sample Image", url: found.previewImage, anns: [] }]);
+            }
+            return;
+          }
+        }
+      } catch {}
+    }
+
+    if (d && d.metadataURI) {
+      try {
+        const meta = await fetchFrom0GStorage(d.metadataURI, 3);
+        setMetadata(meta);
+      } catch {}
+    }
 
     // Fetch real uploaded dataset content from 0G Storage Indexer / Cache
     try {
@@ -46,7 +91,7 @@ export default function DatasetDetail() {
       if (rawData && typeof rawData === "object") {
         const cocoImages = rawData.images ?? [];
         const cocoAnns = rawData.annotations ?? [];
-        const dataRoot = rawData.info?.data_root_hash ?? meta?.dataRootHash;
+        const dataRoot = rawData.info?.data_root_hash ?? metadata?.dataRootHash;
 
         let sourceFiles: any[] = [];
         if (dataRoot) {

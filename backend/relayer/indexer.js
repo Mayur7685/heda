@@ -10,18 +10,18 @@ const MODEL_REGISTRY_ADDR    = process.env.VITE_MODEL_REGISTRY_ADDRESS || '0xa3E
 
 // Minimal ABIs for event indexing
 const MARKET_ABI = [
-  'event JobCreated(uint256 indexed jobId, address indexed creator, string dataRootHash, uint256 rewardPerTask, uint256 taskCount, uint8 dataType)',
-  'function getJob(uint256 jobId) external view returns (tuple(address creator, string dataRootHash, string metadataURI, uint256 rewardPerTask, uint256 taskCount, uint8 dataType, bool active, uint256 approvedCount))',
+  'event JobCreated(uint256 indexed jobId, address indexed creator, bytes32 dataRootHash, uint256 rewardPerTask, uint256 taskCount, uint8 dataType)',
+  'function jobs(uint256 jobId) external view returns (address creator, bytes32 dataRootHash, string metadataURI, uint256 rewardPerTask, uint256 taskCount, uint256 approvedCount, uint8 dataType, bool active)',
 ];
 
 const DATASET_ABI = [
-  'event Published(uint256 indexed datasetId, address indexed publisher, string rootHash, uint256 price, uint8 dataType, uint256 sourceJobId)',
-  'function getDataset(uint256 datasetId) external view returns (tuple(address publisher, string rootHash, string metadataURI, uint256 price, uint8 dataType, uint256 sourceJobId, bool active))',
+  'event Published(uint256 indexed datasetId, address indexed publisher, bytes32 rootHash, uint256 price, uint8 dataType, uint256 sourceJobId)',
+  'function datasets(uint256 datasetId) external view returns (address publisher, bytes32 rootHash, string metadataURI, uint256 price, uint8 dataType, uint256 sourceJobId, bool active)',
 ];
 
 const MODEL_ABI = [
-  'event ModelPublished(uint256 indexed modelId, address indexed publisher, string weightsRootHash, uint256 price, uint8 modelType)',
-  'function getModel(uint256 modelId) external view returns (tuple(address publisher, string weightsRootHash, string reportRootHash, string metadataURI, uint256 price, uint8 modelType, uint256 sourceDatasetId, uint256 downloadCount, string inferenceEndpoint, bool active))',
+  'event ModelPublished(uint256 indexed modelId, address indexed publisher, bytes32 weightsRootHash, uint256 price, uint8 modelType)',
+  'function models(uint256 modelId) external view returns (address publisher, bytes32 weightsRootHash, bytes32 reportRootHash, string metadataURI, uint256 price, uint8 modelType, uint256 sourceDatasetId, uint256 downloadCount, string inferenceEndpoint, bool active)',
 ];
 
 // Initialize SQLite database
@@ -109,8 +109,7 @@ export async function syncEvents() {
     const latestBlock = await provider.getBlockNumber();
 
     const storedLastBlock = stmtGetState.get('last_indexed_block')?.value;
-    // Default to start indexing from recent blocks or block 0
-    let fromBlock = storedLastBlock ? parseInt(storedLastBlock, 10) + 1 : Math.max(0, latestBlock - 50000);
+    let fromBlock = storedLastBlock ? parseInt(storedLastBlock, 10) + 1 : 51600000;
 
     if (fromBlock > latestBlock) {
       isSyncing = false;
@@ -137,7 +136,7 @@ export async function syncEvents() {
 
         let metadataURI = '';
         try {
-          const jobObj = await marketContract.getJob(jobId);
+          const jobObj = await marketContract.jobs(jobId);
           metadataURI = jobObj.metadataURI;
         } catch {}
 
@@ -162,7 +161,7 @@ export async function syncEvents() {
 
         let metadataURI = '';
         try {
-          const dsObj = await datasetContract.getDataset(datasetId);
+          const dsObj = await datasetContract.datasets(datasetId);
           metadataURI = dsObj.metadataURI;
         } catch {}
 
@@ -186,7 +185,7 @@ export async function syncEvents() {
 
         let reportRootHash = '', metadataURI = '', sourceDatasetId = 0, downloadCount = 0, inferenceEndpoint = '';
         try {
-          const mObj = await modelContract.getModel(modelId);
+          const mObj = await modelContract.models(modelId);
           reportRootHash = mObj.reportRootHash;
           metadataURI = mObj.metadataURI;
           sourceDatasetId = Number(mObj.sourceDatasetId);
