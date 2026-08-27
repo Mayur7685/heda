@@ -21,6 +21,37 @@ import io
 from PIL import Image
 from pathlib import Path
 
+def load_env_files():
+    """Loads environment variables from local .env files into os.environ if not already set"""
+    try:
+        from dotenv import load_dotenv
+        load_dotenv(Path(__file__).parent / ".env")
+        load_dotenv(Path(__file__).parent.parent / ".env")
+    except Exception:
+        pass
+
+    env_paths = [
+        Path(__file__).parent / ".env",
+        Path(__file__).parent.parent / ".env",
+        Path(__file__).parent.parent.parent / ".env",
+    ]
+    for env_path in env_paths:
+        if env_path.exists():
+            try:
+                with open(env_path, "r", encoding="utf-8") as f:
+                    for line in f:
+                        line = line.strip()
+                        if line and not line.startswith("#") and "=" in line:
+                            k, v = line.split("=", 1)
+                            k = k.strip()
+                            v = v.strip().strip("'\"")
+                            if k and not os.environ.get(k):
+                                os.environ[k] = v
+            except Exception:
+                pass
+
+load_env_files()
+
 app = FastAPI(title="Heda AI Service", version="1.0.0")
 
 app.add_middleware(
