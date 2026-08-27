@@ -1047,7 +1047,7 @@ export default function RapidCVPipeline() {
                   /* Gemini Giant Center Heading & Floating Prompt Input */
                   <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 24, width: "100%", animation: "fadeIn 0.3s ease" }}>
                     <h1 style={{ fontSize: 32, fontWeight: 500, color: "#e2e8f0", letterSpacing: "-0.02em", margin: 0, textAlign: "center" }}>
-                      What can I help with, Mayur?
+                      What can I help with, {address ? `${address.slice(0, 6)}…${address.slice(-4)}` : "Builder"}?
                     </h1>
 
                     {/* Gemini Floating Prompt Pill Input */}
