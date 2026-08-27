@@ -636,11 +636,32 @@ export default function Workspace() {
 
   if (step === "done") {
     return (
-      <div className="page" style={{ textAlign: "center", paddingTop: 80 }}>
-        <span className="material-symbols-outlined" style={{ fontSize: 48, color: "var(--primary)", display: "block", marginBottom: 16 }}>check_circle</span>
-        <h2 style={{ fontSize: 24, fontWeight: 700, marginBottom: 8 }}>All Annotations Submitted</h2>
-        <a href={`${GALILEO.explorer}/tx/${txHash}`} target="_blank" rel="noreferrer" className="btn-secondary" style={{ marginRight: 12 }}>View Tx ↗</a>
-        <button className="btn-primary" onClick={() => navigate("/")}>Back to Jobs</button>
+      <div className="page" style={{ maxWidth: 640, margin: "0 auto", paddingTop: 40, paddingBottom: 60 }}>
+        <div className="card" style={{ padding: 40, textAlign: "center" }}>
+          <div style={{ width: 64, height: 64, borderRadius: "50%", background: "rgba(0,228,121,0.12)", border: "1px solid rgba(0,228,121,0.3)", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 20px" }}>
+            <span className="material-symbols-outlined" style={{ fontSize: 36, color: "var(--primary)" }}>check_circle</span>
+          </div>
+          <h2 style={{ fontSize: 24, fontWeight: 700, marginBottom: 8, color: "#fff" }}>Annotations Submitted!</h2>
+          <p style={{ color: "var(--text-2)", fontSize: 14, marginBottom: 28, maxWidth: 460, margin: "0 auto 28px" }}>
+            Your annotations for Job #{jobId} have been uploaded to 0G Storage & submitted onchain. The job creator will review and release your ETH reward.
+          </p>
+
+          <div style={{ display: "flex", gap: 12, justifyContent: "center", flexWrap: "wrap" }}>
+            {txHash && (
+              <a href={`${GALILEO.explorer}/tx/${txHash}`} target="_blank" rel="noreferrer" className="btn-secondary" style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                <span className="material-symbols-outlined" style={{ fontSize: 16 }}>open_in_new</span>
+                View Transaction ↗
+              </a>
+            )}
+            <button className="btn-secondary" onClick={() => navigate("/dashboard")}>
+              My Dashboard
+            </button>
+            <button className="btn-primary" onClick={() => navigate("/jobs")}>
+              <span className="material-symbols-outlined" style={{ fontSize: 16 }}>work</span>
+              Browse Active Jobs
+            </button>
+          </div>
+        </div>
       </div>
     );
   }

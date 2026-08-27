@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { useWallet } from "../hooks/useWallet";
 import { useAnnotationMarket } from "../hooks/useAnnotationMarket";
 import { uploadBlob, uploadJson, cache0GData } from "../hooks/useStorage";
@@ -51,6 +52,7 @@ function StepIndicator({ current }: { current: Step }) {
 }
 
 export default function CreateJob() {
+  const navigate = useNavigate();
   const { signer, isCorrectChain } = useWallet();
   const market = useAnnotationMarket(signer);
 
@@ -150,12 +152,30 @@ export default function CreateJob() {
   );
 
   if (status === "done") return (
-    <div className="page" style={{ textAlign: "center", paddingTop: 80 }}>
-      <span className="material-symbols-outlined" style={{ fontSize: 48, color: "var(--primary)", display: "block", marginBottom: 16 }}>check_circle</span>
-      <h2 style={{ fontSize: 24, fontWeight: 700, marginBottom: 8 }}>Job Created</h2>
-      <p style={{ color: "var(--text-2)", marginBottom: 24 }}>Your annotation job is live on Galileo.</p>
-      <a href={`${GALILEO.explorer}/tx/${txHash}`} target="_blank" rel="noreferrer" className="btn-secondary" style={{ marginRight: 12 }}>View Tx ↗</a>
-      <a href="/" className="btn-primary">Browse Jobs</a>
+    <div className="page" style={{ maxWidth: 640, margin: "0 auto", paddingTop: 40, paddingBottom: 60 }}>
+      <div className="card" style={{ padding: 40, textAlign: "center" }}>
+        <div style={{ width: 64, height: 64, borderRadius: "50%", background: "rgba(0,228,121,0.12)", border: "1px solid rgba(0,228,121,0.3)", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 20px" }}>
+          <span className="material-symbols-outlined" style={{ fontSize: 36, color: "var(--primary)" }}>check_circle</span>
+        </div>
+        <h2 style={{ fontSize: 24, fontWeight: 700, marginBottom: 8, color: "#fff" }}>Job Successfully Created!</h2>
+        <p style={{ color: "var(--text-2)", fontSize: 14, marginBottom: 28, maxWidth: 460, margin: "0 auto 28px" }}>
+          Your bounty ETH is locked on 0G Galileo smart contract. Annotators can now claim tasks and submit annotations.
+        </p>
+        
+        <div style={{ display: "flex", gap: 12, justifyContent: "center", flexWrap: "wrap" }}>
+          <a href={`${GALILEO.explorer}/tx/${txHash}`} target="_blank" rel="noreferrer" className="btn-secondary" style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+            <span className="material-symbols-outlined" style={{ fontSize: 16 }}>open_in_new</span>
+            View Transaction ↗
+          </a>
+          <button className="btn-secondary" onClick={() => navigate("/jobs")}>
+            Browse Active Jobs
+          </button>
+          <button className="btn-primary" onClick={() => navigate("/dashboard")}>
+            <span className="material-symbols-outlined" style={{ fontSize: 16 }}>dashboard</span>
+            View on Creator Dashboard
+          </button>
+        </div>
+      </div>
     </div>
   );
 
