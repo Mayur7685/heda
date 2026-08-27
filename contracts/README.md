@@ -6,8 +6,9 @@ Solidity smart contracts for the Heda annotation marketplace, deployed on 0G Cha
 
 | Contract | Address |
 |---|---|
-| AnnotationMarket | `0x4822c5F0617665543B94a0668837CdbBDEb54C90` |
-| DatasetRegistry | `0x46d4a89e496f3A01785ac5B38ecAc40B081c933c` |
+| AnnotationMarket | `0x5C36264B37Ded1b718d3FD511A608ef34054A865` |
+| DatasetRegistry | `0x213e6857E4A9623168A81Bf83879379F7C3A7A4d` |
+| ModelRegistry | `0xfA942F6F0AC98744454711A5a3E1320a7878CD5A` |
 
 ## Contracts
 

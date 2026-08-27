@@ -51,9 +51,9 @@ Heda is a decentralized computer vision annotation marketplace and model trainin
 
 | Contract | Address | Explorer |
 |---|---|---|
-| **AnnotationMarket** | `0x83281b1a16DbA12ACC983e47FdbFD682Fd2A3F48` | [View](https://chainscan-galileo.0g.ai/address/0x83281b1a16DbA12ACC983e47FdbFD682Fd2A3F48) |
-| **DatasetRegistry** | `0xE0F020329C1c968f44B72360e45FA2EB9F35e96E` | [View](https://chainscan-galileo.0g.ai/address/0xE0F020329C1c968f44B72360e45FA2EB9F35e96E) |
-| **ModelRegistry** | `0x91A033BDEb12c335DacA8Ed3c7A52cf780aF75D3` | [View](https://chainscan-galileo.0g.ai/address/0x91A033BDEb12c335DacA8Ed3c7A52cf780aF75D3) |
+| **AnnotationMarket** | `0x5C36264B37Ded1b718d3FD511A608ef34054A865` | [View](https://chainscan-galileo.0g.ai/address/0x5C36264B37Ded1b718d3FD511A608ef34054A865) |
+| **DatasetRegistry** | `0x213e6857E4A9623168A81Bf83879379F7C3A7A4d` | [View](https://chainscan-galileo.0g.ai/address/0x213e6857E4A9623168A81Bf83879379F7C3A7A4d) |
+| **ModelRegistry** | `0xfA942F6F0AC98744454711A5a3E1320a7878CD5A` | [View](https://chainscan-galileo.0g.ai/address/0xfA942F6F0AC98744454711A5a3E1320a7878CD5A) |
 | **PipelineSubscription** | `0x80CBFA451F1E83a9DE9536e1CD0bd85406017FD6` | [View](https://chainscan-galileo.0g.ai/address/0x80CBFA451F1E83a9DE9536e1CD0bd85406017FD6) |
 
 ---

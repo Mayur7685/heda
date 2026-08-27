@@ -12,55 +12,8 @@ type BBox = { id: string; type: "bbox"; x: number; y: number; w: number; h: numb
 type Polygon = { id: string; type: "polygon"; points: number[]; label: string; closed: boolean };
 type Annotation = BBox | Polygon;
 
-// AI suggestion box — pending human confirmation
-type AISuggestion = {
-  id: string;
-  x: number; y: number; w: number; h: number;
-  label: string;
-  confirmed: boolean; // false = purple dashed, true = folded into annotations
-};
-
 const CANVAS_W = 680;
 const uid = () => Math.random().toString(36).slice(2, 8);
-
-// ── Label Assist — Moondream Hosted API ─────────────────────────────────────
-// Uses Moondream hosted API for zero-shot detection.
-// API key: set VITE_MOONDREAM_API_KEY in frontend/.env
-// Future: swap MOONDREAM_API_URL env var to 0G Compute endpoint when available.
-const MOONDREAM_API = "https://api.moondream.ai/v1";
-const MOONDREAM_KEY = import.meta.env.VITE_MOONDREAM_API_KEY ?? "";
-
-async function fetchMoondreamDetections(
-  imageBase64: string,
-  className: string,
-  canvasW: number,
-  canvasH: number
-): Promise<AISuggestion[]> {
-  const response = await fetch(`${MOONDREAM_API}/detect`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", "X-Moondream-Auth": MOONDREAM_KEY },
-    body: JSON.stringify({
-      image_url: imageBase64,
-      object: className,
-      stream: false,
-    }),
-  });
-  if (!response.ok) throw new Error(`Moondream API error: ${response.status}`);
-  const data = await response.json();
-  const objects: Array<{ x_min: number; y_min: number; x_max: number; y_max: number }> =
-    data.objects ?? [];
-  return objects.map((obj) => ({
-    id: uid(),
-    // Moondream returns normalized 0-1 coords → convert to canvas pixel space
-    x: obj.x_min * canvasW,
-    y: obj.y_min * canvasH,
-    w: (obj.x_max - obj.x_min) * canvasW,
-    h: (obj.y_max - obj.y_min) * canvasH,
-    label: className,
-    confirmed: false,
-  }));
-}
-
 
 // ── Image Annotation Workspace ───────────────────────────────────────────────
 
@@ -73,8 +26,6 @@ function ImageWorkspace({
   onSubmit: (annotations: Annotation[]) => void;
   onNext: () => void; onPrev: () => void;
 }) {
-  const { signer, address } = useWallet();
-  const market = useAnnotationMarket(signer);
   const [img, setImg] = useState<HTMLImageElement | null>(null);
   const [tool, setTool] = useState<"bbox" | "polygon">("bbox");
   const [activeLabel, setActiveLabel] = useState(labels[0] ?? "object");
@@ -88,15 +39,6 @@ function ImageWorkspace({
   const stageRef = useRef<any>(null);
   const trRef = useRef<any>(null);
   const rectRefs = useRef<Record<string, any>>({});
-
-  // ── Label Assist state & Paywall ─────────────────────────────────────────
-  const [aiSuggestions, setAiSuggestions] = useState<AISuggestion[]>([]);
-  const [aiLoading, setAiLoading] = useState(false);
-  const [aiError, setAiError] = useState<string | null>(null);
-  const [aiUnlocked, setAiUnlocked] = useState<boolean>(
-    () => localStorage.getItem("heda_ai_unlocked") === "true"
-  );
-  const [showPaywall, setShowPaywall] = useState(false);
 
   // Attach transformer to selected bbox
   useEffect(() => {
@@ -120,9 +62,6 @@ function ImageWorkspace({
     setSelectedId(null);
     setPolyPoints([]);
     setDrawing(false);
-    // Clear AI suggestions on task change
-    setAiSuggestions([]);
-    setAiError(null);
   }, [taskId, jobId]);
 
   const CANVAS_H = img ? Math.round((img.naturalHeight / img.naturalWidth) * CANVAS_W) : 400;
@@ -207,114 +146,6 @@ function ImageWorkspace({
     if (selectedId === id) setSelectedId(null);
   }
 
-  const [subscribingAI, setSubscribingAI] = useState(false);
-
-  // Check onchain AI subscription status
-  useEffect(() => {
-    if (!market || !address) return;
-    market.hasAISubscription(address).then((hasSub) => {
-      if (hasSub) {
-        setAiUnlocked(true);
-        localStorage.setItem("heda_ai_unlocked", "true");
-      }
-    }).catch(() => {});
-  }, [!!market, address]);
-
-  function handleAISuggestClick() {
-    if (!aiUnlocked) {
-      setShowPaywall(true);
-      return;
-    }
-    handleAISuggest();
-  }
-
-  async function unlockAIOnChain() {
-    if (!market) {
-      // Demo fallback if wallet not connected
-      setAiUnlocked(true);
-      setShowPaywall(false);
-      handleAISuggest();
-      return;
-    }
-    setSubscribingAI(true);
-    setAiError(null);
-    try {
-      await market.subscribeAI();
-      setAiUnlocked(true);
-      localStorage.setItem("heda_ai_unlocked", "true");
-      setShowPaywall(false);
-      handleAISuggest();
-    } catch (e: any) {
-      setAiError(`AI Subscription failed: ${e.message}`);
-    } finally {
-      setSubscribingAI(false);
-    }
-  }
-
-  // ── Label Assist handlers ─────────────────────────────────────────────────
-
-  async function handleAISuggest() {
-    if (!img || aiLoading) return;
-    setAiLoading(true);
-    setAiError(null);
-    setAiSuggestions([]);
-
-    try {
-      // Export canvas image to base64 for Moondream
-      const canvas = document.createElement("canvas");
-      canvas.width = img.naturalWidth;
-      canvas.height = img.naturalHeight;
-      const ctx = canvas.getContext("2d");
-      if (!ctx) throw new Error("Canvas context unavailable");
-      ctx.drawImage(img, 0, 0);
-      const imageBase64 = canvas.toDataURL("image/jpeg", 0.85);
-
-      const CANVAS_H = Math.round((img.naturalHeight / img.naturalWidth) * CANVAS_W);
-
-      // Run detection for each label in parallel
-      const results = await Promise.allSettled(
-        labels.map((cls) =>
-          fetchMoondreamDetections(imageBase64, cls, CANVAS_W, CANVAS_H)
-        )
-      );
-
-      const allSuggestions: AISuggestion[] = [];
-      results.forEach((r) => {
-        if (r.status === "fulfilled") allSuggestions.push(...r.value);
-      });
-
-      if (allSuggestions.length === 0) {
-        setAiError("No objects detected. Try drawing boxes manually.");
-      } else {
-        setAiSuggestions(allSuggestions);
-      }
-    } catch (err: any) {
-      setAiError(err.message?.includes("fetch") ? "Moondream API unavailable — draw boxes manually" : err.message);
-    } finally {
-      setAiLoading(false);
-    }
-  }
-
-  function confirmSuggestion(id: string) {
-    const sug = aiSuggestions.find((s) => s.id === id);
-    if (!sug) return;
-    const box: BBox = { id: uid(), type: "bbox", x: sug.x, y: sug.y, w: sug.w, h: sug.h, label: sug.label };
-    setAnnotations((a) => [...a, box]);
-    setAiSuggestions((s) => s.filter((x) => x.id !== id));
-  }
-
-  function rejectSuggestion(id: string) {
-    setAiSuggestions((s) => s.filter((x) => x.id !== id));
-  }
-
-  function acceptAllSuggestions() {
-    const newBoxes: BBox[] = aiSuggestions.map((sug) => ({
-      id: uid(), type: "bbox", x: sug.x, y: sug.y, w: sug.w, h: sug.h, label: sug.label,
-    }));
-    setAnnotations((a) => [...a, ...newBoxes]);
-    setAiSuggestions([]);
-  }
-
   const COLORS: Record<string, string> = {};
   const palette = ["#00ff88", "#ff6b6b", "#ffd700", "#00bfff", "#ff69b4", "#7fff00"];
   labels.forEach((l, i) => { COLORS[l] = palette[i % palette.length]; });
@@ -324,24 +155,6 @@ function ImageWorkspace({
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "calc(100vh - 64px)", overflow: "hidden" }}>
-
-      {/* AI error banner */}
-      {aiError && (
-        <div style={{
-          position: "absolute", top: 16, left: "50%", transform: "translateX(-50%)",
-          zIndex: 30, background: "rgba(255,68,68,0.15)", border: "1px solid #ff444466",
-          borderRadius: 6, padding: "6px 14px", fontSize: 12, color: "#ff8888",
-          display: "flex", alignItems: "center", gap: 6, whiteSpace: "nowrap",
-          backdropFilter: "blur(8px)",
-        }}>
-          <span className="material-symbols-outlined" style={{ fontSize: 14 }}>warning</span>
-          {aiError}
-          <button onClick={() => setAiError(null)}
-            style={{ background: "none", border: "none", cursor: "pointer", color: "#ff8888", marginLeft: 4, padding: 0 }}>
-            <span className="material-symbols-outlined" style={{ fontSize: 14 }}>close</span>
-          </button>
-        </div>
-      )}
 
       <div style={{ display: "flex", flex: 1, overflow: "hidden" }}>
         {/* Canvas area */}
@@ -409,34 +222,6 @@ function ImageWorkspace({
               <><div className="divider-v" style={{ margin: "0 6px" }} />
               <button className="btn-primary btn-sm" onClick={closePolygon} style={{ fontSize: 11, padding: "3px 8px" }}>Close Shape</button></>
             )}
-            {/* AI Suggest button (with PRO Paywall badge) */}
-            <div className="divider-v" style={{ margin: "0 6px" }} />
-            <button
-              onClick={handleAISuggestClick}
-              disabled={aiLoading || !img}
-              title={aiUnlocked ? "AI Label Assist — Moondream" : "Unlock AI Assist Pass"}
-              style={{
-                display: "flex", alignItems: "center", gap: 5,
-                padding: "5px 10px", borderRadius: 4, border: "1px solid",
-                borderColor: aiLoading ? "var(--border)" : aiUnlocked ? "#7c3aed66" : "rgba(255,215,0,0.5)",
-                background: aiLoading ? "transparent" : aiUnlocked ? "rgba(124,58,237,0.12)" : "rgba(255,215,0,0.12)",
-                color: aiLoading ? "var(--text-3)" : aiUnlocked ? "#a78bfa" : "#ffd700",
-                cursor: aiLoading ? "not-allowed" : "pointer",
-                fontSize: 12, fontWeight: 600, transition: "all 0.15s",
-              }}
-            >
-              <span className="material-symbols-outlined" style={{ fontSize: 15, animation: aiLoading ? "spin 1s linear infinite" : "none" }}>
-                {aiLoading ? "progress_activity" : aiUnlocked ? "smart_toy" : "lock"}
-              </span>
-              {aiLoading ? "Detecting…" : aiUnlocked ? "AI Suggest" : "AI Suggest (PRO)"}
-              {aiSuggestions.length > 0 && !aiLoading && (
-                <span style={{
-                  background: "#7c3aed", color: "#fff", borderRadius: "50%",
-                  width: 15, height: 15, fontSize: 9, fontWeight: 700,
-                  display: "flex", alignItems: "center", justifyContent: "center",
-                }}>{aiSuggestions.length}</span>
-              )}
-            </button>
           </div>
 
           {/* Canvas scroll area */}
@@ -496,26 +281,6 @@ function ImageWorkspace({
                   {polyPoints.filter((_, i) => i % 2 === 0).map((x, i) => <Circle key={i} x={x} y={polyPoints[i * 2 + 1]} radius={4} fill="#fff" />)}
                 </>
               )}
-              {/* AI suggestion boxes — purple dashed, click to confirm or reject */}
-              {aiSuggestions.map((sug) => (
-                <React.Fragment key={sug.id}>
-                  <Rect
-                    x={sug.x} y={sug.y} width={sug.w} height={sug.h}
-                    stroke="#a78bfa"
-                    strokeWidth={2}
-                    dash={[6, 4]}
-                    fill="rgba(124,58,237,0.08)"
-                    onClick={() => confirmSuggestion(sug.id)}
-                    onTap={() => confirmSuggestion(sug.id)}
-                    style={{ cursor: "pointer" }}
-                  />
-                  <Text
-                    x={sug.x + 4} y={sug.y + 4}
-                    text={`${sug.label} ✓?`}
-                    fill="#a78bfa" fontSize={11}
-                  />
-                </React.Fragment>
-              ))}
               <Transformer
                 ref={trRef}
                 rotateEnabled={false}
@@ -532,57 +297,6 @@ function ImageWorkspace({
 
         {/* Right sidebar: annotations + properties */}
         <aside style={{ width: 240, background: "var(--surface)", borderLeft: "1px solid var(--border)", display: "flex", flexDirection: "column" }}>
-
-          {/* AI Suggestions tray */}
-          {aiSuggestions.length > 0 && (
-            <div style={{
-              padding: "10px 14px",
-              borderBottom: "1px solid var(--border)",
-              background: "rgba(124,58,237,0.07)",
-            }}>
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
-                  <span className="material-symbols-outlined" style={{ fontSize: 14, color: "#a78bfa" }}>smart_toy</span>
-                  <span style={{ fontSize: 11, fontWeight: 700, color: "#a78bfa" }}>AI Suggestions ({aiSuggestions.length})</span>
-                </div>
-                <button
-                  onClick={acceptAllSuggestions}
-                  style={{
-                    fontSize: 10, padding: "3px 7px", borderRadius: 3,
-                    background: "rgba(124,58,237,0.3)", border: "1px solid #7c3aed66",
-                    color: "#a78bfa", cursor: "pointer", fontWeight: 700,
-                  }}
-                >Accept All</button>
-              </div>
-              <p style={{ fontSize: 11, color: "var(--text-3)", marginBottom: 8, lineHeight: 1.4 }}>
-                Click a box on canvas to confirm, or use the list:
-              </p>
-              <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-                {aiSuggestions.map((sug) => (
-                  <div key={sug.id} style={{
-                    display: "flex", alignItems: "center", gap: 6,
-                    padding: "5px 8px", borderRadius: 4,
-                    background: "rgba(124,58,237,0.1)", border: "1px solid #7c3aed33",
-                  }}>
-                    <div style={{ width: 7, height: 7, borderRadius: "50%", background: "#a78bfa", flexShrink: 0 }} />
-                    <span style={{ flex: 1, fontSize: 11, color: "#a78bfa", fontWeight: 600 }}>{sug.label}</span>
-                    <button
-                      onClick={() => confirmSuggestion(sug.id)}
-                      title="Confirm"
-                      style={{ background: "none", border: "none", cursor: "pointer", padding: 0 }}>
-                      <span className="material-symbols-outlined" style={{ fontSize: 13, color: "var(--primary)" }}>check</span>
-                    </button>
-                    <button
-                      onClick={() => rejectSuggestion(sug.id)}
-                      title="Reject"
-                      style={{ background: "none", border: "none", cursor: "pointer", padding: 0 }}>
-                      <span className="material-symbols-outlined" style={{ fontSize: 13, color: "var(--error)" }}>close</span>
-                    </button>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
 
           {/* Annotations list */}
           <div style={{ padding: "10px 16px", borderBottom: "1px solid var(--border)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
@@ -669,86 +383,6 @@ function ImageWorkspace({
           <span className="label-caps">Fast Path Enabled</span>
         </div>
       </div>
-
-      {/* ── AI Assist Paywall Modal ── */}
-      {showPaywall && (
-        <div style={{ position: "fixed", inset: 0, zIndex: 200, background: "rgba(0,0,0,0.85)", display: "flex", alignItems: "center", justifyContent: "center", backdropFilter: "blur(6px)" }}
-          onClick={() => setShowPaywall(false)}>
-          <div style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 12, padding: 32, maxWidth: 460, width: "90vw", boxShadow: "0 24px 64px rgba(0,0,0,0.6)" }}
-            onClick={(e) => e.stopPropagation()}>
-            {/* Header */}
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                <div style={{ width: 36, height: 36, borderRadius: 8, background: "rgba(255,215,0,0.15)", border: "1px solid rgba(255,215,0,0.4)", display: "flex", alignItems: "center", justifyContent: "center", color: "#ffd700" }}>
-                  <span className="material-symbols-outlined">smart_toy</span>
-                </div>
-                <div>
-                  <h3 style={{ fontSize: 18, fontWeight: 700, color: "#fff" }}>Unlock AI Label Assist</h3>
-                  <span style={{ fontSize: 11, color: "#ffd700", fontWeight: 700, letterSpacing: "0.05em" }}>PRO FEATURE</span>
-                </div>
-              </div>
-              <button className="btn-ghost btn-icon" onClick={() => setShowPaywall(false)}>
-                <span className="material-symbols-outlined">close</span>
-              </button>
-            </div>
-
-            <p style={{ fontSize: 13, color: "var(--text-2)", lineHeight: 1.6, marginBottom: 20 }}>
-              Moondream VLM auto-detects bounding box objects across classes with zero-shot vision intelligence. Speed up your annotation throughput by 10x.
-            </p>
-
-            {/* Feature highlights */}
-            <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 24, background: "var(--surface-low)", padding: 16, borderRadius: 8, border: "1px solid var(--border)" }}>
-              {[
-                "⚡ Zero-Shot Multi-Class Bounding Box Detection",
-                "🎯 1-Click Accept All Objects into Workspace",
-                "🧠 Instant Parallel Inference via Moondream API",
-                "🔐 Lifetime AI Pass for all Annotation Jobs",
-              ].map((feat, i) => (
-                <div key={i} style={{ fontSize: 12, color: "var(--text)", display: "flex", alignItems: "center", gap: 8 }}>
-                  <span className="material-symbols-outlined" style={{ fontSize: 16, color: "var(--primary)" }}>check_circle</span>
-                  {feat}
-                </div>
-              ))}
-            </div>
-
-            {/* Price badge */}
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 16px", borderRadius: 8, background: "rgba(0,228,121,0.06)", border: "1px solid rgba(0,228,121,0.2)", marginBottom: 20 }}>
-              <div>
-                <div style={{ fontSize: 11, color: "var(--text-3)" }}>PRO ACCESS TIERS</div>
-                <div style={{ fontSize: 14, fontWeight: 700, color: "var(--primary)", fontFamily: "'Space Grotesk', monospace" }}>0.005 0G / Pass</div>
-              </div>
-              <span style={{ fontSize: 11, background: "var(--primary-bg)", color: "var(--primary)", padding: "2px 8px", borderRadius: 4, fontWeight: 700 }}>
-                Testnet Active
-              </span>
-            </div>
-
-            {/* Actions */}
-            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-              <button
-                className="btn-primary"
-                style={{ width: "100%", justifyContent: "center", padding: "12px 0", fontSize: 14 }}
-                onClick={unlockAIOnChain}
-                disabled={subscribingAI}
-              >
-                {subscribingAI ? (
-                  <>
-                    <span className="material-symbols-outlined" style={{ fontSize: 18, animation: "spin 1s linear infinite" }}>progress_activity</span>
-                    Subscribing Onchain (0.005 0G)…
-                  </>
-                ) : (
-                  <>
-                    <span className="material-symbols-outlined" style={{ fontSize: 18 }}>account_balance_wallet</span>
-                    Subscribe Onchain (0.005 0G)
-                  </>
-                )}
-              </button>
-              <button className="btn-ghost" style={{ width: "100%", justifyContent: "center", fontSize: 12 }} onClick={() => setShowPaywall(false)}>
-                Continue with Manual Annotations
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
