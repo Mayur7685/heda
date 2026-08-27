@@ -242,6 +242,7 @@ export default function Dashboard() {
       );
 
       let datasetRootHash: string;
+      let previewImage: string | undefined = undefined;
 
       if (job.dataType === 1) {
         // ── TEXT → JSONL ──────────────────────────────────────────────
@@ -311,6 +312,10 @@ export default function Dashboard() {
           annotations: cocoAnnotations,
           categories: labels.map((name, i) => ({ id: i + 1, name, supercategory: "object" })),
         };
+        const sampleFile = Array.isArray(allFiles) ? allFiles[0] : null;
+        if (sampleFile?.data) {
+          previewImage = sampleFile.data.startsWith("data:") ? sampleFile.data : `data:${sampleFile.type || "image/jpeg"};base64,${sampleFile.data}`;
+        }
         datasetRootHash = await uploadJson(coco);
       }
 
@@ -325,6 +330,7 @@ export default function Dashboard() {
         labels,
         taskCount: job.taskCount,
         approvedCount: job.approvedCount,
+        previewImage,
       });
 
       setTxMsg("Publishing onchain…");

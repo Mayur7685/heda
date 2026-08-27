@@ -309,19 +309,22 @@ export default function DatasetDetail() {
               ))}
             </div>
 
-            {hasLicense ? (
+            {hasLicense || isFree || (address && dataset.publisher && address.toLowerCase() === dataset.publisher.toLowerCase()) ? (
               <>
                 <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
-                  <span className="badge badge-approved" style={{ fontSize: 12 }}>Licensed</span>
+                  <span className="badge badge-approved" style={{ fontSize: 12 }}>
+                    {hasLicense ? "Purchased License ✓" : isFree ? "Free Dataset Access" : "Publisher Owner ✓"}
+                  </span>
                 </div>
-                <button className="btn-primary" style={{ width: "100%", justifyContent: "center" }} onClick={download} disabled={downloading}>
-                  <span className="material-symbols-outlined" style={{ fontSize: 16 }}>download</span>
-                  {downloading ? "Downloading…" : "Download Dataset"}
+                <button className="btn-primary" style={{ width: "100%", justifyContent: "center", padding: "12px 0", fontSize: 14 }} onClick={download} disabled={downloading}>
+                  <span className="material-symbols-outlined" style={{ fontSize: 18 }}>download</span>
+                  {downloading ? "Building & Downloading Zip…" : "Download Dataset (.zip)"}
                 </button>
               </>
             ) : (
-              <button className="btn-primary" style={{ width: "100%", justifyContent: "center" }} onClick={purchase}>
-                {isFree ? "Get Free" : `Buy for ${price} 0G`}
+              <button className="btn-primary" style={{ width: "100%", justifyContent: "center", padding: "12px 0", fontSize: 14 }} onClick={purchase}>
+                <span className="material-symbols-outlined" style={{ fontSize: 18 }}>shopping_cart</span>
+                Buy License for {price} 0G
               </button>
             )}
 

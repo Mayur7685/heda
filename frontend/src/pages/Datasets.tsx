@@ -45,6 +45,7 @@ export default function Datasets() {
                 base.format = meta.format;
                 base.taskCount = meta.taskCount;
                 base.labels = meta.labels;
+                if (meta.previewImage) base.previewImage = meta.previewImage;
               }
             } catch { /* fallback */ }
           }

@@ -51,9 +51,12 @@ function ImageWorkspace({
     trRef.current.getLayer()?.batchDraw();
   }, [selectedId, annotations]);
 
+  const currentTaskIdRef = useRef(taskId);
+
   // Reset annotations when task changes — load from savedAnnotations or localStorage
   useEffect(() => {
-    if (savedAnnotations) {
+    currentTaskIdRef.current = taskId;
+    if (savedAnnotations && Array.isArray(savedAnnotations)) {
       setAnnotations(savedAnnotations);
     } else {
       const saved = localStorage.getItem(`draft-${jobId}-${taskId}`);
@@ -73,9 +76,11 @@ function ImageWorkspace({
     image.onload = () => setImg(image);
   }, [imageUrl]);
 
-  // Save draft on every change
+  // Save draft on every change — ONLY for current active task
   useEffect(() => {
-    localStorage.setItem(`draft-${jobId}-${taskId}`, JSON.stringify(annotations));
+    if (currentTaskIdRef.current === taskId) {
+      localStorage.setItem(`draft-${jobId}-${taskId}`, JSON.stringify(annotations));
+    }
   }, [annotations, jobId, taskId]);
 
   // Delete selected on Delete/Backspace key
