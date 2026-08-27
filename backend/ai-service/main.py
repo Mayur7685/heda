@@ -57,18 +57,6 @@ load_env_files()
 
 app = FastAPI(title="Heda AI Service", version="1.0.0")
 
-# Attempt loading local Moondream 2 VLM model instance on startup
-local_moondream_model = None
-try:
-    import moondream as md
-    print("==============================================================")
-    print("Loading local Moondream 2 VLM onto Apple Silicon / CUDA GPU...")
-    print("==============================================================")
-    local_moondream_model = md.vl(local=True, model="moondream2")
-    print("✔ Local Moondream 2 VLM loaded successfully!")
-except Exception as _e:
-    print(f"Note: Local moondream package not initialized directly in Python main ({_e}). Will fallback to local server (http://localhost:2020) or cloud API.")
-
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -368,23 +356,11 @@ def chat_llm_assistant(req: ChatLLMRequest):
     }
 
 def call_moondream_detect(base64_str: str, cls_name: str, api_key: str = "", max_retries: int = 2):
-    """Executes Moondream /v1/detect locally (Tier 1 model or Tier 2 local server) with Cloud API fallback"""
-    # 1. Tier 1: Direct in-memory local Moondream model instance (PyTorch / Metal MPS)
-    if local_moondream_model is not None:
-        try:
-            raw_b64 = base64_str.split(",", 1)[1] if "," in base64_str else base64_str
-            image_bytes = base64.b64decode(raw_b64)
-            pil_image = Image.open(BytesIO(image_bytes))
-            res = local_moondream_model.detect(pil_image, cls_name)
-            if res and isinstance(res, dict) and "objects" in res:
-                print(f"[Local Moondream VLM] Detected {len(res['objects'])} objects for '{cls_name}' locally")
-                return res
-        except Exception as err:
-            print(f"[Local Moondream Model Notice]: {err}")
-
-    # 2. Tier 2: Try local Moondream server (auto-labeler-moondream server.py on port 2020)
+    """Executes Moondream /v1/detect via dedicated local Moondream server (moondream_server.py on :2020) or Cloud API"""
     formatted_img_url = base64_str if base64_str.startswith("data:") else f"data:image/jpeg;base64,{base64_str}"
     body = json.dumps({"image_url": formatted_img_url, "object": cls_name}).encode('utf-8')
+
+    # 1. Query dedicated local Moondream 2 GPU server (moondream_server.py on port 2020)
     try:
         http_req = urllib.request.Request("http://localhost:2020/v1/detect", data=body, headers={"Content-Type": "application/json"}, method="POST")
         with urllib.request.urlopen(http_req, timeout=8) as response:
@@ -395,7 +371,7 @@ def call_moondream_detect(base64_str: str, cls_name: str, api_key: str = "", max
     except Exception:
         pass
 
-    # 3. Tier 3: Cloud API fallback if key is available
+    # 2. Cloud API fallback if API key is provided
     if api_key:
         headers = {
             "Content-Type": "application/json",
@@ -425,89 +401,6 @@ def get_synonym_queries(cls_name: str):
         "cat": ["cat", "pet"],
     }
     return syn_map.get(cls_name.lower().strip(), [cls_name])
-
-class MoondreamDetectRequest(BaseModel):
-    image_url: str
-    object: str = "object"
-
-class MoondreamQueryRequest(BaseModel):
-    image_url: str
-    question: str = ""
-
-@app.post("/v1/detect")
-def moondream_detect_endpoint(req: MoondreamDetectRequest):
-    """Native local Moondream 2 VLM object detection endpoint embedded directly in Heda AI server"""
-    url_or_b64 = req.image_url
-    try:
-        if url_or_b64.startswith("data:image"):
-            header, encoded = url_or_b64.split(",", 1)
-            image_data = base64.b64decode(encoded)
-            pil_img = Image.open(BytesIO(image_data))
-        else:
-            req_http = urllib.request.Request(url_or_b64, headers={'User-Agent': 'Mozilla/5.0'})
-            with urllib.request.urlopen(req_http, timeout=15) as resp:
-                pil_img = Image.open(BytesIO(resp.read()))
-        
-        if local_moondream_model is not None:
-            res = local_moondream_model.detect(pil_img, req.object)
-            return {
-                "objects": [
-                    {
-                        "x_min": o["x_min"],
-                        "y_min": o["y_min"],
-                        "x_max": o["x_max"],
-                        "y_max": o["y_max"]
-                    } for o in res.get("objects", [])
-                ]
-            }
-        
-        # Fallback to cloud API if local model not loaded
-        api_key = os.getenv("MOONDREAM_API_KEY", "")
-        res_cloud = call_moondream_detect(req.image_url, req.object, api_key)
-        return res_cloud or {"objects": []}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Moondream detection error: {e}")
-
-@app.post("/v1/query")
-def moondream_query_endpoint(req: MoondreamQueryRequest):
-    """Native local Moondream 2 VLM visual QA query endpoint embedded directly in Heda AI server"""
-    try:
-        url_or_b64 = req.image_url
-        if url_or_b64.startswith("data:image"):
-            header, encoded = url_or_b64.split(",", 1)
-            image_data = base64.b64decode(encoded)
-            pil_img = Image.open(BytesIO(image_data))
-        else:
-            req_http = urllib.request.Request(url_or_b64, headers={'User-Agent': 'Mozilla/5.0'})
-            with urllib.request.urlopen(req_http, timeout=15) as resp:
-                pil_img = Image.open(BytesIO(resp.read()))
-        
-        if local_moondream_model is not None:
-            res = local_moondream_model.query(pil_img, req.question)
-            return {"answer": res.get("answer", "")}
-        return {"answer": "Local Moondream VLM engine not loaded."}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Moondream query error: {e}")
-
-@app.post("/v1/segment")
-def moondream_segment_endpoint(req: MoondreamDetectRequest):
-    """Native local Moondream VLM segmentation endpoint"""
-    try:
-        if local_moondream_model is not None:
-            url_or_b64 = req.image_url
-            if url_or_b64.startswith("data:image"):
-                header, encoded = url_or_b64.split(",", 1)
-                image_data = base64.b64decode(encoded)
-                pil_img = Image.open(BytesIO(image_data))
-            else:
-                req_http = urllib.request.Request(url_or_b64, headers={'User-Agent': 'Mozilla/5.0'})
-                with urllib.request.urlopen(req_http, timeout=15) as resp:
-                    pil_img = Image.open(BytesIO(resp.read()))
-            res = local_moondream_model.segment(pil_img, req.object)
-            return {"path": res.get("path", "")}
-    except Exception:
-        pass
-    raise HTTPException(status_code=501, detail="Segmentation requires Moondream model supporting polygon masks.")
 
 @app.post("/autolabel")
 def autolabel_images(req: AutoLabelRequest):
