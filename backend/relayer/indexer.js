@@ -15,13 +15,13 @@ const MARKET_ABI = [
 ];
 
 const DATASET_ABI = [
-  'event Published(uint256 indexed datasetId, address indexed publisher, bytes32 rootHash, uint256 price, uint8 dataType, uint256 sourceJobId)',
-  'function datasets(uint256 datasetId) external view returns (address publisher, bytes32 rootHash, string metadataURI, uint256 price, uint8 dataType, uint256 sourceJobId, bool active)',
+  'event Published(uint256 indexed datasetId, address indexed publisher, bytes32 rootHash, uint256 price, uint8 dataType)',
+  'function datasets(uint256 datasetId) external view returns (address publisher, bytes32 rootHash, string metadataURI, uint256 price, uint8 dataType, uint256 sourceJobId, bool exists)',
 ];
 
 const MODEL_ABI = [
-  'event ModelPublished(uint256 indexed modelId, address indexed publisher, bytes32 weightsRootHash, uint256 price, uint8 modelType)',
-  'function models(uint256 modelId) external view returns (address publisher, bytes32 weightsRootHash, bytes32 reportRootHash, string metadataURI, uint256 price, uint8 modelType, uint256 sourceDatasetId, uint256 downloadCount, string inferenceEndpoint, bool active)',
+  'event ModelPublished(uint256 indexed modelId, address indexed publisher, bytes32 weightsRootHash, uint8 modelType)',
+  'function models(uint256 modelId) external view returns (address publisher, bytes32 weightsRootHash, bytes32 reportRootHash, string metadataURI, uint256 price, uint8 modelType, uint256 sourceDatasetId, bool exists, uint256 downloadCount, string inferenceEndpoint)',
 ];
 
 // Initialize SQLite database
@@ -157,12 +157,11 @@ export async function syncEvents() {
         const rootHash = log.args.rootHash;
         const price = ethers.formatEther(log.args.price);
         const dataType = Number(log.args.dataType);
-        const sourceJobId = Number(log.args.sourceJobId);
-
-        let metadataURI = '';
+        let metadataURI = '', sourceJobId = 0;
         try {
           const dsObj = await datasetContract.datasets(datasetId);
           metadataURI = dsObj.metadataURI;
+          sourceJobId = Number(dsObj.sourceJobId);
         } catch {}
 
         stmtUpsertDataset.run(
@@ -180,14 +179,14 @@ export async function syncEvents() {
         const modelId = Number(log.args.modelId);
         const publisher = log.args.publisher;
         const weightsRootHash = log.args.weightsRootHash;
-        const price = ethers.formatEther(log.args.price);
         const modelType = Number(log.args.modelType);
 
-        let reportRootHash = '', metadataURI = '', sourceDatasetId = 0, downloadCount = 0, inferenceEndpoint = '';
+        let reportRootHash = '', metadataURI = '', price = '0', sourceDatasetId = 0, downloadCount = 0, inferenceEndpoint = '';
         try {
           const mObj = await modelContract.models(modelId);
           reportRootHash = mObj.reportRootHash;
           metadataURI = mObj.metadataURI;
+          price = ethers.formatEther(mObj.price);
           sourceDatasetId = Number(mObj.sourceDatasetId);
           downloadCount = Number(mObj.downloadCount);
           inferenceEndpoint = mObj.inferenceEndpoint;
