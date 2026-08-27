@@ -350,7 +350,8 @@ def call_moondream_detect(base64_str: str, cls_name: str, api_key: str, max_retr
     import urllib.error
     headers = {
         "Content-Type": "application/json",
-        "X-Moondream-Auth": api_key
+        "X-Moondream-Auth": api_key,
+        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
     }
     body = json.dumps({
         "image_url": f"data:image/jpeg;base64,{base64_str}",
