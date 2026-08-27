@@ -335,8 +335,7 @@ export default function RapidCVPipeline() {
 
   // Moondream Cloud VLM Auto-Label State
   const [autoLabeling, setAutoLabeling] = useState(false);
-  const [detectionThreshold, setDetectionThreshold] = useState(35);
-  const [nmsThreshold, setNmsThreshold] = useState(45);
+
 
   // ── Stage 5: Augmentations & 0G Storage Upload State ──
   const [activeAugs, setActiveAugs] = useState<Record<string, boolean>>({ flip: true, brightness: true });
@@ -1642,42 +1641,100 @@ export default function RapidCVPipeline() {
             {/* Right Inspector Panel */}
             <div className="card" style={{ padding: 16, display: "flex", flexDirection: "column", justifyContent: "space-between" }}>
               <div>
-                <h4 style={{ fontSize: 13, fontWeight: 800, marginBottom: 2 }}>Annotation Inspector</h4>
-                <p style={{ fontSize: 11, color: "var(--text-3)", marginBottom: 12 }}>{activeImgFile?.annotations.length || 0} objects labeled on active image</p>
+                <h4 style={{ fontSize: 14, fontWeight: 800, marginBottom: 2, display: "flex", alignItems: "center", gap: 6 }}>
+                  <span className="material-symbols-outlined" style={{ color: "var(--primary)", fontSize: 18 }}>assignment_turned_in</span>
+                  Annotation Inspector
+                </h4>
+                <p style={{ fontSize: 11, color: "var(--text-3)", marginBottom: 14 }}>
+                  Review and approve annotations before pinning to 0G Storage.
+                </p>
+
+                {/* Active Image Status Card */}
+                <div style={{ padding: 12, borderRadius: 8, background: "var(--surface-low)", border: "1px solid var(--border)", marginBottom: 14 }}>
+                  <div style={{ fontSize: 10, color: "var(--text-3)", textTransform: "uppercase", fontWeight: 700, marginBottom: 4 }}>ACTIVE IMAGE</div>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: "#fff", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", marginBottom: 6 }}>
+                    {activeImgFile?.name}
+                  </div>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 11 }}>
+                    <span style={{ color: "var(--text-2)" }}>Bounding Boxes:</span>
+                    <span style={{ fontWeight: 800, color: "var(--primary)" }}>{activeImgFile?.annotations.length || 0} objects</span>
+                  </div>
+                </div>
 
                 {selectedId && (
                   <button className="btn-secondary btn-sm" onClick={() => {
                     setStagedFiles((prev) => prev.map((f, idx) => idx === selectedImgIdx ? { ...f, annotations: f.annotations.filter((x) => x.id !== selectedId) } : f));
                     setSelectedId(null);
-                  }} style={{ color: "var(--error)", border: "1px solid var(--error)", width: "100%", marginBottom: 12 }}>
+                  }} style={{ color: "var(--error)", border: "1px solid var(--error)", width: "100%", marginBottom: 14 }}>
+                    <span className="material-symbols-outlined" style={{ fontSize: 15 }}>delete</span>
                     Delete Selected Annotation
                   </button>
                 )}
 
-                <div style={{ marginBottom: 12 }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, fontWeight: 700, marginBottom: 4 }}>
-                    <span>Detection Threshold</span>
-                    <span style={{ color: "var(--primary)" }}>{detectionThreshold}%</span>
+                {/* Active Annotations List */}
+                <div style={{ marginBottom: 14 }}>
+                  <div style={{ fontSize: 10, color: "var(--text-3)", textTransform: "uppercase", fontWeight: 700, marginBottom: 6 }}>LABELS ON ACTIVE IMAGE</div>
+                  <div style={{ maxHeight: 180, overflowY: "auto", display: "flex", flexDirection: "column", gap: 6 }}>
+                    {activeImgFile?.annotations.length ? (
+                      activeImgFile.annotations.map((ann, idx) => (
+                        <div
+                          key={ann.id}
+                          onClick={() => setSelectedId(ann.id)}
+                          style={{
+                            padding: "6px 10px", borderRadius: 6, border: "1px solid",
+                            borderColor: selectedId === ann.id ? "var(--primary)" : "var(--border)",
+                            background: selectedId === ann.id ? "var(--primary-bg)" : "var(--surface-high)",
+                            cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 11,
+                          }}
+                        >
+                          <span style={{ fontWeight: 700, color: selectedId === ann.id ? "var(--primary)" : "#fff" }}>
+                            #{idx + 1} {ann.label}
+                          </span>
+                          <span style={{ fontSize: 10, color: "var(--text-3)" }}>
+                            {ann.type === "bbox" ? `${Math.round(ann.w)}×${Math.round(ann.h)}px` : "polygon"}
+                          </span>
+                        </div>
+                      ))
+                    ) : (
+                      <div style={{ fontSize: 11, color: "var(--text-3)", fontStyle: "italic", textAlign: "center", padding: 10 }}>
+                        No bounding boxes drawn yet. Click Box (B) or Polygon (P) to draw manually.
+                      </div>
+                    )}
                   </div>
-                  <input type="range" min={10} max={90} value={detectionThreshold} onChange={(e) => setDetectionThreshold(Number(e.target.value))} style={{ width: "100%" }} />
-                </div>
-
-                <div style={{ marginBottom: 12 }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, fontWeight: 700, marginBottom: 4 }}>
-                    <span>NMS IoU Threshold</span>
-                    <span style={{ color: "var(--primary)" }}>{nmsThreshold}%</span>
-                  </div>
-                  <input type="range" min={10} max={90} value={nmsThreshold} onChange={(e) => setNmsThreshold(Number(e.target.value))} style={{ width: "100%" }} />
                 </div>
               </div>
 
-              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                <button className="btn-primary btn-sm" onClick={triggerMoondreamAutoLabel} disabled={autoLabeling || stagedFiles.length === 0} style={{ justifyContent: "center" }}>
-                  <span className="material-symbols-outlined" style={{ fontSize: 16 }}>auto_awesome</span>
-                  {autoLabeling ? "Labeling via Moondream API..." : "Run Moondream Auto-Label"}
+              {/* Action Buttons: Approve Active & Approve All */}
+              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                <button
+                  className="btn-secondary btn-sm"
+                  onClick={() => {
+                    setStagedFiles((prev) => prev.map((f, idx) => idx === selectedImgIdx ? { ...f, approved: true } : f));
+                    if (selectedImgIdx < stagedFiles.length - 1) {
+                      setSelectedImgIdx((i) => i + 1);
+                    }
+                  }}
+                  style={{ justifyContent: "center", border: "1px solid var(--primary)", color: "var(--primary)" }}
+                >
+                  <span className="material-symbols-outlined" style={{ fontSize: 16 }}>check_circle</span>
+                  Approve Current Image ({selectedImgIdx + 1}/{stagedFiles.length})
                 </button>
-                <button className="btn-secondary btn-sm" onClick={() => requestStageTransition("augment", 4, "Confirm Annotations & Lock Step 4", `Annotation review completed on active workspace image batch (${stagedFiles.length} files). Do you want to lock bounding box labels and proceed to Step 5: Augmentations & 0G Storage Upload?`)} style={{ justifyContent: "center" }}>
-                  Proceed to Augmentation →
+
+                <button
+                  className="btn-primary"
+                  onClick={() => {
+                    setStagedFiles((prev) => prev.map((f) => ({ ...f, approved: true })));
+                    requestStageTransition(
+                      "augment",
+                      4,
+                      "Confirm All Annotations & Lock Step 4",
+                      `Approved all ${stagedFiles.length} annotated dataset images. Do you want to lock annotations and proceed to Step 5: Augmentations & 0G Storage Upload?`
+                    );
+                  }}
+                  style={{ justifyContent: "center", padding: 10, fontSize: 13 }}
+                >
+                  <span className="material-symbols-outlined" style={{ fontSize: 18 }}>task_alt</span>
+                  Approve All Images & Proceed →
                 </button>
               </div>
             </div>
