@@ -344,6 +344,38 @@ def chat_llm_assistant(req: ChatLLMRequest):
         "ogModel": "qwen2.5-omni"
     }
 
+def call_moondream_detect(base64_str: str, cls_name: str, api_key: str, max_retries: int = 3):
+    """Executes Moondream /v1/detect with rate limit throttling (max 2 req/sec) & HTTP 403/429 backoff retries"""
+    import urllib.request
+    import urllib.error
+    headers = {
+        "Content-Type": "application/json",
+        "X-Moondream-Auth": api_key
+    }
+    body = json.dumps({
+        "image_url": f"data:image/jpeg;base64,{base64_str}",
+        "object": cls_name
+    }).encode('utf-8')
+
+    for attempt in range(max_retries):
+        # Rate limit throttling: pause 0.55s between requests to strictly respect Moondream's 2 req/sec rate limit
+        time.sleep(0.55)
+        try:
+            http_req = urllib.request.Request("https://api.moondream.ai/v1/detect", data=body, headers=headers, method="POST")
+            with urllib.request.urlopen(http_req, timeout=10) as response:
+                return json.loads(response.read().decode('utf-8'))
+        except urllib.error.HTTPError as err:
+            print(f"[Moondream API HTTP {err.code} Attempt {attempt + 1}/{max_retries}]: {err}")
+            if err.code in (403, 429, 503):
+                # Back off on rate limits or temporary server errors
+                time.sleep(1.5 * (attempt + 1))
+            else:
+                break
+        except Exception as e:
+            print(f"[Moondream API Error Attempt {attempt + 1}/{max_retries}]: {e}")
+            time.sleep(1.0)
+    return None
+
 @app.post("/autolabel")
 def autolabel_images(req: AutoLabelRequest):
     """Generates zero-shot bounding boxes for unlabeled images using Moondream Cloud VLM API"""
@@ -358,6 +390,7 @@ def autolabel_images(req: AutoLabelRequest):
 
     results = []
     total_detected = 0
+    rate_limited_count = 0
     
     for idx, img_item in enumerate(req.images):
         img_id = img_item.get("id", idx + 1)
@@ -365,45 +398,30 @@ def autolabel_images(req: AutoLabelRequest):
         boxes = []
         
         if base64_str:
-            try:
-                import urllib.request
-                headers = {
-                    "Content-Type": "application/json",
-                    "X-Moondream-Auth": moondream_api_key
-                }
-                for cls_name in classes:
-                    body = json.dumps({
-                        "image_url": f"data:image/jpeg;base64,{base64_str}",
-                        "object": cls_name
-                    }).encode('utf-8')
-                    
-                    http_req = urllib.request.Request("https://api.moondream.ai/v1/detect", data=body, headers=headers, method="POST")
-                    with urllib.request.urlopen(http_req, timeout=8) as response:
-                        res_data = json.loads(response.read().decode('utf-8'))
-                        if "objects" in res_data and isinstance(res_data["objects"], list):
-                            for obj in res_data["objects"]:
-                                x_min = float(obj.get("x_min", 0))
-                                y_min = float(obj.get("y_min", 0))
-                                x_max = float(obj.get("x_max", 0))
-                                y_max = float(obj.get("y_max", 0))
-                                
-                                # Convert normalized float (0.0 - 1.0) to percentage (0 - 100) if needed
-                                if x_min <= 1.0 and x_max <= 1.0:
-                                    x_min *= 100.0
-                                    y_min *= 100.0
-                                    x_max *= 100.0
-                                    y_max *= 100.0
-                                    
-                                boxes.append({
-                                    "x_min": round(max(0.0, min(100.0, x_min)), 2),
-                                    "y_min": round(max(0.0, min(100.0, y_min)), 2),
-                                    "x_max": round(max(0.0, min(100.0, x_max)), 2),
-                                    "y_max": round(max(0.0, min(100.0, y_max)), 2),
-                                    "label": cls_name,
-                                    "confidence": round(float(obj.get("confidence", 0.95)), 2)
-                                })
-            except Exception as e:
-                print(f"[Moondream API Call Note for image {img_id}]:", e)
+            for cls_name in classes:
+                res_data = call_moondream_detect(base64_str, cls_name, moondream_api_key)
+                if res_data and "objects" in res_data and isinstance(res_data["objects"], list):
+                    for obj in res_data["objects"]:
+                        x_min = float(obj.get("x_min", 0))
+                        y_min = float(obj.get("y_min", 0))
+                        x_max = float(obj.get("x_max", 0))
+                        y_max = float(obj.get("y_max", 0))
+                        
+                        # Convert normalized float (0.0 - 1.0) to percentage (0 - 100) if needed
+                        if x_min <= 1.0 and x_max <= 1.0:
+                            x_min *= 100.0
+                            y_min *= 100.0
+                            x_max *= 100.0
+                            y_max *= 100.0
+                            
+                        boxes.append({
+                            "x_min": round(max(0.0, min(100.0, x_min)), 2),
+                            "y_min": round(max(0.0, min(100.0, y_min)), 2),
+                            "x_max": round(max(0.0, min(100.0, x_max)), 2),
+                            "y_max": round(max(0.0, min(100.0, y_max)), 2),
+                            "label": cls_name,
+                            "confidence": round(float(obj.get("confidence", 0.95)), 2)
+                        })
 
         total_detected += len(boxes)
         results.append({
