@@ -5,6 +5,7 @@ import 'dotenv/config';
 import os from 'os';
 import path from 'path';
 import fs from 'fs';
+import { startIndexer, getIndexedJobs, getIndexedDatasets, getIndexedModels, getIndexerStatus } from './indexer.js';
 
 const app = express();
 app.use(cors());
@@ -74,8 +75,17 @@ app.post('/upload', (req, res) => {
     });
 });
 
+// ── Lightweight Event Indexer Endpoints ─────────────────────────────────────
+app.get('/indexer/jobs', (_, res) => res.json(getIndexedJobs()));
+app.get('/indexer/datasets', (_, res) => res.json(getIndexedDatasets()));
+app.get('/indexer/models', (_, res) => res.json(getIndexedModels()));
+app.get('/indexer/status', (_, res) => res.json(getIndexerStatus()));
+
 // Health check
-app.get('/health', (_, res) => res.json({ ok: true, service: "Heda 0G Storage Relayer" }));
+app.get('/health', (_, res) => res.json({ ok: true, service: "Heda 0G Relayer + Event Indexer" }));
 
 const PORT = process.env.PORT || 3001;
-app.listen(PORT, () => console.log(`🚀 Heda 0G Relayer listening on :${PORT}`));
+app.listen(PORT, () => {
+  console.log(`🚀 Heda 0G Relayer & Indexer listening on :${PORT}`);
+  startIndexer();
+});
