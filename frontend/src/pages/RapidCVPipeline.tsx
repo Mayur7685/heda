@@ -1351,17 +1351,26 @@ export default function RapidCVPipeline() {
 
               {/* Animated Image Grid */}
               <div style={{ flex: 1, padding: 20, overflowY: "auto" }}>
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))", gap: 14 }}>
-                  {stagedFiles.map((f) => {
+                <style>{`
+                  @keyframes vlmLaserScan {
+                    0% { top: 2%; opacity: 0.3; }
+                    50% { top: 90%; opacity: 1; }
+                    100% { top: 2%; opacity: 0.3; }
+                  }
+                `}</style>
+
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: 16 }}>
+                  {stagedFiles.map((f, i) => {
                     const hasAnnotations = f.annotations.length > 0;
                     return (
                       <div
                         key={f.id}
                         className="card"
                         style={{
-                          position: "relative", overflow: "hidden", borderRadius: 10,
-                          border: hasAnnotations ? "1px solid var(--primary)" : "1px solid var(--border)",
-                          background: "#0c1017", height: 170, display: "flex", flexDirection: "column",
+                          position: "relative", overflow: "hidden", borderRadius: 12,
+                          border: hasAnnotations ? "1px solid var(--primary)" : autoLabeling ? "1px solid rgba(0, 228, 121, 0.4)" : "1px solid var(--border)",
+                          background: "#0c1017", height: 180, display: "flex", flexDirection: "column",
+                          boxShadow: autoLabeling ? "0 4px 20px rgba(0, 228, 121, 0.15)" : "none",
                         }}
                       >
                         <img
@@ -1370,16 +1379,94 @@ export default function RapidCVPipeline() {
                           style={{ width: "100%", height: "100%", objectFit: "cover" }}
                         />
 
-                        {/* Overlay Badge */}
+                        {/* High-Tech Shredder / Laser Scanner Animation */}
+                        {autoLabeling && (
+                          <>
+                            {/* Cyberpunk Matrix Holographic Grid Sweep */}
+                            <div
+                              style={{
+                                position: "absolute", inset: 0,
+                                backgroundImage: "linear-gradient(rgba(0, 228, 121, 0.15) 1px, transparent 1px), linear-gradient(90deg, rgba(0, 228, 121, 0.15) 1px, transparent 1px)",
+                                backgroundSize: "18px 18px",
+                                pointerEvents: "none",
+                                opacity: 0.6,
+                              }}
+                            />
+
+                            {/* High-Tech Glowing Laser Shredder Beam */}
+                            <div
+                              style={{
+                                position: "absolute", left: 0, right: 0, height: 3,
+                                background: "linear-gradient(90deg, transparent 0%, var(--primary) 50%, #7c3aed 100%)",
+                                boxShadow: "0 0 12px var(--primary), 0 0 24px #7c3aed, 0 0 36px #00e479",
+                                animation: `vlmLaserScan ${1.4 + (i % 3) * 0.4}s cubic-bezier(0.4, 0, 0.6, 1) infinite`,
+                                pointerEvents: "none",
+                                zIndex: 10,
+                              }}
+                            />
+
+                            {/* Top HUD Telemetry Tag */}
+                            <div
+                              style={{
+                                position: "absolute", top: 8, left: 8,
+                                display: "flex", alignItems: "center", gap: 4,
+                                background: "rgba(0,0,0,0.8)", border: "1px solid rgba(0,228,121,0.5)",
+                                borderRadius: 4, padding: "2px 6px", fontSize: 9, color: "var(--primary)",
+                                fontFamily: "'Space Grotesk', monospace", fontWeight: 800, textTransform: "uppercase",
+                                zIndex: 12,
+                              }}
+                            >
+                              <span className="material-symbols-outlined" style={{ fontSize: 11, animation: "spin 1s linear infinite" }}>radial_point</span>
+                              SHREDDER SCAN
+                            </div>
+
+                            {/* Four Corner HUD Target Reticles */}
+                            <div style={{ position: "absolute", top: 6, left: 6, width: 10, height: 10, borderTop: "2px solid var(--primary)", borderLeft: "2px solid var(--primary)", pointerEvents: "none", zIndex: 11 }} />
+                            <div style={{ position: "absolute", top: 6, right: 6, width: 10, height: 10, borderTop: "2px solid var(--primary)", borderRight: "2px solid var(--primary)", pointerEvents: "none", zIndex: 11 }} />
+                            <div style={{ position: "absolute", bottom: 32, left: 6, width: 10, height: 10, borderBottom: "2px solid var(--primary)", borderLeft: "2px solid var(--primary)", pointerEvents: "none", zIndex: 11 }} />
+                            <div style={{ position: "absolute", bottom: 32, right: 6, width: 10, height: 10, borderBottom: "2px solid var(--primary)", borderRight: "2px solid var(--primary)", pointerEvents: "none", zIndex: 11 }} />
+                          </>
+                        )}
+
+                        {/* Overlay Bounding Box Wireframe Preview when completed */}
+                        {!autoLabeling && f.annotations.length > 0 && (
+                          <svg style={{ position: "absolute", inset: 0, width: "100%", height: "100%", pointerEvents: "none", zIndex: 5 }}>
+                            {f.annotations.map((ann) => {
+                              if (ann.type === "bbox") {
+                                const leftPct = `${(ann.x / 820) * 100}%`;
+                                const topPct = `${(ann.y / 520) * 100}%`;
+                                const widthPct = `${(ann.w / 820) * 100}%`;
+                                const heightPct = `${(ann.h / 520) * 100}%`;
+                                return (
+                                  <rect
+                                    key={ann.id}
+                                    x={leftPct}
+                                    y={topPct}
+                                    width={widthPct}
+                                    height={heightPct}
+                                    fill="rgba(0, 228, 121, 0.18)"
+                                    stroke="#00e479"
+                                    strokeWidth="2"
+                                    rx="2"
+                                  />
+                                );
+                              }
+                              return null;
+                            })}
+                          </svg>
+                        )}
+
+                        {/* Bottom Overlay Badge */}
                         <div
                           style={{
                             position: "absolute", bottom: 6, left: 6, right: 6,
-                            padding: "4px 8px", borderRadius: 6, background: "rgba(0,0,0,0.8)",
+                            padding: "4px 8px", borderRadius: 6, background: "rgba(0,0,0,0.85)",
                             backdropFilter: "blur(4px)", border: "1px solid rgba(255,255,255,0.1)",
                             display: "flex", alignItems: "center", justifyContent: "space-between", fontSize: 10,
+                            zIndex: 15,
                           }}
                         >
-                          <span style={{ color: "#fff", fontWeight: 700, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: 100 }}>
+                          <span style={{ color: "#fff", fontWeight: 700, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: 110 }}>
                             {f.name}
                           </span>
                           {autoLabeling ? (
