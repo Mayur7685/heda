@@ -202,6 +202,11 @@ export async function syncEvents() {
 
     stmtSetState.run('last_indexed_block', toBlock.toString());
     stmtSetState.run('last_sync_time', Date.now().toString());
+
+    const jobsCount = db.prepare('SELECT COUNT(*) as count FROM jobs').get().count;
+    const datasetsCount = db.prepare('SELECT COUNT(*) as count FROM datasets').get().count;
+    const modelsCount = db.prepare('SELECT COUNT(*) as count FROM models').get().count;
+    console.log(`[Indexer] ⚡ Synced block range ${fromBlock}..${toBlock} (${jobsCount} jobs, ${datasetsCount} datasets, ${modelsCount} models)`);
   } catch (err) {
     console.error('[Indexer] Sync error:', err.message);
   } finally {
