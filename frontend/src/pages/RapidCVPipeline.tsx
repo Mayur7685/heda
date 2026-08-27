@@ -429,26 +429,93 @@ export default function RapidCVPipeline() {
   const [showModelPublishModal, setShowModelPublishModal] = useState(false);
   const [customModelName, setCustomModelName] = useState("");
 
-  // Moondream Cloud API Auto-Labeling (Live Zero-Shot VLM Detection Only - No Fake Annotations)
+  // Moondream Local GPU VLM Auto-Labeling Engine
   async function triggerMoondreamAutoLabel() {
-    if (stagedFiles.length === 0) {
-      return;
-    }
+    if (stagedFiles.length === 0) return;
 
     setAutoLabeling(true);
     setErrorNotification(null);
 
+    const AI_SERVICE_API = import.meta.env.VITE_AI_SERVICE_API ?? "http://localhost:8000";
+    const MOONDREAM_LOCAL_SERVER = "http://localhost:2020/v1/detect";
+
     try {
+      const classesToSearch = targetClasses.length > 0 ? targetClasses : ["object"];
+      let totalDetectedCount = 0;
+      const updatedFiles = stagedFiles.map((f) => ({ ...f, annotations: [...f.annotations] }));
+
+      // 1. Try local Moondream 2 GPU server (http://localhost:2020/v1/detect) first
+      let usedLocalServer = false;
+
+      for (let i = 0; i < updatedFiles.length; i++) {
+        const file = updatedFiles[i];
+        const imgUrl = file.data.startsWith("data:") ? file.data : `data:${file.type || "image/jpeg"};base64,${file.data}`;
+        const newBoxes: Annotation[] = [];
+
+        for (const clsName of classesToSearch) {
+          try {
+            const localRes = await fetch(MOONDREAM_LOCAL_SERVER, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ image_url: imgUrl, object: clsName }),
+            });
+
+            if (localRes.ok) {
+              usedLocalServer = true;
+              const localData = await localRes.json();
+              const detectedObjects = localData.objects ?? [];
+
+              const canvasW = 820;
+              const canvasH = file.width ? Math.round((file.height / file.width) * canvasW) : 520;
+
+              detectedObjects.forEach((a: any) => {
+                const xMin = a.x_min <= 1.0 ? a.x_min * 100 : a.x_min;
+                const yMin = a.y_min <= 1.0 ? a.y_min * 100 : a.y_min;
+                const xMax = a.x_max <= 1.0 ? a.x_max * 100 : a.x_max;
+                const yMax = a.y_max <= 1.0 ? a.y_max * 100 : a.y_max;
+
+                newBoxes.push({
+                  id: uid(),
+                  type: "bbox",
+                  x: (xMin / 100) * canvasW,
+                  y: (yMin / 100) * canvasH,
+                  w: Math.max(20, ((xMax - xMin) / 100) * canvasW),
+                  h: Math.max(20, ((yMax - yMin) / 100) * canvasH),
+                  label: clsName,
+                  confidence: 0.95,
+                });
+              });
+            }
+          } catch { /* local server offline, fallback to main ai-service */ }
+        }
+
+        if (newBoxes.length > 0) {
+          file.annotations = newBoxes;
+          file.approved = true;
+          totalDetectedCount += newBoxes.length;
+        }
+      }
+
+      if (usedLocalServer) {
+        setStagedFiles(updatedFiles);
+        if (totalDetectedCount === 0) {
+          setErrorNotification("Local Moondream 2 VLM scan completed but found 0 objects matching your target classes. Please annotate objects manually in Step 4: Review & Edit tool.");
+        } else {
+          setTimeout(() => advanceToStage("review", 3), 1600);
+        }
+        return;
+      }
+
+      // 2. Fallback: Call main Python AI service on port 8000 (/autolabel)
       const payload = stagedFiles.map((f) => ({ id: f.id, base64: f.data }));
-      const res = await fetch("http://localhost:8000/autolabel", {
+      const res = await fetch(`${AI_SERVICE_API}/autolabel`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ images: payload, classes: targetClasses.length > 0 ? targetClasses : ["hardhat"] }),
+        body: JSON.stringify({ images: payload, classes: classesToSearch }),
       });
       const data = await res.json();
 
       if (data.ok && Array.isArray(data.results)) {
-        let totalDetectedCount = 0;
         data.results.forEach((r: any) => {
           if (Array.isArray(r.annotations)) {
             totalDetectedCount += r.annotations.length;
@@ -468,7 +535,7 @@ export default function RapidCVPipeline() {
                 y: (a.y_min / 100) * canvasH,
                 w: Math.max(20, ((a.x_max - a.x_min) / 100) * canvasW),
                 h: Math.max(20, ((a.y_max - a.y_min) / 100) * canvasH),
-                label: a.label || targetClasses[0] || "hardhat",
+                label: a.label || classesToSearch[0] || "object",
                 confidence: a.confidence || 0.95,
               }));
               return { ...f, annotations: formattedBoxes, approved: true };
@@ -478,19 +545,16 @@ export default function RapidCVPipeline() {
         );
 
         if (totalDetectedCount === 0) {
-          setErrorNotification("Moondream AI completed scan but found 0 objects matching your target classes. Please annotate objects manually in Step 4: Review & Edit tool.");
+          setErrorNotification("Moondream AI completed scan but found 0 objects matching your target classes. Draw annotations manually using Review & Edit tool.");
         } else {
-          // Automatically advance to Step 4 (Review & Edit) after short delay
-          setTimeout(() => {
-            advanceToStage("review", 3);
-          }, 1600);
+          setTimeout(() => advanceToStage("review", 3), 1600);
         }
       } else {
-        setErrorNotification(data.error || "Moondream AI Auto-Labeling is currently unreachable at the moment. Please draw annotations manually in Step 4: Review & Edit tool.");
+        setErrorNotification(data.error || "Moondream AI Auto-Labeling is currently unreachable. Draw annotations manually using Review & Edit tool.");
       }
     } catch (err: any) {
       console.warn("Auto-labeling network error:", err);
-      setErrorNotification("Moondream AI Auto-Labeling service is currently unreachable (backend not running on port 8000 or MOONDREAM_API_KEY missing). Please draw annotations manually in Step 4: Review & Edit tool.");
+      setErrorNotification("Moondream GPU Auto-Labeling server offline. Run 'python3 moondream_server.py' or 'python3 main.py' in backend/ai-service.");
     } finally {
       setAutoLabeling(false);
     }
