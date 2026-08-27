@@ -49,42 +49,58 @@ export default function Models() {
   const [pubErr, setPubErr] = useState("");
 
   useEffect(() => {
-    if (!registry) return;
     loadModels();
-  }, [!!registry, address]);
+  }, [registry, address]);
 
   async function loadModels() {
-    if (!registry) return;
     setLoading(true);
-    try {
-      const list = await registry.listModels();
-      const withMeta = await Promise.all(
-        list.map(async (m) => {
-          const hasLic = address ? await registry.hasLicense(m.modelId, address).catch(() => false) : false;
-          const base: ModelCardRow = { ...m, hasLicense: hasLic };
+    let onchain: ModelCardRow[] = [];
+    if (registry) {
+      try {
+        const list = await registry.listModels();
+        onchain = await Promise.all(
+          list.map(async (m) => {
+            const hasLic = address ? await registry.hasLicense(m.modelId, address).catch(() => false) : false;
+            const base: ModelCardRow = { ...m, hasLicense: hasLic };
 
-          if (m.metadataURI) {
-            try {
-              const meta = await fetchFrom0GStorage(m.metadataURI, 3);
-              if (meta) {
-                base.name = meta.name;
-                base.description = meta.description;
-                base.architecture = meta.architecture;
-                base.metrics = meta.metrics;
-                base.labels = Array.isArray(meta.labels) ? meta.labels : [];
-              }
-            } catch {}
-          }
-          if (!base.labels) {
-            base.labels = [];
-          }
-          return base;
-        })
-      );
-      setModels(withMeta.reverse());
-    } finally {
-      setLoading(false);
+            if (m.metadataURI) {
+              try {
+                const meta = await fetchFrom0GStorage(m.metadataURI, 3);
+                if (meta) {
+                  base.name = meta.name;
+                  base.description = meta.description;
+                  base.architecture = meta.architecture;
+                  base.metrics = meta.metrics;
+                  base.labels = Array.isArray(meta.labels) ? meta.labels : [];
+                }
+              } catch {}
+            }
+            if (!base.labels) {
+              base.labels = [];
+            }
+            return base;
+          })
+        );
+      } catch (err) {
+        console.warn("Onchain model load note:", err);
+      }
     }
+
+    // Load custom Rapid CV models from localStorage
+    let customModels: ModelCardRow[] = [];
+    try {
+      const stored = localStorage.getItem("hedaprotocol_custom_models");
+      if (stored) {
+        customModels = JSON.parse(stored);
+      }
+    } catch (e) {
+      console.warn("Custom models localStorage load note:", e);
+    }
+
+    const onchainHashes = new Set(onchain.map((m) => m.weightsRootHash));
+    const uniqueCustom = customModels.filter((m) => !onchainHashes.has(m.weightsRootHash));
+    setModels([...uniqueCustom, ...onchain].reverse());
+    setLoading(false);
   }
 
   async function purchaseLicense(m: ModelCardRow) {

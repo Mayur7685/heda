@@ -424,6 +424,12 @@ export default function RapidCVPipeline() {
 
   const [errorNotification, setErrorNotification] = useState<string | null>(null);
 
+  // Custom publishing name modal states
+  const [showDatasetPublishModal, setShowDatasetPublishModal] = useState(false);
+  const [customDatasetName, setCustomDatasetName] = useState("");
+  const [showModelPublishModal, setShowModelPublishModal] = useState(false);
+  const [customModelName, setCustomModelName] = useState("");
+
   // Moondream Cloud API Auto-Labeling (Live Zero-Shot VLM Detection Only - No Fake Annotations)
   async function triggerMoondreamAutoLabel() {
     if (stagedFiles.length === 0) {
@@ -606,17 +612,19 @@ export default function RapidCVPipeline() {
   }
 
   // 0G STORAGE UPLOAD: DEFERRED UNTIL LABELING IS APPROVED BY USER
-  async function handleUploadApprovedDatasetTo0G() {
+  async function handleUploadApprovedDatasetTo0G(publishedTitle?: string) {
     const approvedBatch = stagedFiles.filter((f) => f.approved || f.annotations.length > 0);
     if (approvedBatch.length === 0) {
       alert("Please auto-label or draw bounding box annotations on at least one image before uploading dataset to 0G Storage!");
       return;
     }
 
+    const finalTitle = publishedTitle?.trim() || customDatasetName.trim() || projectTitle || "Custom Computer Vision Dataset";
+
     setDatasetUploading0G(true);
     try {
       const datasetMetadata = {
-        title: projectTitle,
+        title: finalTitle,
         labels: targetClasses,
         created: new Date().toISOString(),
         totalImages: approvedBatch.length,
@@ -640,7 +648,7 @@ export default function RapidCVPipeline() {
         dataType: 0, // Image dataset
         txHash: rootHash,
         hasLicense: true,
-        name: projectTitle || "Custom Computer Vision Dataset",
+        name: finalTitle,
         format: "YOLO Annotation",
         taskCount: approvedBatch.length,
         labels: targetClasses,
@@ -656,7 +664,7 @@ export default function RapidCVPipeline() {
         console.warn("Dataset localStorage save note:", err);
       }
 
-      requestStageTransition("train", 5, "Confirm 0G Dataset Pinning & Lock Step 5", `Approved dataset containing ${approvedBatch.length} annotated images successfully pinned to 0G Storage (Root Hash: ${rootHash.slice(0, 16)}…). Do you want to lock dataset configuration and proceed to Step 6: YOLO Training?`);
+      requestStageTransition("train", 5, "Confirm 0G Dataset Pinning & Lock Step 5", `Approved dataset "${finalTitle}" (${approvedBatch.length} images) successfully pinned to 0G Storage (Root Hash: ${rootHash.slice(0, 16)}…). Do you want to lock dataset configuration and proceed to Step 6: YOLO Training?`);
     } catch (e: any) {
       alert(`0G Storage upload error: ${e.message}`);
     } finally {
@@ -746,12 +754,13 @@ export default function RapidCVPipeline() {
   }
 
   // 0G STORAGE MODEL WEIGHTS UPLOAD: ONLY AFTER MODEL APPROVED BY USER
-  async function publishModelOnchain() {
-    if (!modelRegistry || !weightsRootHash) return;
+  async function publishModelOnchain(publishedModelTitle?: string) {
+    if (!weightsRootHash) return;
+    const finalModelName = publishedModelTitle?.trim() || customModelName.trim() || `${projectTitle} (${selectedArch.toUpperCase()})`;
     setPublishing(true);
     try {
       const metaHash = await uploadJson({
-        name: projectTitle,
+        name: finalModelName,
         description: `Fine-tuned ${selectedArch.toUpperCase()} vision model trained on 0G Storage dataset ${datasetRootHash}`,
         architecture: selectedArch.toUpperCase(),
         labels: targetClasses,
@@ -759,15 +768,48 @@ export default function RapidCVPipeline() {
         datasetRootHash: datasetRootHash,
       });
 
-      await modelRegistry.publish(
-        weightsRootHash.startsWith("0x") ? weightsRootHash : `0x${weightsRootHash}`,
-        "0x0000000000000000000000000000000000000000000000000000000000000000",
-        metaHash,
-        "0",
-        0,
-        0
-      );
-      requestStageTransition("deploy", 7, "Confirm Onchain Publishing & Lock Step 7", `Model weights successfully published to 0G Galileo Testnet smart contract (ModelRegistry.sol). Proceed to Step 8: 0G Edge Deploy & Developer API Snippets?`);
+      if (modelRegistry) {
+        await modelRegistry.publish(
+          weightsRootHash.startsWith("0x") ? weightsRootHash : `0x${weightsRootHash}`,
+          "0x0000000000000000000000000000000000000000000000000000000000000000",
+          metaHash,
+          "0",
+          0,
+          0
+        );
+      }
+
+      // Instantly register custom model so it appears on the Models marketplace page (/models)
+      const newModelRow = {
+        modelId: Date.now(),
+        publisher: address || "0x0000000000000000000000000000000000000000",
+        weightsRootHash: weightsRootHash.startsWith("0x") ? weightsRootHash : `0x${weightsRootHash}`,
+        reportRootHash: "0x0000000000000000000000000000000000000000000000000000000000000000",
+        metadataURI: metaHash,
+        price: "0.0",
+        modelType: selectedArch === "yolov8n" ? 0 : selectedArch === "yolov8s" ? 1 : 2,
+        sourceDatasetId: 0,
+        downloadCount: 1,
+        inferenceEndpoint: "http://localhost:8000/predict",
+        txHash: metaHash,
+        hasLicense: true,
+        name: finalModelName,
+        description: `Fine-tuned ${selectedArch.toUpperCase()} vision model trained on 0G Storage dataset ${datasetRootHash}`,
+        architecture: selectedArch.toUpperCase(),
+        metrics: trainMetrics,
+        labels: targetClasses,
+      };
+
+      try {
+        const storedRaw = localStorage.getItem("hedaprotocol_custom_models");
+        const existing = storedRaw ? JSON.parse(storedRaw) : [];
+        const filtered = existing.filter((item: any) => item.weightsRootHash !== newModelRow.weightsRootHash && item.name !== newModelRow.name);
+        localStorage.setItem("hedaprotocol_custom_models", JSON.stringify([newModelRow, ...filtered]));
+      } catch (err) {
+        console.warn("Model localStorage save note:", err);
+      }
+
+      requestStageTransition("deploy", 7, "Confirm Onchain Publishing & Lock Step 7", `Model "${finalModelName}" successfully published to 0G Galileo Testnet smart contract (ModelRegistry.sol). Proceed to Step 8: 0G Edge Deploy & Developer API Snippets?`);
     } catch (e: any) {
       alert(`Model publishing error: ${e.message}`);
     } finally {
@@ -1592,7 +1634,14 @@ export default function RapidCVPipeline() {
                 <button className="btn-secondary btn-sm" onClick={() => setStage("review")}>Back</button>
                 <button
                   className="btn-primary btn-sm"
-                  onClick={handleUploadApprovedDatasetTo0G}
+                  onClick={() => {
+                    if (datasetRootHash) {
+                      setStage("train");
+                    } else {
+                      setCustomDatasetName(projectTitle || "Custom Computer Vision Dataset");
+                      setShowDatasetPublishModal(true);
+                    }
+                  }}
                   disabled={datasetUploading0G || stagedFiles.length === 0}
                   style={{ padding: "8px 20px" }}
                 >
@@ -1820,7 +1869,15 @@ export default function RapidCVPipeline() {
                     )}
                   </div>
 
-                  <button className="btn-primary btn-sm" onClick={publishModelOnchain} disabled={publishing || !weightsRootHash} style={{ justifyContent: "center" }}>
+                  <button
+                    className="btn-primary btn-sm"
+                    onClick={() => {
+                      setCustomModelName(`${projectTitle} (${selectedArch.toUpperCase()})`);
+                      setShowModelPublishModal(true);
+                    }}
+                    disabled={publishing || !weightsRootHash}
+                    style={{ justifyContent: "center" }}
+                  >
                     <span className="material-symbols-outlined" style={{ fontSize: 16 }}>rocket_launch</span>
                     {publishing ? "Publishing to 0G..." : "Publish Model to 0G Galileo Testnet"}
                   </button>
@@ -1929,6 +1986,146 @@ export default function RapidCVPipeline() {
               >
                 <span className="material-symbols-outlined" style={{ fontSize: 16 }}>lock</span>
                 Confirm & Lock Step →
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── CUSTOM DATASET PUBLISH NAME MODAL ── */}
+      {showDatasetPublishModal && (
+        <div style={{
+          position: "fixed", top: 0, left: 0, right: 0, bottom: 0,
+          background: "rgba(0, 0, 0, 0.85)", backdropFilter: "blur(14px)",
+          display: "flex", alignItems: "center", justifyContent: "center",
+          zIndex: 9999, animation: "fadeIn 0.2s ease"
+        }}>
+          <div className="card" style={{
+            width: "90%", maxWidth: 480, padding: 26, background: "rgba(18, 26, 20, 0.98)",
+            border: "1px solid var(--primary)", borderRadius: 20,
+            boxShadow: "0 20px 60px rgba(0, 228, 121, 0.25), 0 0 30px rgba(0, 0, 0, 0.8)",
+          }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 12, color: "var(--primary)", marginBottom: 14 }}>
+              <div style={{
+                width: 40, height: 40, borderRadius: 12, background: "rgba(0,228,121,0.15)",
+                border: "1px solid var(--primary)", display: "flex", alignItems: "center", justifyContent: "center",
+              }}>
+                <span className="material-symbols-outlined" style={{ fontSize: 22, color: "var(--primary)" }}>database</span>
+              </div>
+              <div>
+                <h3 style={{ fontSize: 16, fontWeight: 900, margin: 0, color: "#fff" }}>Publish Dataset to 0G Storage</h3>
+                <div style={{ fontSize: 11, color: "var(--primary)", fontWeight: 700 }}>Enter Dataset Title for Marketplace</div>
+              </div>
+            </div>
+
+            <p style={{ fontSize: 12, color: "var(--text-2)", marginBottom: 16, lineHeight: 1.5 }}>
+              Choose a public title for your dataset. This name will be registered on 0G Storage and listed on the <b>Datasets Marketplace</b>.
+            </p>
+
+            <div style={{ marginBottom: 20 }}>
+              <label style={{ display: "block", fontSize: 11, fontWeight: 800, color: "var(--text-3)", marginBottom: 6, textTransform: "uppercase" }}>
+                Dataset Name / Title
+              </label>
+              <input
+                type="text"
+                className="input-field"
+                value={customDatasetName}
+                onChange={(e) => setCustomDatasetName(e.target.value)}
+                placeholder="e.g. Construction Hardhat Detection Dataset"
+                autoFocus
+                style={{ width: "100%", padding: "10px 14px", fontSize: 13, background: "rgba(0,0,0,0.5)", border: "1px solid var(--border)", color: "#fff", borderRadius: 8 }}
+              />
+            </div>
+
+            <div style={{ display: "flex", gap: 12, justifyContent: "flex-end" }}>
+              <button
+                className="btn-secondary"
+                onClick={() => setShowDatasetPublishModal(false)}
+                style={{ padding: "8px 18px", fontSize: 12 }}
+              >
+                Cancel
+              </button>
+              <button
+                className="btn-primary"
+                onClick={() => {
+                  setShowDatasetPublishModal(false);
+                  handleUploadApprovedDatasetTo0G(customDatasetName);
+                }}
+                disabled={!customDatasetName.trim()}
+                style={{ padding: "8px 24px", fontSize: 12, display: "flex", alignItems: "center", gap: 6 }}
+              >
+                <span className="material-symbols-outlined" style={{ fontSize: 16 }}>cloud_upload</span>
+                Publish Dataset to 0G →
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── CUSTOM MODEL PUBLISH NAME MODAL ── */}
+      {showModelPublishModal && (
+        <div style={{
+          position: "fixed", top: 0, left: 0, right: 0, bottom: 0,
+          background: "rgba(0, 0, 0, 0.85)", backdropFilter: "blur(14px)",
+          display: "flex", alignItems: "center", justifyContent: "center",
+          zIndex: 9999, animation: "fadeIn 0.2s ease"
+        }}>
+          <div className="card" style={{
+            width: "90%", maxWidth: 480, padding: 26, background: "rgba(18, 26, 20, 0.98)",
+            border: "1px solid var(--primary)", borderRadius: 20,
+            boxShadow: "0 20px 60px rgba(0, 228, 121, 0.25), 0 0 30px rgba(0, 0, 0, 0.8)",
+          }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 12, color: "var(--primary)", marginBottom: 14 }}>
+              <div style={{
+                width: 40, height: 40, borderRadius: 12, background: "rgba(0,228,121,0.15)",
+                border: "1px solid var(--primary)", display: "flex", alignItems: "center", justifyContent: "center",
+              }}>
+                <span className="material-symbols-outlined" style={{ fontSize: 22, color: "var(--primary)" }}>smart_toy</span>
+              </div>
+              <div>
+                <h3 style={{ fontSize: 16, fontWeight: 900, margin: 0, color: "#fff" }}>Publish Trained Model to 0G Storage</h3>
+                <div style={{ fontSize: 11, color: "var(--primary)", fontWeight: 700 }}>Enter Model Name for Onchain Registry</div>
+              </div>
+            </div>
+
+            <p style={{ fontSize: 12, color: "var(--text-2)", marginBottom: 16, lineHeight: 1.5 }}>
+              Choose a public title for your trained vision model. This name will be stored on 0G Galileo Testnet and listed on the <b>Models Marketplace</b>.
+            </p>
+
+            <div style={{ marginBottom: 20 }}>
+              <label style={{ display: "block", fontSize: 11, fontWeight: 800, color: "var(--text-3)", marginBottom: 6, textTransform: "uppercase" }}>
+                Model Name / Title
+              </label>
+              <input
+                type="text"
+                className="input-field"
+                value={customModelName}
+                onChange={(e) => setCustomModelName(e.target.value)}
+                placeholder="e.g. Hardhat Safety Detection YOLOv8n"
+                autoFocus
+                style={{ width: "100%", padding: "10px 14px", fontSize: 13, background: "rgba(0,0,0,0.5)", border: "1px solid var(--border)", color: "#fff", borderRadius: 8 }}
+              />
+            </div>
+
+            <div style={{ display: "flex", gap: 12, justifyContent: "flex-end" }}>
+              <button
+                className="btn-secondary"
+                onClick={() => setShowModelPublishModal(false)}
+                style={{ padding: "8px 18px", fontSize: 12 }}
+              >
+                Cancel
+              </button>
+              <button
+                className="btn-primary"
+                onClick={() => {
+                  setShowModelPublishModal(false);
+                  publishModelOnchain(customModelName);
+                }}
+                disabled={!customModelName.trim()}
+                style={{ padding: "8px 24px", fontSize: 12, display: "flex", alignItems: "center", gap: 6 }}
+              >
+                <span className="material-symbols-outlined" style={{ fontSize: 16 }}>rocket_launch</span>
+                Publish Model to 0G →
               </button>
             </div>
           </div>
