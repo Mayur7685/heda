@@ -55,7 +55,7 @@ export default function TrainingModal({ datasetId, datasetName, datasetRootHash,
         setStep("training");
       }
     } catch (err: any) {
-      alert(`Failed to start training: ${err.message}`);
+      alert(`Local GPU AI Service Offline:\n\nPlease run 'cd backend/ai-service && python main.py' on your local machine to execute PyTorch YOLO model fine-tuning.\n\n(⚡ 0G Rented GPU Compute Network nodes integration coming soon!)`);
     }
   }
 
@@ -146,14 +146,32 @@ export default function TrainingModal({ datasetId, datasetName, datasetRootHash,
             {/* Runner Selection */}
             <div style={{ padding: 12, borderRadius: 8, background: "var(--surface-low)", border: "1px solid var(--border)" }}>
               <div style={{ fontSize: 11, fontWeight: 700, color: "var(--text-3)", textTransform: "uppercase", marginBottom: 6 }}>TRAINING ENGINE</div>
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                   <span className="material-symbols-outlined" style={{ fontSize: 18, color: "var(--primary)" }}>laptop_mac</span>
-                  <span style={{ fontSize: 13, fontWeight: 600, color: "#fff" }}>Local Machine Runner (M-Series / CUDA)</span>
+                  <span style={{ fontSize: 13, fontWeight: 600, color: "#fff" }}>Local Machine GPU Runner (M-Series / CUDA)</span>
                 </div>
                 <span style={{ fontSize: 10, background: "var(--primary-bg)", color: "var(--primary)", padding: "2px 8px", borderRadius: 4, fontWeight: 700 }}>
-                  ACTIVE
+                  ACTIVE LOCAL
                 </span>
+              </div>
+              <div style={{
+                background: "rgba(255, 171, 0, 0.08)",
+                border: "1px solid rgba(255, 171, 0, 0.3)",
+                borderRadius: 6,
+                padding: "10px 12px",
+                fontSize: 12,
+                color: "#ffca28",
+                display: "flex",
+                alignItems: "flex-start",
+                gap: 8
+              }}>
+                <span className="material-symbols-outlined" style={{ fontSize: 16, color: "#ffab00", flexShrink: 0, marginTop: 1 }}>memory</span>
+                <div>
+                  <strong style={{ color: "#ffe082", display: "block", marginBottom: 2 }}>Local GPU Execution Required</strong>
+                  Model training executes on your local GPU node (<code>cd backend/ai-service && python main.py</code>).
+                  <span style={{ display: "block", fontSize: 11, opacity: 0.8, marginTop: 2 }}>⚡ 0G Rented GPU Compute Nodes coming soon to cloud hosting!</span>
+                </div>
               </div>
             </div>
 
