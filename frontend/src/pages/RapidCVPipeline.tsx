@@ -713,7 +713,7 @@ export default function RapidCVPipeline() {
           datasetId: 0,
           datasetName: projectTitle,
           datasetRootHash: datasetRootHash,
-          modelType: selectedArch === "yolov8n" ? 0 : selectedArch === "yolov8s" ? 1 : 2,
+          modelType: selectedArch.toUpperCase(),
           epochs: epochs,
           imgSize: 640,
         }),

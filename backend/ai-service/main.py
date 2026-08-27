@@ -6,6 +6,7 @@ Provides REST endpoints for training YOLO models, tracking live metrics, and pos
 from fastapi import FastAPI, BackgroundTasks, HTTPException
 from fastapi.responses import StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
+from typing import Union, Any, Optional
 from pydantic import BaseModel
 import subprocess
 import threading
@@ -66,9 +67,9 @@ app.add_middleware(
 active_jobs = {}
 
 class TrainRequest(BaseModel):
-    datasetId: int
-    datasetRootHash: str
-    modelType: str = "YOLOv8n"
+    datasetId: Union[int, str, None] = 0
+    datasetRootHash: str = ""
+    modelType: Union[str, int, None] = "YOLOv8n"
     epochs: int = 30
     imgSize: int = 640
     datasetName: str = "Dataset"
@@ -95,13 +96,21 @@ def upload_to_relayer(data_base64: str) -> str:
 def run_training_job(job_id: str, req: TrainRequest):
     job = active_jobs[job_id]
     job["status"] = "training"
+
+    model_type_str = str(req.modelType or "YOLOv8n")
+    if model_type_str in ["0", "yolov8n"]:
+        model_type_str = "YOLOv8n"
+    elif model_type_str in ["1", "yolov8s"]:
+        model_type_str = "YOLOv8s"
+    elif model_type_str in ["2", "yolov8m"]:
+        model_type_str = "YOLOv8m"
     
     script_path = Path(__file__).parent / "train_yolo.py"
     cmd = [
         sys.executable if 'sys' in globals() else "python3",
         str(script_path),
-        "--dataset_root_hash", req.datasetRootHash,
-        "--model_type", req.modelType,
+        "--dataset_root_hash", req.datasetRootHash or "",
+        "--model_type", model_type_str,
         "--epochs", str(req.epochs),
         "--img_size", str(req.imgSize),
         "--train_id", job_id
