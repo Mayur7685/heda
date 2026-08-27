@@ -449,12 +449,17 @@ export default function RapidCVPipeline() {
       const data = await res.json();
 
       if (data.ok && Array.isArray(data.results)) {
-        let count = 0;
+        let totalDetectedCount = 0;
+        data.results.forEach((r: any) => {
+          if (Array.isArray(r.annotations)) {
+            totalDetectedCount += r.annotations.length;
+          }
+        });
+
         setStagedFiles((prev) =>
           prev.map((f) => {
             const match = data.results.find((r: any) => r.id === f.id);
             if (match && Array.isArray(match.annotations) && match.annotations.length > 0) {
-              count += match.annotations.length;
               const canvasW = 820;
               const canvasH = f.width ? Math.round((f.height / f.width) * canvasW) : 520;
               const formattedBoxes: Annotation[] = match.annotations.map((a: any) => ({
@@ -473,15 +478,20 @@ export default function RapidCVPipeline() {
           })
         );
 
-        if (count === 0) {
-          setErrorNotification("Moondream AI completed scan but found 0 objects matching your target classes. Please annotate objects manually using Bounding Box (B) or Polygon (P) tool.");
+        if (totalDetectedCount === 0) {
+          setErrorNotification("Moondream AI completed scan but found 0 objects matching your target classes. Please annotate objects manually in Step 4: Review & Edit tool.");
+        } else {
+          // Automatically advance to Step 4 (Review & Edit) after short delay
+          setTimeout(() => {
+            advanceToStage("review", 3);
+          }, 1600);
         }
       } else {
-        setErrorNotification(data.error || "Moondream AI Auto-Labeling is currently unreachable at the moment. Please draw annotations manually using Bounding Box (B) or Polygon (P) tool.");
+        setErrorNotification(data.error || "Moondream AI Auto-Labeling is currently unreachable at the moment. Please draw annotations manually in Step 4: Review & Edit tool.");
       }
     } catch (err: any) {
       console.warn("Auto-labeling network error:", err);
-      setErrorNotification("Moondream AI Auto-Labeling service is currently unreachable (backend not running on port 8000 or MOONDREAM_API_KEY missing). Please draw annotations manually using Bounding Box (B) or Polygon (P) tool.");
+      setErrorNotification("Moondream AI Auto-Labeling service is currently unreachable (backend not running on port 8000 or MOONDREAM_API_KEY missing). Please draw annotations manually in Step 4: Review & Edit tool.");
     } finally {
       setAutoLabeling(false);
     }
@@ -1289,10 +1299,119 @@ export default function RapidCVPipeline() {
             </div>
           )}
 
-        {/* ═══════════════════════════════════════════════
-            STAGE 3 & 4: KONVA ANNOTATION WORKSPACE (autolabel / review)
-        ═══════════════════════════════════════════════ */}
-        {(stage === "autolabel" || stage === "review") && (
+          {/* ═══════════════════════════════════════════════
+              STAGE 3: MOONDREAM AUTO-LABELING GRID SCANNER (autolabel)
+          ═══════════════════════════════════════════════ */}
+          {stage === "autolabel" && (
+            <div style={{ display: "flex", flexDirection: "column", height: "100%", overflow: "hidden", background: "#090c12" }}>
+              {/* Header & Status Bar */}
+              <div style={{ padding: "16px 24px", borderBottom: "1px solid var(--border)", background: "var(--surface-low)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+                    <span className="material-symbols-outlined" style={{ color: "var(--primary)", fontSize: 22, animation: autoLabeling ? "spin 1.5s linear infinite" : "none" }}>
+                      {autoLabeling ? "progress_activity" : "auto_awesome"}
+                    </span>
+                    <h2 style={{ fontSize: 18, fontWeight: 800, margin: 0, color: "#fff" }}>
+                      Moondream Cloud VLM Auto-Labeling
+                    </h2>
+                  </div>
+                  <p style={{ fontSize: 11, color: "var(--text-2)", margin: 0 }}>
+                    {autoLabeling
+                      ? `Scanning ${stagedFiles.length} image dataset with zero-shot AI vision model for target classes: [${targetClasses.join(", ")}]...`
+                      : `Auto-labeling complete! Detected ${stagedFiles.reduce((sum, f) => sum + f.annotations.length, 0)} total objects across ${stagedFiles.length} images.`}
+                  </p>
+                </div>
+
+                <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                  <button
+                    className="btn-primary btn-sm"
+                    onClick={() => advanceToStage("review", 3)}
+                    disabled={autoLabeling}
+                    style={{ padding: "8px 22px", fontSize: 12 }}
+                  >
+                    {autoLabeling ? "AI Scanning in progress..." : "Proceed to Step 4: Review & Edit Annotations →"}
+                  </button>
+                </div>
+              </div>
+
+              {/* Error Banner if any */}
+              {errorNotification && (
+                <div style={{
+                  padding: "10px 24px", background: "rgba(220, 38, 38, 0.95)", borderBottom: "1px solid #ef4444",
+                  color: "#ffffff", fontSize: 12, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "space-between",
+                }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <span className="material-symbols-outlined" style={{ fontSize: 18, color: "#fff" }}>warning</span>
+                    <span>{errorNotification}</span>
+                  </div>
+                  <button onClick={() => setErrorNotification(null)} style={{ background: "transparent", border: "none", color: "#fff", cursor: "pointer" }}>
+                    <span className="material-symbols-outlined" style={{ fontSize: 16 }}>close</span>
+                  </button>
+                </div>
+              )}
+
+              {/* Animated Image Grid */}
+              <div style={{ flex: 1, padding: 20, overflowY: "auto" }}>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))", gap: 14 }}>
+                  {stagedFiles.map((f) => {
+                    const hasAnnotations = f.annotations.length > 0;
+                    return (
+                      <div
+                        key={f.id}
+                        className="card"
+                        style={{
+                          position: "relative", overflow: "hidden", borderRadius: 10,
+                          border: hasAnnotations ? "1px solid var(--primary)" : "1px solid var(--border)",
+                          background: "#0c1017", height: 170, display: "flex", flexDirection: "column",
+                        }}
+                      >
+                        <img
+                          src={`data:${f.type};base64,${f.data}`}
+                          alt={f.name}
+                          style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                        />
+
+                        {/* Overlay Badge */}
+                        <div
+                          style={{
+                            position: "absolute", bottom: 6, left: 6, right: 6,
+                            padding: "4px 8px", borderRadius: 6, background: "rgba(0,0,0,0.8)",
+                            backdropFilter: "blur(4px)", border: "1px solid rgba(255,255,255,0.1)",
+                            display: "flex", alignItems: "center", justifyContent: "space-between", fontSize: 10,
+                          }}
+                        >
+                          <span style={{ color: "#fff", fontWeight: 700, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: 100 }}>
+                            {f.name}
+                          </span>
+                          {autoLabeling ? (
+                            <span style={{ color: "var(--primary)", fontWeight: 700, fontSize: 10, display: "flex", alignItems: "center", gap: 3 }}>
+                              <span className="material-symbols-outlined" style={{ fontSize: 12, animation: "spin 1s linear infinite" }}>sync</span>
+                              Scanning
+                            </span>
+                          ) : (
+                            <span style={{ color: hasAnnotations ? "var(--primary)" : "var(--text-3)", fontWeight: 700, fontSize: 10, display: "flex", alignItems: "center", gap: 3 }}>
+                              <span className="material-symbols-outlined" style={{ fontSize: 12 }}>
+                                {hasAnnotations ? "check_circle" : "search_off"}
+                              </span>
+                              {f.annotations.length} obj
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Bottom Reel */}
+              <HorizontalReelFooter stagedFiles={stagedFiles} />
+            </div>
+          )}
+
+          {/* ═══════════════════════════════════════════════
+              STAGE 4: KONVA ANNOTATION WORKSPACE (review)
+          ═══════════════════════════════════════════════ */}
+          {stage === "review" && (
           <div style={{ display: "grid", gridTemplateColumns: "110px 1fr 300px", gap: 12, height: "100%", overflow: "hidden" }}>
             {/* Left Image Drawer */}
             <div className="card" style={{ padding: 6, overflowY: "auto", display: "flex", flexDirection: "column", gap: 6 }}>
