@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { useWallet } from "../hooks/useWallet";
 import { useDatasetRegistry } from "../hooks/useDatasetRegistry";
@@ -18,63 +18,79 @@ export default function Datasets() {
   const [loading, setLoading] = useState(false);
   const [txMsg, setTxMsg] = useState("");
   const [trainingDataset, setTrainingDataset] = useState<DatasetRow | null>(null);
-  const loaded = useRef(false);
 
   useEffect(() => {
-    if (!registry || loaded.current) return;
-    loaded.current = true;
     loadDatasets();
-  }, [!!registry]);
+  }, [registry, address]);
 
   async function loadDatasets() {
-    if (!registry) return;
     setLoading(true);
-    try {
-      const events = await registry.listDatasets();
-      const withLicense = await Promise.all(events.map(async (d) => {
-        const base: any = {
-          ...d,
-          hasLicense: address ? await registry.hasLicense(d.datasetId, address) : false,
-          name: undefined,
-          format: undefined,
-          taskCount: undefined,
-        };
-        if (d.metadataURI) {
-          try {
-            const meta = await fetchFrom0GStorage(d.metadataURI, 3);
-            if (meta) {
-              base.name = meta.name;
-              base.format = meta.format;
-              base.taskCount = meta.taskCount;
-              base.labels = meta.labels;
-            }
-          } catch { /* fallback */ }
-        }
+    let onchainDatasets: any[] = [];
+    if (registry) {
+      try {
+        const events = await registry.listDatasets();
+        onchainDatasets = await Promise.all(events.map(async (d) => {
+          const base: any = {
+            ...d,
+            hasLicense: address ? await registry.hasLicense(d.datasetId, address) : false,
+            name: undefined,
+            format: undefined,
+            taskCount: undefined,
+          };
+          if (d.metadataURI) {
+            try {
+              const meta = await fetchFrom0GStorage(d.metadataURI, 3);
+              if (meta) {
+                base.name = meta.name;
+                base.format = meta.format;
+                base.taskCount = meta.taskCount;
+                base.labels = meta.labels;
+              }
+            } catch { /* fallback */ }
+          }
 
-        // Fetch real uploaded sample image if dataset is image type
-        if (d.dataType === 0 && d.rootHash) {
-          try {
-            const rawData = await fetchFrom0GStorage(d.rootHash, 3);
-            if (rawData && typeof rawData === "object") {
-              let b64 = rawData.images?.[0]?.base64;
-              const dataRoot = rawData.info?.data_root_hash ?? base.dataRootHash;
-              if (!b64 && dataRoot) {
-                const sourceFiles = await fetchFrom0GStorage(dataRoot, 3).catch(() => []);
-                if (Array.isArray(sourceFiles) && sourceFiles[0]?.data) {
-                  const f = sourceFiles[0];
-                  b64 = f.data.startsWith("data:") ? f.data : `data:${f.type || "image/jpeg"};base64,${f.data}`;
+          // Fetch real uploaded sample image if dataset is image type
+          if (d.dataType === 0 && d.rootHash) {
+            try {
+              const rawData = await fetchFrom0GStorage(d.rootHash, 3);
+              if (rawData && typeof rawData === "object") {
+                let b64 = rawData.images?.[0]?.base64;
+                const dataRoot = rawData.info?.data_root_hash ?? base.dataRootHash;
+                if (!b64 && dataRoot) {
+                  const sourceFiles = await fetchFrom0GStorage(dataRoot, 3).catch(() => []);
+                  if (Array.isArray(sourceFiles) && sourceFiles[0]?.data) {
+                    const f = sourceFiles[0];
+                    b64 = f.data.startsWith("data:") ? f.data : `data:${f.type || "image/jpeg"};base64,${f.data}`;
+                  }
+                }
+                if (b64) {
+                  base.previewImage = b64.startsWith("data:") ? b64 : `data:image/jpeg;base64,${b64}`;
                 }
               }
-              if (b64) {
-                base.previewImage = b64.startsWith("data:") ? b64 : `data:image/jpeg;base64,${b64}`;
-              }
-            }
-          } catch { /* ignore fallback */ }
-        }
-        return base;
-      }));
-      setDatasets(withLicense);
-    } finally { setLoading(false); }
+            } catch { /* ignore fallback */ }
+          }
+          return base;
+        }));
+      } catch (err) {
+        console.warn("Onchain registry fetch note:", err);
+      }
+    }
+
+    // Load custom Rapid CV / user created datasets from localStorage
+    let customDatasets: any[] = [];
+    try {
+      const stored = localStorage.getItem("hedaprotocol_custom_datasets");
+      if (stored) {
+        customDatasets = JSON.parse(stored);
+      }
+    } catch (e) {
+      console.warn("Custom dataset localStorage load note:", e);
+    }
+
+    const onchainHashes = new Set(onchainDatasets.map((d) => d.rootHash));
+    const uniqueCustom = customDatasets.filter((d) => !onchainHashes.has(d.rootHash));
+    setDatasets([...uniqueCustom, ...onchainDatasets]);
+    setLoading(false);
   }
 
   async function purchase(d: DatasetRow) {

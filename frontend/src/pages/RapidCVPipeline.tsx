@@ -630,6 +630,32 @@ export default function RapidCVPipeline() {
 
       const rootHash = await uploadJson(datasetMetadata);
       setDatasetRootHash(rootHash);
+
+      // Instantly register custom dataset so it appears on the Datasets page (/datasets)
+      const newDatasetRow = {
+        datasetId: Date.now(),
+        publisher: address || "0x0000000000000000000000000000000000000000",
+        rootHash: rootHash,
+        price: "0.0",
+        dataType: 0, // Image dataset
+        txHash: rootHash,
+        hasLicense: true,
+        name: projectTitle || "Custom Computer Vision Dataset",
+        format: "YOLO Annotation",
+        taskCount: approvedBatch.length,
+        labels: targetClasses,
+        previewImage: approvedBatch[0]?.data ? (approvedBatch[0].data.startsWith("data:") ? approvedBatch[0].data : `data:${approvedBatch[0].type || "image/jpeg"};base64,${approvedBatch[0].data}`) : undefined,
+      };
+
+      try {
+        const storedRaw = localStorage.getItem("hedaprotocol_custom_datasets");
+        const existing = storedRaw ? JSON.parse(storedRaw) : [];
+        const filtered = existing.filter((item: any) => item.rootHash !== rootHash && item.name !== newDatasetRow.name);
+        localStorage.setItem("hedaprotocol_custom_datasets", JSON.stringify([newDatasetRow, ...filtered]));
+      } catch (err) {
+        console.warn("Dataset localStorage save note:", err);
+      }
+
       requestStageTransition("train", 5, "Confirm 0G Dataset Pinning & Lock Step 5", `Approved dataset containing ${approvedBatch.length} annotated images successfully pinned to 0G Storage (Root Hash: ${rootHash.slice(0, 16)}…). Do you want to lock dataset configuration and proceed to Step 6: YOLO Training?`);
     } catch (e: any) {
       alert(`0G Storage upload error: ${e.message}`);
