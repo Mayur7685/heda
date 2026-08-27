@@ -9,10 +9,10 @@ export const GALILEO = {
   storageExplorer: "https://storagescan-galileo.0g.ai",
   faucet: "https://faucet.0g.ai",
   contracts: {
-    annotationMarket: import.meta.env.VITE_MARKET_ADDRESS ?? "0x5C36264B37Ded1b718d3FD511A608ef34054A865",
-    datasetRegistry:  import.meta.env.VITE_DATASET_REGISTRY_ADDRESS ?? "0x213e6857E4A9623168A81Bf83879379F7C3A7A4d",
-    modelRegistry:    import.meta.env.VITE_MODEL_REGISTRY_ADDRESS ?? "0xfA942F6F0AC98744454711A5a3E1320a7878CD5A",
-    pipelineSubscription: import.meta.env.VITE_PIPELINE_SUBSCRIPTION_ADDRESS ?? "0x80CBFA451F1E83a9DE9536e1CD0bd85406017FD6",
+    annotationMarket: import.meta.env.VITE_MARKET_ADDRESS ?? "0x993Ab9D8d254cCe045F00A642CCDE21145a77C2B",
+    datasetRegistry:  import.meta.env.VITE_DATASET_REGISTRY_ADDRESS ?? "0x94353b3BDF015346802bc965e1FF807c09222Ede",
+    modelRegistry:    import.meta.env.VITE_MODEL_REGISTRY_ADDRESS ?? "0xa3Eb0cfb5472944770142F4CB27Dd516DbC4c126",
+    pipelineSubscription: import.meta.env.VITE_PIPELINE_SUBSCRIPTION_ADDRESS ?? "0x9d7dcFAA625a1622C4042E2Eb9978c34F5BA7EDF",
   },
 } as const;
 
