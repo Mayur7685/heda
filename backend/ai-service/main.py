@@ -19,6 +19,8 @@ import urllib.request
 import os
 import hashlib
 import io
+import io
+from io import BytesIO
 from PIL import Image
 from pathlib import Path
 
@@ -54,6 +56,18 @@ def load_env_files():
 load_env_files()
 
 app = FastAPI(title="Heda AI Service", version="1.0.0")
+
+# Attempt loading local Moondream 2 VLM model instance on startup
+local_moondream_model = None
+try:
+    import moondream as md
+    print("==============================================================")
+    print("Loading local Moondream 2 VLM onto Apple Silicon / CUDA GPU...")
+    print("==============================================================")
+    local_moondream_model = md.vl(local=True, model="moondream2")
+    print("✔ Local Moondream 2 VLM loaded successfully!")
+except Exception as _e:
+    print(f"Note: Local moondream package not initialized directly in Python main ({_e}). Will fallback to local server (http://localhost:2020) or cloud API.")
 
 app.add_middleware(
     CORSMiddleware,
@@ -353,43 +367,50 @@ def chat_llm_assistant(req: ChatLLMRequest):
         "ogModel": "qwen2.5-omni"
     }
 
-def call_moondream_detect(base64_str: str, cls_name: str, api_key: str, max_retries: int = 3):
-    """Executes Moondream /v1/detect with rate limit throttling (max 2 req/sec) & HTTP 403/429 backoff retries"""
-    import urllib.request
-    import urllib.error
-    # Format image URL cleanly for Moondream VLM API
-    if base64_str.startswith("data:"):
-        formatted_img_url = base64_str
-    else:
-        formatted_img_url = f"data:image/jpeg;base64,{base64_str}"
-
-    headers = {
-        "Content-Type": "application/json",
-        "X-Moondream-Auth": api_key,
-        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-    }
-    body = json.dumps({
-        "image_url": formatted_img_url,
-        "object": cls_name
-    }).encode('utf-8')
-
-    for attempt in range(max_retries):
-        # Rate limit throttling: pause 0.55s between requests to strictly respect Moondream's 2 req/sec rate limit
-        time.sleep(0.55)
+def call_moondream_detect(base64_str: str, cls_name: str, api_key: str = "", max_retries: int = 2):
+    """Executes Moondream /v1/detect locally (Tier 1 model or Tier 2 local server) with Cloud API fallback"""
+    # 1. Tier 1: Direct in-memory local Moondream model instance (PyTorch / Metal MPS)
+    if local_moondream_model is not None:
         try:
-            http_req = urllib.request.Request("https://api.moondream.ai/v1/detect", data=body, headers=headers, method="POST")
-            with urllib.request.urlopen(http_req, timeout=10) as response:
-                return json.loads(response.read().decode('utf-8'))
-        except urllib.error.HTTPError as err:
-            print(f"[Moondream API HTTP {err.code} Attempt {attempt + 1}/{max_retries}]: {err}")
-            if err.code in (403, 429, 503):
-                # Back off on rate limits or temporary server errors
-                time.sleep(1.5 * (attempt + 1))
-            else:
-                break
-        except Exception as e:
-            print(f"[Moondream API Error Attempt {attempt + 1}/{max_retries}]: {e}")
-            time.sleep(1.0)
+            raw_b64 = base64_str.split(",", 1)[1] if "," in base64_str else base64_str
+            image_bytes = base64.b64decode(raw_b64)
+            pil_image = Image.open(BytesIO(image_bytes))
+            res = local_moondream_model.detect(pil_image, cls_name)
+            if res and isinstance(res, dict) and "objects" in res:
+                print(f"[Local Moondream VLM] Detected {len(res['objects'])} objects for '{cls_name}' locally")
+                return res
+        except Exception as err:
+            print(f"[Local Moondream Model Notice]: {err}")
+
+    # 2. Tier 2: Try local Moondream server (auto-labeler-moondream server.py on port 2020)
+    formatted_img_url = base64_str if base64_str.startswith("data:") else f"data:image/jpeg;base64,{base64_str}"
+    body = json.dumps({"image_url": formatted_img_url, "object": cls_name}).encode('utf-8')
+    try:
+        http_req = urllib.request.Request("http://localhost:2020/v1/detect", data=body, headers={"Content-Type": "application/json"}, method="POST")
+        with urllib.request.urlopen(http_req, timeout=8) as response:
+            res_data = json.loads(response.read().decode('utf-8'))
+            if res_data and "objects" in res_data:
+                print(f"[Local Moondream Server :2020] Detected {len(res_data['objects'])} objects for '{cls_name}'")
+                return res_data
+    except Exception:
+        pass
+
+    # 3. Tier 3: Cloud API fallback if key is available
+    if api_key:
+        headers = {
+            "Content-Type": "application/json",
+            "X-Moondream-Auth": api_key,
+            "User-Agent": "Mozilla/5.0"
+        }
+        for attempt in range(max_retries):
+            time.sleep(0.4)
+            try:
+                http_req = urllib.request.Request("https://api.moondream.ai/v1/detect", data=body, headers=headers, method="POST")
+                with urllib.request.urlopen(http_req, timeout=10) as response:
+                    return json.loads(response.read().decode('utf-8'))
+            except Exception as e:
+                print(f"[Moondream Cloud API Note attempt {attempt+1}]: {e}")
+                time.sleep(0.8)
     return None
 
 def get_synonym_queries(cls_name: str):
@@ -407,16 +428,10 @@ def get_synonym_queries(cls_name: str):
 
 @app.post("/autolabel")
 def autolabel_images(req: AutoLabelRequest):
-    """Generates zero-shot bounding boxes for unlabeled images using Moondream Cloud VLM API"""
+    """Generates zero-shot bounding boxes for unlabeled images using local Moondream VLM engine or cloud API"""
     classes = req.classes if req.classes else ["hardhat"]
-    moondream_api_key = os.getenv("MOONDREAM_API_KEY")
+    moondream_api_key = os.getenv("MOONDREAM_API_KEY", "")
     
-    if not moondream_api_key:
-        return {
-            "ok": False,
-            "error": "Moondream AI Auto-Labeling is not configured (MOONDREAM_API_KEY missing in backend .env). Please draw bounding boxes manually using Bounding Box (B) or Polygon (P) tool."
-        }
-
     results = []
     total_detected = 0
     
