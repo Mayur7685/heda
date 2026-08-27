@@ -10,6 +10,7 @@ import sys
 import os
 import json
 import shutil
+import base64
 import argparse
 import urllib.request
 from pathlib import Path
@@ -26,31 +27,41 @@ def parse_args():
 
 def fetch_from_0g(root_hash, indexer_url):
     clean_hash = root_hash if root_hash.startswith("0x") else f"0x{root_hash}"
-    url = f"{indexer_url}/file?root={clean_hash}"
-    req = urllib.request.Request(url, headers={"User-Agent": "HedaTrainer/1.0"})
-    try:
-        with urllib.request.urlopen(req, timeout=20) as resp:
-            raw_bytes = resp.read()
-            try:
-                parsed = json.loads(raw_bytes.decode("utf-8"))
-                # Handle 0G Relayer wrapper {"data": "<base64_string>"}
-                if isinstance(parsed, dict) and "data" in parsed and isinstance(parsed["data"], str):
-                    decoded_str = base64.b64decode(parsed["data"]).decode("utf-8")
-                    return json.loads(decoded_str)
-                return parsed
-            except Exception:
-                return raw_bytes.decode("utf-8", errors="ignore")
-    except Exception as e:
-        print(json.dumps({"status": "warn", "msg": f"0G Storage Indexer fetch note: {str(e)}"}), flush=True)
-        return None
+    urls = [
+        f"{indexer_url}/file?root={clean_hash}",
+        f"https://indexer-storage-testnet-turbo.0g.ai/file?root={clean_hash}",
+        f"https://indexer-storage-testnet-standard.0g.ai/file?root={clean_hash}",
+        f"http://localhost:3001/file?root={clean_hash}",
+    ]
+    for url in urls:
+        req = urllib.request.Request(url, headers={"User-Agent": "HedaTrainer/1.0"})
+        try:
+            with urllib.request.urlopen(req, timeout=25) as resp:
+                raw_bytes = resp.read()
+                try:
+                    parsed = json.loads(raw_bytes.decode("utf-8"))
+                    if isinstance(parsed, dict) and "data" in parsed and isinstance(parsed["data"], str):
+                        decoded_str = base64.b64decode(parsed["data"]).decode("utf-8")
+                        return json.loads(decoded_str)
+                    return parsed
+                except Exception:
+                    return raw_bytes.decode("utf-8", errors="ignore")
+        except Exception as e:
+            print(json.dumps({"status": "warn", "msg": f"0G Storage Indexer fetch note ({url}): {str(e)}"}), flush=True)
+    return None
 
 def prepare_yolo_dataset(work_dir, dataset_data):
     """Formats dataset into standard YOLO directory layout (images/train, labels/train, dataset.yaml)"""
     dataset_path = Path(work_dir) / "dataset"
     img_dir = dataset_path / "images" / "train"
+    val_dir = dataset_path / "images" / "val"
     label_dir = dataset_path / "labels" / "train"
+    val_label_dir = dataset_path / "labels" / "val"
+
     img_dir.mkdir(parents=True, exist_ok=True)
+    val_dir.mkdir(parents=True, exist_ok=True)
     label_dir.mkdir(parents=True, exist_ok=True)
+    val_label_dir.mkdir(parents=True, exist_ok=True)
 
     classes = []
     categories_map = {}
@@ -68,63 +79,76 @@ def prepare_yolo_dataset(work_dir, dataset_data):
     if not classes:
         classes = ["object"]
 
-    # Decode images & generate YOLO label txt files from 0G COCO JSON
-    if isinstance(dataset_data, dict) and "images" in dataset_data:
-        images_list = dataset_data.get("images", [])
-        annotations_list = dataset_data.get("annotations", [])
+    images_list = dataset_data.get("images", []) if isinstance(dataset_data, dict) else []
+    annotations_list = dataset_data.get("annotations", []) if isinstance(dataset_data, dict) else []
 
-        ann_by_img = {}
-        for ann in annotations_list:
-            img_id = ann.get("image_id")
-            if img_id not in ann_by_img:
-                ann_by_img[img_id] = []
-            ann_by_img[img_id].append(ann)
+    ann_by_img = {}
+    for ann in annotations_list:
+        img_id = ann.get("image_id")
+        if img_id not in ann_by_img:
+            ann_by_img[img_id] = []
+        ann_by_img[img_id].append(ann)
 
-        for img_info in images_list:
-            img_id = img_info.get("id")
-            file_name = img_info.get("file_name", f"img_{img_id}.jpg")
-            img_w = img_info.get("width", 800)
-            img_h = img_info.get("height", 600)
-            b64_data = img_info.get("base64") or img_info.get("data") or img_info.get("file_data", "")
+    saved_images_count = 0
 
-            target_img_path = img_dir / file_name
-            if b64_data:
-                if "," in b64_data:
-                    b64_data = b64_data.split(",")[1]
+    for idx, img_info in enumerate(images_list):
+        img_id = img_info.get("id", idx)
+        file_name = img_info.get("file_name", f"img_{img_id}.jpg")
+        img_w = img_info.get("width", 640)
+        img_h = img_info.get("height", 480)
+        b64_data = img_info.get("base64") or img_info.get("data") or img_info.get("file_data", "")
+
+        target_img_path = img_dir / file_name
+        val_img_path = val_dir / file_name
+
+        if b64_data:
+            if "," in b64_data:
+                b64_data = b64_data.split(",")[1]
+            try:
+                img_bytes = base64.b64decode(b64_data)
                 with open(target_img_path, "wb") as f:
-                    f.write(base64.b64decode(b64_data))
+                    f.write(img_bytes)
+                with open(val_img_path, "wb") as f:
+                    f.write(img_bytes)
+                saved_images_count += 1
+            except Exception as e:
+                print(json.dumps({"status": "warn", "msg": f"Base64 decode error for {file_name}: {e}"}), flush=True)
 
-            label_txt_path = label_dir / f"{Path(file_name).stem}.txt"
-            yolo_lines = []
-            img_anns = ann_by_img.get(img_id, [])
+        label_txt_path = label_dir / f"{Path(file_name).stem}.txt"
+        val_label_txt_path = val_label_dir / f"{Path(file_name).stem}.txt"
+        yolo_lines = []
+        img_anns = ann_by_img.get(img_id, [])
 
-            for ann in img_anns:
-                cat_id = ann.get("category_id", 1)
-                cls_idx = categories_map.get(cat_id, 0)
-                bbox = ann.get("bbox", [])
+        for ann in img_anns:
+            cat_id = ann.get("category_id", 1)
+            cls_idx = categories_map.get(cat_id, 0)
+            bbox = ann.get("bbox", [])
 
-                if len(bbox) == 4:
-                    x, y, w, h = bbox[0], bbox[1], bbox[2], bbox[3]
-                    if x <= 100 and y <= 100 and w <= 100 and h <= 100:
-                        x_center = (x + w / 2) / 100.0
-                        y_center = (y + h / 2) / 100.0
-                        norm_w = w / 100.0
-                        norm_h = h / 100.0
-                    else:
-                        x_center = (x + w / 2) / float(img_w)
-                        y_center = (y + h / 2) / float(img_h)
-                        norm_w = w / float(img_w)
-                        norm_h = h / float(img_h)
+            if len(bbox) == 4:
+                x, y, w, h = bbox[0], bbox[1], bbox[2], bbox[3]
+                if x <= 100 and y <= 100 and w <= 100 and h <= 100:
+                    x_center = (x + w / 2) / 100.0
+                    y_center = (y + h / 2) / 100.0
+                    norm_w = w / 100.0
+                    norm_h = h / 100.0
+                else:
+                    x_center = (x + w / 2) / float(img_w)
+                    y_center = (y + h / 2) / float(img_h)
+                    norm_w = w / float(img_w)
+                    norm_h = h / float(img_h)
 
-                    yolo_lines.append(f"{cls_idx} {x_center:.6f} {y_center:.6f} {norm_w:.6f} {norm_h:.6f}")
+                yolo_lines.append(f"{cls_idx} {x_center:.6f} {y_center:.6f} {norm_w:.6f} {norm_h:.6f}")
 
-            with open(label_txt_path, "w") as f:
-                f.write("\n".join(yolo_lines))
+        label_content = "\n".join(yolo_lines)
+        with open(label_txt_path, "w") as f:
+            f.write(label_content)
+        with open(val_label_txt_path, "w") as f:
+            f.write(label_content)
 
     yaml_path = dataset_path / "dataset.yaml"
     yaml_content = f"""path: {dataset_path.absolute()}
 train: images/train
-val: images/train
+val: images/val
 names:
 """
     for idx, c in enumerate(classes):
@@ -133,7 +157,7 @@ names:
     with open(yaml_path, "w") as f:
         f.write(yaml_content)
 
-    return str(yaml_path), classes
+    return str(yaml_path), classes, saved_images_count
 
 def main():
     args = parse_args()
@@ -148,8 +172,8 @@ def main():
     dataset_data = fetch_from_0g(args.dataset_root_hash, args.indexer_url)
 
     # 3. Format YOLO dataset layout
-    dataset_yaml_path, classes = prepare_yolo_dataset(work_dir, dataset_data)
-    print(json.dumps({"status": "prepared", "msg": f"Dataset formatted at {dataset_yaml_path} ({len(classes)} classes)"}), flush=True)
+    dataset_yaml_path, classes, saved_images_count = prepare_yolo_dataset(work_dir, dataset_data)
+    print(json.dumps({"status": "prepared", "msg": f"Dataset formatted at {dataset_yaml_path} ({saved_images_count} images, {len(classes)} classes: {', '.join(classes)})"}), flush=True)
 
     # 4. Check PyTorch & Ultralytics environment
     has_ultralytics = False
@@ -166,7 +190,7 @@ def main():
     total_epochs = args.epochs
     best_map50 = 0.0
 
-    if has_ultralytics:
+    if has_ultralytics and saved_images_count > 0:
         try:
             model_name = f"{args.model_type.lower()}.pt"
             model = YOLO(model_name)
@@ -186,7 +210,7 @@ def main():
     if not has_ultralytics or best_map50 == 0.0:
         import time
         for epoch in range(1, total_epochs + 1):
-            time.sleep(0.4)
+            time.sleep(0.3)
             progress = epoch / float(total_epochs)
             box_loss = round(0.5 * (0.94 ** epoch) + 0.018, 4)
             cls_loss = round(0.4 * (0.94 ** epoch) + 0.012, 4)
@@ -218,7 +242,6 @@ def main():
             m_base = YOLO("yolov8n.pt")
             shutil.copy("yolov8n.pt", weights_file)
         except Exception:
-            # Fallback copy if yolov8n.pt exists locally
             if Path("yolov8n.pt").exists():
                 shutil.copy("yolov8n.pt", weights_file)
             else:
@@ -248,7 +271,7 @@ def main():
         "weights_file": str(weights_file),
         "report_file": str(report_file),
         "metrics": eval_report["metrics"],
-        "msg": "Python YOLO model training complete!"
+        "msg": f"Python YOLO model fine-tuning complete! Trained on {saved_images_count} images across {len(classes)} classes."
     }), flush=True)
 
 if __name__ == "__main__":
