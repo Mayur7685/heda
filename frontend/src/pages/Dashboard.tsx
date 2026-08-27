@@ -307,7 +307,12 @@ export default function Dashboard() {
         });
 
         const coco = {
-          info: { description: publishForm.name || `Heda Dataset #${job.jobId}`, date_created: new Date().toISOString(), source_job_id: job.jobId },
+          info: {
+            description: publishForm.name || `Heda Dataset #${job.jobId}`,
+            date_created: new Date().toISOString(),
+            source_job_id: job.jobId,
+            data_root_hash: job.dataRootHash,
+          },
           images: cocoImages,
           annotations: cocoAnnotations,
           categories: labels.map((name, i) => ({ id: i + 1, name, supercategory: "object" })),

@@ -148,36 +148,70 @@ export default function DatasetDetail() {
   async function download() {
     if (!dataset) return;
     setDownloading(true);
+    setTxMsg("Packaging dataset files…"); setTxErr(false);
     try {
       const JSZip = (await import("jszip")).default;
       const zip = new JSZip();
       const isImage = Number(dataset.dataType) === 0;
 
-      const dataRes = await fetch(`${GALILEO.storageIndexer}/file?root=${dataset.rootHash}`);
-      if (!dataRes.ok) throw new Error("Dataset not found on 0G Storage");
-      const dataText = await dataRes.text();
+      // Fetch COCO JSON or JSONL data via resilient fetchFrom0GStorage
+      let rawData = await fetchFrom0GStorage(dataset.rootHash, 5).catch(() => null);
+
+      // Fallback: try raw HTTP fetch from 0G Storage Indexer
+      if (!rawData) {
+        const res = await fetch(`${GALILEO.storageIndexer}/file?root=${dataset.rootHash}`).catch(() => null);
+        if (res?.ok) {
+          const txt = await res.text();
+          try { rawData = JSON.parse(txt); } catch { rawData = txt; }
+        }
+      }
+
+      if (!rawData) throw new Error("Dataset files not found on 0G Storage");
 
       if (isImage) {
-        zip.file("annotations/instances.json", dataText);
-        try {
-          const coco = JSON.parse(dataText);
-          const sourceRoot = coco.info?.data_root_hash ?? metadata?.dataRootHash;
-          if (sourceRoot) {
-            const imgRes = await fetch(`${GALILEO.storageIndexer}/file?root=${sourceRoot}`).catch(() => null);
-            if (imgRes?.ok) {
-              const files: Array<{ name: string; type: string; data: string }> = await imgRes.json();
-              files.forEach((f, i) => {
-                if (f.data) {
-                  const ext = f.type?.split("/")[1] ?? "jpg";
-                  zip.file(`images/${f.name ?? `image_${i}.${ext}`}`, f.data, { base64: true });
-                }
-              });
-            }
+        const cocoObj = typeof rawData === "object" ? rawData : JSON.parse(String(rawData));
+        
+        // 1. Save COCO annotations file
+        zip.file("annotations/instances.json", JSON.stringify(cocoObj, null, 2));
+
+        // 2. Extract and zip images
+        const imagesList = cocoObj.images ?? [];
+        let addedImages = 0;
+
+        // Try extracting base64 images directly from COCO images array
+        imagesList.forEach((imgObj: any, idx: number) => {
+          let b64 = imgObj.base64;
+          if (b64) {
+            const cleanB64 = b64.includes(",") ? b64.split(",")[1] : b64;
+            const fileName = imgObj.file_name ?? `image_${idx + 1}.jpg`;
+            zip.file(`images/${fileName}`, cleanB64, { base64: true });
+            addedImages++;
           }
-        } catch { /* images unavailable */ }
-        zip.file("README.txt", `Heda Dataset #${datasetId}\nFormat: COCO JSON\nAnnotations: annotations/instances.json\nImages: images/`);
+        });
+
+        // If base64 was not embedded in COCO images, fetch source files from dataRootHash
+        const sourceRoot = cocoObj.info?.data_root_hash ?? metadata?.dataRootHash;
+        if (addedImages === 0 && sourceRoot) {
+          const sourceFiles: any[] = await fetchFrom0GStorage(sourceRoot, 5).catch(() => []);
+          if (Array.isArray(sourceFiles)) {
+            sourceFiles.forEach((f: any, idx: number) => {
+              if (f.data) {
+                const cleanB64 = f.data.includes(",") ? f.data.split(",")[1] : f.data;
+                const fileName = f.name ?? `image_${idx + 1}.jpg`;
+                zip.file(`images/${fileName}`, cleanB64, { base64: true });
+                addedImages++;
+              }
+            });
+          }
+        }
+
+        zip.file(
+          "README.txt",
+          `Heda Dataset #${datasetId}\nFormat: COCO JSON\nAnnotations: annotations/instances.json\nImages Included: ${addedImages}\nPublisher: ${dataset.publisher}`
+        );
       } else {
-        zip.file("dataset.jsonl", dataText);
+        const content = typeof rawData === "string" ? rawData : JSON.stringify(rawData, null, 2);
+        zip.file("dataset.jsonl", content);
         zip.file("README.txt", `Heda Dataset #${datasetId}\nFormat: JSONL\nFile: dataset.jsonl`);
       }
 
@@ -188,8 +222,13 @@ export default function DatasetDetail() {
       a.download = `heda-dataset-${datasetId}.zip`;
       a.click();
       URL.revokeObjectURL(url);
-    } catch (e: any) { setTxMsg(e.message); setTxErr(true); }
-    finally { setDownloading(false); }
+      setTxMsg(`Dataset #${datasetId} downloaded successfully! ✓`);
+    } catch (e: any) {
+      setTxMsg(`Download error: ${e.message}`);
+      setTxErr(true);
+    } finally {
+      setDownloading(false);
+    }
   }
 
       if (!dataset) return <div className="page"><p className="hint">Loading…</p></div>;
