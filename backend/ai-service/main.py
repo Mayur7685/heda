@@ -348,13 +348,19 @@ def call_moondream_detect(base64_str: str, cls_name: str, api_key: str, max_retr
     """Executes Moondream /v1/detect with rate limit throttling (max 2 req/sec) & HTTP 403/429 backoff retries"""
     import urllib.request
     import urllib.error
+    # Format image URL cleanly for Moondream VLM API
+    if base64_str.startswith("data:"):
+        formatted_img_url = base64_str
+    else:
+        formatted_img_url = f"data:image/jpeg;base64,{base64_str}"
+
     headers = {
         "Content-Type": "application/json",
         "X-Moondream-Auth": api_key,
         "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
     }
     body = json.dumps({
-        "image_url": f"data:image/jpeg;base64,{base64_str}",
+        "image_url": formatted_img_url,
         "object": cls_name
     }).encode('utf-8')
 
@@ -377,6 +383,19 @@ def call_moondream_detect(base64_str: str, cls_name: str, api_key: str, max_retr
             time.sleep(1.0)
     return None
 
+def get_synonym_queries(cls_name: str):
+    """Returns fallback zero-shot query synonyms if initial class prompt returns 0 detections"""
+    syn_map = {
+        "hardhat": ["hardhat", "helmet", "safety helmet", "hardhats"],
+        "helmet": ["helmet", "hardhat", "safety helmet"],
+        "person": ["person", "worker", "man", "woman"],
+        "car": ["car", "vehicle", "automobile"],
+        "truck": ["truck", "vehicle"],
+        "dog": ["dog", "pet"],
+        "cat": ["cat", "pet"],
+    }
+    return syn_map.get(cls_name.lower().strip(), [cls_name])
+
 @app.post("/autolabel")
 def autolabel_images(req: AutoLabelRequest):
     """Generates zero-shot bounding boxes for unlabeled images using Moondream Cloud VLM API"""
@@ -391,7 +410,6 @@ def autolabel_images(req: AutoLabelRequest):
 
     results = []
     total_detected = 0
-    rate_limited_count = 0
     
     for idx, img_item in enumerate(req.images):
         img_id = img_item.get("id", idx + 1)
@@ -400,29 +418,37 @@ def autolabel_images(req: AutoLabelRequest):
         
         if base64_str:
             for cls_name in classes:
-                res_data = call_moondream_detect(base64_str, cls_name, moondream_api_key)
-                if res_data and "objects" in res_data and isinstance(res_data["objects"], list):
-                    for obj in res_data["objects"]:
-                        x_min = float(obj.get("x_min", 0))
-                        y_min = float(obj.get("y_min", 0))
-                        x_max = float(obj.get("x_max", 0))
-                        y_max = float(obj.get("y_max", 0))
-                        
-                        # Convert normalized float (0.0 - 1.0) to percentage (0 - 100) if needed
-                        if x_min <= 1.0 and x_max <= 1.0:
-                            x_min *= 100.0
-                            y_min *= 100.0
-                            x_max *= 100.0
-                            y_max *= 100.0
+                queries = get_synonym_queries(cls_name)
+                found_for_cls = False
+                for q_str in queries:
+                    res_data = call_moondream_detect(base64_str, q_str, moondream_api_key)
+                    if res_data and "objects" in res_data and isinstance(res_data["objects"], list) and len(res_data["objects"]) > 0:
+                        print(f"[Moondream Autolabel] Image '{img_id}' query '{q_str}' -> Detected {len(res_data['objects'])} objects")
+                        found_for_cls = True
+                        for obj in res_data["objects"]:
+                            x_min = float(obj.get("x_min", obj.get("xmin", 0)))
+                            y_min = float(obj.get("y_min", obj.get("ymin", 0)))
+                            x_max = float(obj.get("x_max", obj.get("xmax", 0)))
+                            y_max = float(obj.get("y_max", obj.get("ymax", 0)))
                             
-                        boxes.append({
-                            "x_min": round(max(0.0, min(100.0, x_min)), 2),
-                            "y_min": round(max(0.0, min(100.0, y_min)), 2),
-                            "x_max": round(max(0.0, min(100.0, x_max)), 2),
-                            "y_max": round(max(0.0, min(100.0, y_max)), 2),
-                            "label": cls_name,
-                            "confidence": round(float(obj.get("confidence", 0.95)), 2)
-                        })
+                            # Convert normalized float (0.0 - 1.0) to percentage (0 - 100) if needed
+                            if x_min <= 1.0 and x_max <= 1.0:
+                                x_min *= 100.0
+                                y_min *= 100.0
+                                x_max *= 100.0
+                                y_max *= 100.0
+                                
+                            boxes.append({
+                                "x_min": round(max(0.0, min(100.0, x_min)), 2),
+                                "y_min": round(max(0.0, min(100.0, y_min)), 2),
+                                "x_max": round(max(0.0, min(100.0, x_max)), 2),
+                                "y_max": round(max(0.0, min(100.0, y_max)), 2),
+                                "label": cls_name,
+                                "confidence": round(float(obj.get("confidence", 0.95)), 2)
+                            })
+                        break # Found objects with synonym query
+                if not found_for_cls:
+                    print(f"[Moondream Autolabel] Image '{img_id}' query '{cls_name}' -> 0 objects found")
 
         total_detected += len(boxes)
         results.append({
