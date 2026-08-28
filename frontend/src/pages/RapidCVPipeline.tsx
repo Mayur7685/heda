@@ -486,19 +486,16 @@ export default function RapidCVPipeline() {
         const updatedFiles = stagedFiles.map((f) => {
           const match = data.results.find((r: any) => r.id === f.id);
           if (match && Array.isArray(match.annotations) && match.annotations.length > 0) {
-            const imgW = f.width || 800;
-            const imgH = f.height || 600;
-
-            const refW = 680;
-            const refH = Math.round((imgH / imgW) * refW);
+            const canvasW = 820;
+            const canvasH = f.width && f.height ? Math.round((f.height / f.width) * canvasW) : 520;
 
             const rawBoxes: Annotation[] = match.annotations.map((a: any) => ({
               id: uid(),
               type: "bbox",
-              x: (a.x_min / 100) * refW,
-              y: (a.y_min / 100) * refH,
-              w: Math.max(15, ((a.x_max - a.x_min) / 100) * refW),
-              h: Math.max(15, ((a.y_max - a.y_min) / 100) * refH),
+              x: (a.x_min / 100) * canvasW,
+              y: (a.y_min / 100) * canvasH,
+              w: Math.max(15, ((a.x_max - a.x_min) / 100) * canvasW),
+              h: Math.max(15, ((a.y_max - a.y_min) / 100) * canvasH),
               label: a.label || classesToSearch[0] || "object",
               confidence: a.confidence || 0.95,
             }));
@@ -1451,12 +1448,12 @@ export default function RapidCVPipeline() {
                           <svg style={{ position: "absolute", inset: 0, width: "100%", height: "100%", pointerEvents: "none", zIndex: 5 }}>
                             {f.annotations.map((ann) => {
                               if (ann.type === "bbox") {
-                                const refW = 680;
-                                const refH = f.width && f.height ? Math.round((f.height / f.width) * refW) : 450;
-                                const leftPct = `${(ann.x / refW) * 100}%`;
-                                const topPct = `${(ann.y / refH) * 100}%`;
-                                const widthPct = `${(ann.w / refW) * 100}%`;
-                                const heightPct = `${(ann.h / refH) * 100}%`;
+                                const canvasW = 820;
+                                const canvasH = f.width && f.height ? Math.round((f.height / f.width) * canvasW) : 520;
+                                const leftPct = `${(ann.x / canvasW) * 100}%`;
+                                const topPct = `${(ann.y / canvasH) * 100}%`;
+                                const widthPct = `${(ann.w / canvasW) * 100}%`;
+                                const heightPct = `${(ann.h / canvasH) * 100}%`;
                                 return (
                                   <g key={ann.id}>
                                     <rect
