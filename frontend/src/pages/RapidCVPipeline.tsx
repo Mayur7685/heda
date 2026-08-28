@@ -1666,22 +1666,6 @@ export default function RapidCVPipeline() {
                     <button className="btn-primary btn-sm" onClick={closePolygon} style={{ fontSize: 10, padding: "2px 6px" }}>Close Shape</button>
                   </>
                 )}
-
-                <div className="divider-v" style={{ margin: "0 4px" }} />
-                <button
-                  onClick={triggerMoondreamAutoLabel}
-                  disabled={autoLabeling || stagedFiles.length === 0}
-                  style={{
-                    display: "flex", alignItems: "center", gap: 4, padding: "4px 8px",
-                    borderRadius: 4, border: "1px solid #7c3aed66", background: "rgba(124,58,237,0.15)",
-                    color: "#a78bfa", cursor: autoLabeling ? "not-allowed" : "pointer", fontSize: 11, fontWeight: 700,
-                  }}
-                >
-                  <span className="material-symbols-outlined" style={{ fontSize: 14, animation: autoLabeling ? "spin 1s linear infinite" : "none" }}>
-                    {autoLabeling ? "progress_activity" : "smart_toy"}
-                  </span>
-                  {autoLabeling ? "Detecting…" : "AI Suggest"}
-                </button>
               </div>
 
               <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden", background: "#000", position: "relative" }}>
