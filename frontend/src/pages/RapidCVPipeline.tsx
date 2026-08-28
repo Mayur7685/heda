@@ -671,8 +671,10 @@ export default function RapidCVPipeline() {
         totalImages: approvedBatch.length,
         images: approvedBatch.map((f) => ({
           name: f.name,
+          file_name: f.name,
           width: f.width,
           height: f.height,
+          base64: f.data ? (f.data.startsWith("data:") ? f.data : `data:${f.type || "image/jpeg"};base64,${f.data}`) : undefined,
           annotations: f.annotations,
         })),
       };

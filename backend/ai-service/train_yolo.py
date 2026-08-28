@@ -117,12 +117,21 @@ def prepare_yolo_dataset(work_dir, dataset_data):
         label_txt_path = label_dir / f"{Path(file_name).stem}.txt"
         val_label_txt_path = val_label_dir / f"{Path(file_name).stem}.txt"
         yolo_lines = []
-        img_anns = ann_by_img.get(img_id, [])
+        img_anns = ann_by_img.get(img_id, []) or img_info.get("annotations", [])
 
         for ann in img_anns:
-            cat_id = ann.get("category_id", 1)
-            cls_idx = categories_map.get(cat_id, 0)
+            label_str = ann.get("label")
+            if label_str:
+                if label_str not in classes:
+                    classes.append(label_str)
+                cls_idx = classes.index(label_str)
+            else:
+                cat_id = ann.get("category_id", 1)
+                cls_idx = categories_map.get(cat_id, 0)
+
             bbox = ann.get("bbox", [])
+            if not bbox and "x" in ann:
+                bbox = [ann["x"], ann["y"], ann.get("w", 0), ann.get("h", 0)]
 
             if len(bbox) == 4:
                 x, y, w, h = bbox[0], bbox[1], bbox[2], bbox[3]
