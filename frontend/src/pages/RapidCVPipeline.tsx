@@ -13,6 +13,36 @@ interface ChatMessage {
   text: string;
 }
 
+function deduplicateBoxes(boxes: Annotation[], iouThreshold = 0.35): Annotation[] {
+  if (boxes.length <= 1) return boxes;
+  const result: Annotation[] = [];
+  for (const box of boxes) {
+    if (box.type !== "bbox") {
+      result.push(box);
+      continue;
+    }
+    let isDuplicate = false;
+    for (const existing of result) {
+      if (existing.type !== "bbox") continue;
+      const x1 = Math.max(box.x, existing.x);
+      const y1 = Math.max(box.y, existing.y);
+      const x2 = Math.min(box.x + box.w, existing.x + existing.w);
+      const y2 = Math.min(box.y + box.h, existing.y + existing.h);
+      const inter = Math.max(0, x2 - x1) * Math.max(0, y2 - y1);
+      const area1 = box.w * box.h;
+      const area2 = existing.w * existing.h;
+      const union = area1 + area2 - inter;
+      const iou = union > 0 ? inter / union : 0;
+      if (iou > iouThreshold) {
+        isDuplicate = true;
+        break;
+      }
+    }
+    if (!isDuplicate) result.push(box);
+  }
+  return result;
+}
+
 export function HedaConnectButton() {
   return (
     <ConnectButton.Custom>
@@ -465,8 +495,8 @@ export default function RapidCVPipeline() {
               const localData = await localRes.json();
               const detectedObjects = localData.objects ?? [];
 
-              const canvasW = 820;
-              const canvasH = file.width ? Math.round((file.height / file.width) * canvasW) : 520;
+              const refW = 680;
+              const refH = file.width && file.height ? Math.round((file.height / file.width) * refW) : 450;
 
               detectedObjects.forEach((a: any) => {
                 const xMin = a.x_min <= 1.0 ? a.x_min * 100 : a.x_min;
@@ -477,10 +507,10 @@ export default function RapidCVPipeline() {
                 newBoxes.push({
                   id: uid(),
                   type: "bbox",
-                  x: (xMin / 100) * canvasW,
-                  y: (yMin / 100) * canvasH,
-                  w: Math.max(20, ((xMax - xMin) / 100) * canvasW),
-                  h: Math.max(20, ((yMax - yMin) / 100) * canvasH),
+                  x: (xMin / 100) * refW,
+                  y: (yMin / 100) * refH,
+                  w: Math.max(15, ((xMax - xMin) / 100) * refW),
+                  h: Math.max(15, ((yMax - yMin) / 100) * refH),
                   label: clsName,
                   confidence: 0.95,
                 });
@@ -489,10 +519,12 @@ export default function RapidCVPipeline() {
           } catch { /* local server offline, fallback to main ai-service */ }
         }
 
-        if (newBoxes.length > 0) {
-          file.annotations = newBoxes;
+        // Deduplicate overlapping bounding boxes (IoU > 0.35 filter)
+        const cleanBoxes = deduplicateBoxes(newBoxes, 0.35);
+        if (cleanBoxes.length > 0) {
+          file.annotations = cleanBoxes;
           file.approved = true;
-          totalDetectedCount += newBoxes.length;
+          totalDetectedCount += cleanBoxes.length;
         }
       }
 

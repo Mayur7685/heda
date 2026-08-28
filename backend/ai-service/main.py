@@ -402,6 +402,31 @@ def get_synonym_queries(cls_name: str):
     }
     return syn_map.get(cls_name.lower().strip(), [cls_name])
 
+def compute_box_iou(b1: dict, b2: dict) -> float:
+    """Computes Intersection over Union (IoU) between two bounding box dictionaries"""
+    x1 = max(b1["x_min"], b2["x_min"])
+    y1 = max(b1["y_min"], b2["y_min"])
+    x2 = min(b1["x_max"], b2["x_max"])
+    y2 = min(b1["y_max"], b2["y_max"])
+    
+    inter = max(0.0, x2 - x1) * max(0.0, y2 - y1)
+    area1 = (b1["x_max"] - b1["x_min"]) * (b1["y_max"] - b1["y_min"])
+    area2 = (b2["x_max"] - b2["x_min"]) * (b2["y_max"] - b2["y_min"])
+    union = area1 + area2 - inter
+    return inter / union if union > 0 else 0.0
+
+def apply_nms(boxes: list, iou_thresh: float = 0.40) -> list:
+    """Applies Non-Maximum Suppression to remove overlapping duplicate boxes"""
+    if not boxes:
+        return []
+    sorted_b = sorted(boxes, key=lambda x: x.get("confidence", 0.95), reverse=True)
+    keep = []
+    while sorted_b:
+        curr = sorted_b.pop(0)
+        keep.append(curr)
+        sorted_b = [b for b in sorted_b if compute_box_iou(curr, b) < iou_thresh]
+    return keep
+
 @app.post("/autolabel")
 def autolabel_images(req: AutoLabelRequest):
     """Generates zero-shot bounding boxes for unlabeled images using local Moondream VLM engine or cloud API"""
@@ -450,10 +475,12 @@ def autolabel_images(req: AutoLabelRequest):
                 if not found_for_cls:
                     print(f"[Moondream Autolabel] Image '{img_id}' query '{cls_name}' -> 0 objects found")
 
-        total_detected += len(boxes)
+        # Apply Non-Maximum Suppression (NMS) deduplication filter
+        filtered_boxes = apply_nms(boxes, iou_thresh=0.40)
+        total_detected += len(filtered_boxes)
         results.append({
             "id": img_id,
-            "annotations": boxes
+            "annotations": filtered_boxes
         })
         
     return {"ok": True, "results": results, "totalDetected": total_detected}
