@@ -356,37 +356,40 @@ def chat_llm_assistant(req: ChatLLMRequest):
     }
 
 def call_moondream_detect(base64_str: str, cls_name: str, api_key: str = "", max_retries: int = 2):
-    """Executes Moondream /v1/detect via dedicated local Moondream server (moondream_server.py on :2020) or Cloud API"""
+    """Executes Moondream /v1/detect via Moondream Cloud API (https://api.moondream.ai/v1/detect)"""
     formatted_img_url = base64_str if base64_str.startswith("data:") else f"data:image/jpeg;base64,{base64_str}"
     body = json.dumps({"image_url": formatted_img_url, "object": cls_name}).encode('utf-8')
 
-    # 1. Query dedicated local Moondream 2 GPU server (moondream_server.py on port 2020)
+    # 1. Primary: Moondream Cloud API (https://api.moondream.ai/v1/detect)
+    headers = {
+        "Content-Type": "application/json",
+        "User-Agent": "Mozilla/5.0"
+    }
+    if api_key:
+        headers["X-Moondream-Auth"] = api_key
+
+    for attempt in range(max_retries):
+        try:
+            http_req = urllib.request.Request("https://api.moondream.ai/v1/detect", data=body, headers=headers, method="POST")
+            with urllib.request.urlopen(http_req, timeout=12) as response:
+                res_data = json.loads(response.read().decode('utf-8'))
+                if res_data and "objects" in res_data:
+                    print(f"[Moondream Cloud API] Detected {len(res_data['objects'])} objects for '{cls_name}'")
+                    return res_data
+        except Exception as e:
+            print(f"[Moondream Cloud API attempt {attempt+1} note]: {e}")
+            time.sleep(0.4)
+
+    # 2. Fallback to local server (:2020) if Cloud API is unreachable
     try:
         http_req = urllib.request.Request("http://localhost:2020/v1/detect", data=body, headers={"Content-Type": "application/json"}, method="POST")
-        with urllib.request.urlopen(http_req, timeout=8) as response:
+        with urllib.request.urlopen(http_req, timeout=5) as response:
             res_data = json.loads(response.read().decode('utf-8'))
             if res_data and "objects" in res_data:
-                print(f"[Local Moondream Server :2020] Detected {len(res_data['objects'])} objects for '{cls_name}'")
                 return res_data
     except Exception:
         pass
 
-    # 2. Cloud API fallback if API key is provided
-    if api_key:
-        headers = {
-            "Content-Type": "application/json",
-            "X-Moondream-Auth": api_key,
-            "User-Agent": "Mozilla/5.0"
-        }
-        for attempt in range(max_retries):
-            time.sleep(0.4)
-            try:
-                http_req = urllib.request.Request("https://api.moondream.ai/v1/detect", data=body, headers=headers, method="POST")
-                with urllib.request.urlopen(http_req, timeout=10) as response:
-                    return json.loads(response.read().decode('utf-8'))
-            except Exception as e:
-                print(f"[Moondream Cloud API Note attempt {attempt+1}]: {e}")
-                time.sleep(0.8)
     return None
 
 def get_synonym_queries(cls_name: str):

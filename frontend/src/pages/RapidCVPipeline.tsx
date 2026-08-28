@@ -459,7 +459,7 @@ export default function RapidCVPipeline() {
   const [showModelPublishModal, setShowModelPublishModal] = useState(false);
   const [customModelName, setCustomModelName] = useState("");
 
-  // Moondream Local GPU VLM Auto-Labeling Engine
+  // Moondream VLM Auto-Labeling Engine (via Cloud API)
   async function triggerMoondreamAutoLabel() {
     if (stagedFiles.length === 0) return;
 
@@ -467,78 +467,12 @@ export default function RapidCVPipeline() {
     setErrorNotification(null);
 
     const AI_SERVICE_API = import.meta.env.VITE_AI_SERVICE_API ?? "http://localhost:8000";
-    const MOONDREAM_LOCAL_SERVER = "http://localhost:2020/v1/detect";
 
     try {
       const classesToSearch = targetClasses.length > 0 ? targetClasses : ["object"];
       let totalDetectedCount = 0;
-      const updatedFiles = stagedFiles.map((f) => ({ ...f, annotations: [...f.annotations] }));
 
-      // 1. Try local Moondream 2 GPU server (http://localhost:2020/v1/detect) first
-      let usedLocalServer = false;
-
-      for (let i = 0; i < updatedFiles.length; i++) {
-        const file = updatedFiles[i];
-        const imgUrl = file.data.startsWith("data:") ? file.data : `data:${file.type || "image/jpeg"};base64,${file.data}`;
-        const newBoxes: Annotation[] = [];
-
-        for (const clsName of classesToSearch) {
-          try {
-            const localRes = await fetch(MOONDREAM_LOCAL_SERVER, {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ image_url: imgUrl, object: clsName }),
-            });
-
-            if (localRes.ok) {
-              usedLocalServer = true;
-              const localData = await localRes.json();
-              const detectedObjects = localData.objects ?? [];
-
-              const refW = 680;
-              const refH = file.width && file.height ? Math.round((file.height / file.width) * refW) : 450;
-
-              detectedObjects.forEach((a: any) => {
-                const xMin = a.x_min <= 1.0 ? a.x_min * 100 : a.x_min;
-                const yMin = a.y_min <= 1.0 ? a.y_min * 100 : a.y_min;
-                const xMax = a.x_max <= 1.0 ? a.x_max * 100 : a.x_max;
-                const yMax = a.y_max <= 1.0 ? a.y_max * 100 : a.y_max;
-
-                newBoxes.push({
-                  id: uid(),
-                  type: "bbox",
-                  x: (xMin / 100) * refW,
-                  y: (yMin / 100) * refH,
-                  w: Math.max(15, ((xMax - xMin) / 100) * refW),
-                  h: Math.max(15, ((yMax - yMin) / 100) * refH),
-                  label: clsName,
-                  confidence: 0.95,
-                });
-              });
-            }
-          } catch { /* local server offline, fallback to main ai-service */ }
-        }
-
-        // Deduplicate overlapping bounding boxes (IoU > 0.35 filter)
-        const cleanBoxes = deduplicateBoxes(newBoxes, 0.35);
-        if (cleanBoxes.length > 0) {
-          file.annotations = cleanBoxes;
-          file.approved = true;
-          totalDetectedCount += cleanBoxes.length;
-        }
-      }
-
-      if (usedLocalServer) {
-        setStagedFiles(updatedFiles);
-        if (totalDetectedCount === 0) {
-          setErrorNotification("Local Moondream 2 VLM scan completed but found 0 objects matching your target classes. Please annotate objects manually in Step 4: Review & Edit tool.");
-        } else {
-          setTimeout(() => advanceToStage("review", 3), 1600);
-        }
-        return;
-      }
-
-      // 2. Fallback: Call main Python AI service on port 8000 (/autolabel)
+      // Call main Python AI service on port 8000 (/autolabel -> Moondream Cloud API)
       const payload = stagedFiles.map((f) => ({ id: f.id, base64: f.data }));
       const res = await fetch(`${AI_SERVICE_API}/autolabel`, {
         method: "POST",
@@ -548,45 +482,42 @@ export default function RapidCVPipeline() {
       const data = await res.json();
 
       if (data.ok && Array.isArray(data.results)) {
-        data.results.forEach((r: any) => {
-          if (Array.isArray(r.annotations)) {
-            totalDetectedCount += r.annotations.length;
-          }
-        });
-
         setStagedFiles((prev) =>
           prev.map((f) => {
             const match = data.results.find((r: any) => r.id === f.id);
             if (match && Array.isArray(match.annotations) && match.annotations.length > 0) {
-              const canvasW = 820;
-              const canvasH = f.width ? Math.round((f.height / f.width) * canvasW) : 520;
-              const formattedBoxes: Annotation[] = match.annotations.map((a: any) => ({
+              const refW = 680;
+              const refH = f.width && f.height ? Math.round((f.height / f.width) * refW) : 450;
+
+              const rawBoxes: Annotation[] = match.annotations.map((a: any) => ({
                 id: uid(),
                 type: "bbox",
-                x: (a.x_min / 100) * canvasW,
-                y: (a.y_min / 100) * canvasH,
-                w: Math.max(20, ((a.x_max - a.x_min) / 100) * canvasW),
-                h: Math.max(20, ((a.y_max - a.y_min) / 100) * canvasH),
+                x: (a.x_min / 100) * refW,
+                y: (a.y_min / 100) * refH,
+                w: Math.max(15, ((a.x_max - a.x_min) / 100) * refW),
+                h: Math.max(15, ((a.y_max - a.y_min) / 100) * refH),
                 label: a.label || classesToSearch[0] || "object",
                 confidence: a.confidence || 0.95,
               }));
-              return { ...f, annotations: formattedBoxes, approved: true };
+
+              const cleanBoxes = deduplicateBoxes(rawBoxes, 0.35);
+              totalDetectedCount += cleanBoxes.length;
+              return { ...f, annotations: cleanBoxes, approved: true };
             }
             return f;
           })
         );
 
         if (totalDetectedCount === 0) {
-          setErrorNotification("Moondream AI completed scan but found 0 objects matching your target classes. Draw annotations manually using Review & Edit tool.");
+          setErrorNotification("Moondream Cloud API completed scan but found 0 objects matching your target classes. Draw annotations manually using Review & Edit tool.");
         } else {
           setTimeout(() => advanceToStage("review", 3), 1600);
         }
       } else {
-        setErrorNotification(data.error || "Moondream AI Auto-Labeling is currently unreachable. Draw annotations manually using Review & Edit tool.");
+        setErrorNotification(data.error || "Moondream Cloud API Auto-Labeling is currently unreachable. Draw annotations manually using Review & Edit tool.");
       }
-    } catch (err: any) {
-      console.warn("Auto-labeling network error:", err);
-      setErrorNotification("Moondream GPU Auto-Labeling server offline. Run 'python3 moondream_server.py' or 'python3 main.py' in backend/ai-service.");
+    } catch (e: any) {
+      setErrorNotification(`Auto-Labeling Failed: ${e?.message || e}. Please ensure http://localhost:8000 AI service is running.`);
     } finally {
       setAutoLabeling(false);
     }
