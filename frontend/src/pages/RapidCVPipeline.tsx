@@ -1502,17 +1502,36 @@ export default function RapidCVPipeline() {
                                 const widthPct = `${(ann.w / 820) * 100}%`;
                                 const heightPct = `${(ann.h / 520) * 100}%`;
                                 return (
-                                  <rect
-                                    key={ann.id}
-                                    x={leftPct}
-                                    y={topPct}
-                                    width={widthPct}
-                                    height={heightPct}
-                                    fill="rgba(0, 228, 121, 0.18)"
-                                    stroke="#00e479"
-                                    strokeWidth="2"
-                                    rx="2"
-                                  />
+                                  <g key={ann.id}>
+                                    <rect
+                                      x={leftPct}
+                                      y={topPct}
+                                      width={widthPct}
+                                      height={heightPct}
+                                      fill="rgba(0, 228, 121, 0.18)"
+                                      stroke="#00e479"
+                                      strokeWidth="2"
+                                      rx="2"
+                                    />
+                                    <rect
+                                      x={leftPct}
+                                      y={`calc(${topPct} - 16px)`}
+                                      width={`${Math.max(45, (ann.label || "object").length * 7 + 10)}px`}
+                                      height="16px"
+                                      fill="#00e479"
+                                      rx="2"
+                                    />
+                                    <text
+                                      x={`calc(${leftPct} + 4px)`}
+                                      y={`calc(${topPct} - 4px)`}
+                                      fill="#000"
+                                      fontSize="10px"
+                                      fontWeight="bold"
+                                      fontFamily="sans-serif"
+                                    >
+                                      {ann.label || "object"}
+                                    </text>
+                                  </g>
                                 );
                               }
                               return null;

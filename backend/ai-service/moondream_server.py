@@ -59,14 +59,17 @@ class MoondreamRequestHandler(BaseHTTPRequestHandler):
             return
 
         try:
-            if image_url.startswith("data:image"):
+            if "," in image_url:
                 header, encoded = image_url.split(",", 1)
                 image_data = base64.b64decode(encoded)
                 image = Image.open(BytesIO(image_data))
-            else:
+            elif image_url.startswith("http://") or image_url.startswith("https://"):
                 req = urllib.request.Request(image_url, headers={'User-Agent': 'Mozilla/5.0'})
                 with urllib.request.urlopen(req) as response:
                     image = Image.open(BytesIO(response.read()))
+            else:
+                image_data = base64.b64decode(image_url)
+                image = Image.open(BytesIO(image_data))
         except Exception as e:
             self.send_response(400)
             self.send_header('Content-Type', 'application/json')
