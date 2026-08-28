@@ -470,7 +470,6 @@ export default function RapidCVPipeline() {
 
     try {
       const classesToSearch = targetClasses.length > 0 ? targetClasses : ["object"];
-      let totalDetectedCount = 0;
 
       // Call main Python AI service on port 8000 (/autolabel -> Moondream Cloud API)
       const payload = stagedFiles.map((f) => ({ id: f.id, base64: f.data }));
@@ -482,35 +481,41 @@ export default function RapidCVPipeline() {
       const data = await res.json();
 
       if (data.ok && Array.isArray(data.results)) {
-        setStagedFiles((prev) =>
-          prev.map((f) => {
-            const match = data.results.find((r: any) => r.id === f.id);
-            if (match && Array.isArray(match.annotations) && match.annotations.length > 0) {
-              const refW = 680;
-              const refH = f.width && f.height ? Math.round((f.height / f.width) * refW) : 450;
+        let totalCount = 0;
 
-              const rawBoxes: Annotation[] = match.annotations.map((a: any) => ({
-                id: uid(),
-                type: "bbox",
-                x: (a.x_min / 100) * refW,
-                y: (a.y_min / 100) * refH,
-                w: Math.max(15, ((a.x_max - a.x_min) / 100) * refW),
-                h: Math.max(15, ((a.y_max - a.y_min) / 100) * refH),
-                label: a.label || classesToSearch[0] || "object",
-                confidence: a.confidence || 0.95,
-              }));
+        const updatedFiles = stagedFiles.map((f) => {
+          const match = data.results.find((r: any) => r.id === f.id);
+          if (match && Array.isArray(match.annotations) && match.annotations.length > 0) {
+            const imgW = f.width || 800;
+            const imgH = f.height || 600;
 
-              const cleanBoxes = deduplicateBoxes(rawBoxes, 0.35);
-              totalDetectedCount += cleanBoxes.length;
-              return { ...f, annotations: cleanBoxes, approved: true };
-            }
-            return f;
-          })
-        );
+            const refW = 680;
+            const refH = Math.round((imgH / imgW) * refW);
 
-        if (totalDetectedCount === 0) {
+            const rawBoxes: Annotation[] = match.annotations.map((a: any) => ({
+              id: uid(),
+              type: "bbox",
+              x: (a.x_min / 100) * refW,
+              y: (a.y_min / 100) * refH,
+              w: Math.max(15, ((a.x_max - a.x_min) / 100) * refW),
+              h: Math.max(15, ((a.y_max - a.y_min) / 100) * refH),
+              label: a.label || classesToSearch[0] || "object",
+              confidence: a.confidence || 0.95,
+            }));
+
+            const cleanBoxes = deduplicateBoxes(rawBoxes, 0.35);
+            totalCount += cleanBoxes.length;
+            return { ...f, annotations: cleanBoxes, approved: true };
+          }
+          return f;
+        });
+
+        setStagedFiles(updatedFiles);
+
+        if (totalCount === 0) {
           setErrorNotification("Moondream Cloud API completed scan but found 0 objects matching your target classes. Draw annotations manually using Review & Edit tool.");
         } else {
+          setErrorNotification(null);
           setTimeout(() => advanceToStage("review", 3), 1600);
         }
       } else {
@@ -1406,53 +1411,37 @@ export default function RapidCVPipeline() {
                           style={{ width: "100%", height: "100%", objectFit: "cover" }}
                         />
 
-                        {/* High-Tech Shredder / Laser Scanner Animation */}
+                        {/* Minimal Atmospheric Organic Morphing AI Loading Animation */}
                         {autoLabeling && (
-                          <>
-                            {/* Cyberpunk Matrix Holographic Grid Sweep */}
-                            <div
-                              style={{
-                                position: "absolute", inset: 0,
-                                backgroundImage: "linear-gradient(rgba(0, 228, 121, 0.15) 1px, transparent 1px), linear-gradient(90deg, rgba(0, 228, 121, 0.15) 1px, transparent 1px)",
-                                backgroundSize: "18px 18px",
-                                pointerEvents: "none",
-                                opacity: 0.6,
-                              }}
-                            />
-
-                            {/* High-Tech Glowing Laser Shredder Beam */}
-                            <div
-                              style={{
-                                position: "absolute", left: 0, right: 0, height: 3,
-                                background: "linear-gradient(90deg, transparent 0%, var(--primary) 50%, #7c3aed 100%)",
-                                boxShadow: "0 0 12px var(--primary), 0 0 24px #7c3aed, 0 0 36px #00e479",
-                                animation: `vlmLaserScan ${1.4 + (i % 3) * 0.4}s cubic-bezier(0.4, 0, 0.6, 1) infinite`,
-                                pointerEvents: "none",
-                                zIndex: 10,
-                              }}
-                            />
-
-                            {/* Top HUD Telemetry Tag */}
-                            <div
-                              style={{
-                                position: "absolute", top: 8, left: 8,
-                                display: "flex", alignItems: "center", gap: 4,
-                                background: "rgba(0,0,0,0.8)", border: "1px solid rgba(0,228,121,0.5)",
-                                borderRadius: 4, padding: "2px 6px", fontSize: 9, color: "var(--primary)",
-                                fontFamily: "'Space Grotesk', monospace", fontWeight: 800, textTransform: "uppercase",
-                                zIndex: 12,
-                              }}
-                            >
-                              <span className="material-symbols-outlined" style={{ fontSize: 11, animation: "spin 1s linear infinite" }}>radial_point</span>
-                              SHREDDER SCAN
-                            </div>
-
-                            {/* Four Corner HUD Target Reticles */}
-                            <div style={{ position: "absolute", top: 6, left: 6, width: 10, height: 10, borderTop: "2px solid var(--primary)", borderLeft: "2px solid var(--primary)", pointerEvents: "none", zIndex: 11 }} />
-                            <div style={{ position: "absolute", top: 6, right: 6, width: 10, height: 10, borderTop: "2px solid var(--primary)", borderRight: "2px solid var(--primary)", pointerEvents: "none", zIndex: 11 }} />
-                            <div style={{ position: "absolute", bottom: 32, left: 6, width: 10, height: 10, borderBottom: "2px solid var(--primary)", borderLeft: "2px solid var(--primary)", pointerEvents: "none", zIndex: 11 }} />
-                            <div style={{ position: "absolute", bottom: 32, right: 6, width: 10, height: 10, borderBottom: "2px solid var(--primary)", borderRight: "2px solid var(--primary)", pointerEvents: "none", zIndex: 11 }} />
-                          </>
+                          <div style={{
+                            position: "absolute", inset: 0, zIndex: 10, overflow: "hidden",
+                            background: "#080c14", display: "flex", alignItems: "center", justifyContent: "center",
+                          }}>
+                            <div style={{
+                              position: "absolute", width: 120, height: 120, borderRadius: "50%",
+                              background: "radial-gradient(circle, rgba(0,228,121,0.5) 0%, rgba(124,58,237,0.2) 60%, transparent 80%)",
+                              filter: "blur(25px)",
+                              animation: `organicBlobMorph1 ${10 + (i % 3) * 2}s cubic-bezier(0.4, 0, 0.2, 1) infinite alternate`,
+                            }} />
+                            <div style={{
+                              position: "absolute", width: 140, height: 140, borderRadius: "45%",
+                              background: "radial-gradient(circle, rgba(124,58,237,0.45) 0%, rgba(0,191,255,0.2) 60%, transparent 80%)",
+                              filter: "blur(30px)",
+                              animation: `organicBlobMorph2 ${14 + (i % 2) * 3}s cubic-bezier(0.37, 0, 0.63, 1) infinite alternate`,
+                            }} />
+                            <div style={{
+                              position: "absolute", width: 100, height: 100, borderRadius: "60%",
+                              background: "radial-gradient(circle, rgba(0,228,121,0.35) 0%, rgba(255,215,0,0.15) 70%, transparent 90%)",
+                              filter: "blur(20px)",
+                              animation: `organicBlobMorph3 ${12 + (i % 4) * 2}s cubic-bezier(0.45, 0.05, 0.55, 0.95) infinite alternate`,
+                            }} />
+                            <div style={{
+                              position: "absolute", inset: 0,
+                              background: "linear-gradient(115deg, transparent 20%, rgba(255,255,255,0.05) 50%, transparent 80%)",
+                              animation: "organicShimmer 6s cubic-bezier(0.4, 0, 0.6, 1) infinite",
+                              pointerEvents: "none",
+                            }} />
+                          </div>
                         )}
 
                         {/* Overlay Bounding Box Wireframe Preview when completed */}
@@ -1460,10 +1449,12 @@ export default function RapidCVPipeline() {
                           <svg style={{ position: "absolute", inset: 0, width: "100%", height: "100%", pointerEvents: "none", zIndex: 5 }}>
                             {f.annotations.map((ann) => {
                               if (ann.type === "bbox") {
-                                const leftPct = `${(ann.x / 820) * 100}%`;
-                                const topPct = `${(ann.y / 520) * 100}%`;
-                                const widthPct = `${(ann.w / 820) * 100}%`;
-                                const heightPct = `${(ann.h / 520) * 100}%`;
+                                const refW = 680;
+                                const refH = f.width && f.height ? Math.round((f.height / f.width) * refW) : 450;
+                                const leftPct = `${(ann.x / refW) * 100}%`;
+                                const topPct = `${(ann.y / refH) * 100}%`;
+                                const widthPct = `${(ann.w / refW) * 100}%`;
+                                const heightPct = `${(ann.h / refH) * 100}%`;
                                 return (
                                   <g key={ann.id}>
                                     <rect
