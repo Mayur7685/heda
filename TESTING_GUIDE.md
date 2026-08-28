@@ -1,10 +1,82 @@
 # 🧪 Heda Protocol — Comprehensive Judge & Developer Testing Guide
 
-This testing guide provides step-by-step instructions for testing every feature of Heda Protocol, including expected terminal outputs, onchain responses, and UI state verification.
+This testing guide provides step-by-step instructions for testing every feature of Heda Protocol locally, including exact terminal commands, expected outputs, onchain responses, and UI state verification.
 
 ---
 
-## 🎯 Test Scenario Overview
+## 💻 Step 0: Terminal Startup Commands for Local Testing
+
+Open 4 terminal windows to launch all sub-services locally:
+
+### Terminal 1 — Frontend Web Application (Port 5173)
+```bash
+cd frontend
+npm install
+npm run dev
+```
+*App will run at `http://localhost:5173`*
+
+### Terminal 2 — Node.js & SQLite Relayer Indexer (Port 3001)
+```bash
+cd backend/relayer
+npm install
+npm start
+```
+*Indexer API will run at `http://localhost:3001`*
+
+### Terminal 3 — Local Moondream 2 VLM Server (Port 2020)
+```bash
+cd backend/ai-service
+python3 -m pip install -r requirements.txt --break-system-packages
+python3 moondream_server.py
+```
+*Dedicated VLM Server will load model onto GPU & run at `http://localhost:2020`*
+
+### Terminal 4 — PyTorch YOLO Fine-Tuning & Inference Service (Port 8000)
+```bash
+cd backend/ai-service
+python3 main.py
+```
+*Main AI Microservice will run at `http://localhost:8000`*
+
+---
+
+## 💻 CLI Verification & Test Commands
+
+You can also run these direct terminal commands to verify each subsystem:
+
+### 1. Smart Contract Unit Tests (Foundry)
+```bash
+cd contracts
+forge test
+```
+*Expected Output: `Ran 2 test suites: 17 passed, 0 failed`*
+
+### 2. Event Indexer Status & Onchain Database Queries
+```bash
+curl http://localhost:3001/indexer/status
+curl http://localhost:3001/indexer/jobs
+curl http://localhost:3001/indexer/datasets
+```
+*Expected Output: JSON object containing indexed block status and active jobs*
+
+### 3. Local Moondream 2 VLM Bounding Box Detection Test
+```bash
+curl -X POST http://localhost:2020/v1/detect \
+  -H "Content-Type: application/json" \
+  -d '{"image_url": "https://raw.githubusercontent.com/ultralytics/yolov5/master/data/images/zidane.jpg", "object": "person"}'
+```
+*Expected Output: JSON containing detected bounding box coordinates `[x_min, y_min, x_max, y_max]`*
+
+### 4. AI Microservice Swagger & Health Check
+```bash
+curl http://localhost:8000/
+```
+*Expected Output: `{"message": "Heda AI Microservice Running"}`*
+
+---
+
+## 🎯 Full End-to-End User Test Scenario
 
 1. **Step 1: Wallet Setup & Faucet Funds**
 2. **Step 2: Create an Image Annotation Bounty Job**
