@@ -214,19 +214,6 @@ export default function DatasetDetail() {
           }
         }
 
-        // Path C: Fallback to realImages UI preview state array
-        if (addedImages === 0 && realImages.length > 0) {
-          realImages.forEach((imgObj: any, idx: number) => {
-            let b64 = imgObj.url ?? imgObj.data ?? imgObj.base64;
-            if (b64 && typeof b64 === "string") {
-              const cleanB64 = b64.includes(",") ? b64.split(",")[1] : b64;
-              const fileName = imgObj.name ?? `image_${idx + 1}.jpg`;
-              zip.file(`images/${fileName}`, cleanB64, { base64: true });
-              addedImages++;
-            }
-          });
-        }
-
         zip.file(
           "README.txt",
           `Heda Dataset #${datasetId}\nFormat: COCO JSON\nAnnotations: annotations/instances.json\nImages Included: ${addedImages}\nPublisher: ${dataset.publisher}`

@@ -62,6 +62,8 @@ export async function fetchFrom0GStorage<T = any>(rootHash: string, maxRetries =
   }
 
   const endpoints = [
+    `${UPLOAD_API}/file?root=${normHash}`,
+    `${UPLOAD_API}/file?root=${rawHash}`,
     `https://indexer-storage-testnet-turbo.0g.ai/file?root=${normHash}`,
     `https://indexer-storage-testnet-turbo.0g.ai/file?root=${rawHash}`,
     `https://indexer-storage-testnet-standard.0g.ai/file?root=${normHash}`,

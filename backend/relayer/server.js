@@ -75,6 +75,32 @@ app.post('/upload', (req, res) => {
     });
 });
 
+// GET /file?root=... (0G Storage file proxy)
+app.get('/file', async (req, res) => {
+  const root = req.query.root;
+  if (!root) return res.status(400).json({ error: 'Missing root query param' });
+  const normHash = root.startsWith('0x') ? root : `0x${root}`;
+  const rawHash = root.replace(/^0x/, '');
+
+  const endpoints = [
+    `${STORAGE_INDEXER}/file?root=${normHash}`,
+    `${STORAGE_INDEXER}/file?root=${rawHash}`,
+    `https://indexer-storage-testnet-standard.0g.ai/file?root=${normHash}`,
+    `https://indexer-storage-testnet-standard.0g.ai/file?root=${rawHash}`,
+  ];
+
+  for (const endpoint of endpoints) {
+    try {
+      const resp = await fetch(endpoint);
+      if (resp.ok) {
+        const text = await resp.text();
+        return res.send(text);
+      }
+    } catch {}
+  }
+  res.status(404).json({ error: 'File not found on 0G Storage' });
+});
+
 // ── Lightweight Event Indexer Endpoints ─────────────────────────────────────
 app.get('/indexer/jobs', (_, res) => res.json(getIndexedJobs()));
 app.get('/indexer/datasets', (_, res) => res.json(getIndexedDatasets()));
