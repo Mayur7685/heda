@@ -693,3 +693,131 @@ if __name__ == "__main__":
     import uvicorn
     import sys
     uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Annotation IoU Scoring  (Phase 2 — multi-annotator quality pipeline)
+# ─────────────────────────────────────────────────────────────────────────────
+
+class AnnotationScoreRequest(BaseModel):
+    """Request body for POST /annotation/score"""
+    imageBase64: str                        # Raw base64 or data-URI of the task image
+    submittedBoxes: list                    # List of {label, x, y, w, h} dicts
+    moondreamClasses: list = ["object"]     # Classes to detect via Moondream API
+
+
+def compute_iou(box_a: dict, box_b: dict) -> float:
+    """
+    Compute Intersection-over-Union (IoU) for two bounding boxes.
+    Boxes in {x, y, w, h} format (top-left origin, pixel coords).
+    Returns float in [0.0, 1.0].
+    """
+    ax1, ay1 = box_a["x"], box_a["y"]
+    ax2, ay2 = ax1 + box_a["w"], ay1 + box_a["h"]
+    bx1, by1 = box_b["x"], box_b["y"]
+    bx2, by2 = bx1 + box_b["w"], by1 + box_b["h"]
+
+    ix1 = max(ax1, bx1)
+    iy1 = max(ay1, by1)
+    ix2 = min(ax2, bx2)
+    iy2 = min(ay2, by2)
+
+    inter = max(0.0, ix2 - ix1) * max(0.0, iy2 - iy1)
+    area_a = (ax2 - ax1) * (ay2 - ay1)
+    area_b = (bx2 - bx1) * (by2 - by1)
+    union  = area_a + area_b - inter
+
+    return inter / union if union > 0 else 0.0
+
+
+def score_submission(submitted: list, ground_truth: list) -> float:
+    """
+    Mean best-match IoU per GT box.
+    Only matches submitted boxes with the same label.
+    Returns 0.0 if no GT boxes available.
+    """
+    if not ground_truth:
+        return 0.0
+
+    per_box_scores = []
+    for gt in ground_truth:
+        gt_label = gt.get("label", "")
+        same_label = [b for b in submitted if b.get("label", "") == gt_label]
+        best_iou = max((compute_iou(gt, s) for s in same_label), default=0.0)
+        per_box_scores.append(best_iou)
+
+    return sum(per_box_scores) / len(per_box_scores) if per_box_scores else 0.0
+
+
+def normalize_moondream_boxes(moondream_objects: list, img_w: int, img_h: int, label: str) -> list:
+    """
+    Convert Moondream fractional bbox coords to {label, x, y, w, h} pixel coords.
+    Supports both list [x0,y0,x1,y1] and dict {'x_min':...} formats.
+    """
+    boxes = []
+    for obj in moondream_objects:
+        bbox = obj.get("bbox", obj)
+        if isinstance(bbox, (list, tuple)) and len(bbox) == 4:
+            x0, y0, x1, y1 = bbox
+        elif isinstance(bbox, dict):
+            x0 = bbox.get("x_min", bbox.get("x", 0))
+            y0 = bbox.get("y_min", bbox.get("y", 0))
+            x1 = bbox.get("x_max", x0 + bbox.get("w", 0))
+            y1 = bbox.get("y_max", y0 + bbox.get("h", 0))
+        else:
+            continue
+        boxes.append({
+            "label": label,
+            "x": x0 * img_w,
+            "y": y0 * img_h,
+            "w": (x1 - x0) * img_w,
+            "h": (y1 - y0) * img_h,
+        })
+    return boxes
+
+
+@app.post("/annotation/score")
+async def score_annotation(req: AnnotationScoreRequest):
+    """
+    Score an annotator's bounding-box submission against Moondream ground truth.
+
+    Flow:
+    1. Decode task image from base64.
+    2. Call Moondream /detect once per class in moondreamClasses.
+    3. Compute mean-best-match IoU vs submitted boxes.
+    4. Return iouScore + ground-truth boxes (cached by annotation-indexer to avoid re-calling Moondream).
+    """
+    moondream_api_key = os.getenv("MOONDREAM_API_KEY", "")
+
+    try:
+        img_bytes = base64.b64decode(req.imageBase64.split(",")[-1])
+        img = Image.open(BytesIO(img_bytes)).convert("RGB")
+        img_w, img_h = img.size
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Invalid image: {e}")
+
+    # Rebuild data-URI for Moondream
+    buffered = BytesIO()
+    img.save(buffered, format="JPEG", quality=85)
+    b64_img = base64.b64encode(buffered.getvalue()).decode("utf-8")
+    data_uri = f"data:image/jpeg;base64,{b64_img}"
+
+    # Collect GT boxes from Moondream for all requested classes
+    all_gt_boxes: list = []
+    for cls_name in req.moondreamClasses:
+        result = call_moondream_detect(data_uri, cls_name, moondream_api_key)
+        if result and "objects" in result:
+            boxes = normalize_moondream_boxes(result["objects"], img_w, img_h, cls_name)
+            all_gt_boxes.extend(boxes)
+
+    iou_score = score_submission(req.submittedBoxes, all_gt_boxes)
+
+    print(f"[Annotation/Score] GT={len(all_gt_boxes)}, submitted={len(req.submittedBoxes)}, IoU={iou_score:.4f}")
+
+    return {
+        "ok": True,
+        "iouScore":         round(iou_score, 4),
+        "groundTruthBoxes": all_gt_boxes,
+        "submittedBoxes":   req.submittedBoxes,
+        "imageSize":        {"width": img_w, "height": img_h},
+    }
