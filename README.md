@@ -2,6 +2,8 @@
 
 > **Heda Protocol** is a decentralized end-to-end AI data pipeline, bounding box annotation marketplace, and model training ecosystem built natively on **0G Storage** and **0G Galileo Testnet**. 
 
+> 📄 **Detailed Pipeline Technical Documentation**: Read [DATASET_PIPELINE.md](file:///Users/mayurasodara/Desktop/0g-heda/heda/DATASET_PIPELINE.md) for a complete step-by-step technical breakdown of image base64 embedding, 0G Storage pinning, Moondream zero-shot auto-labeling, and PyTorch YOLOv8 model training. 
+
 ---
 
 ## 🌟 Key Subsystems & Features
