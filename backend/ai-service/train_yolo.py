@@ -154,6 +154,29 @@ def prepare_yolo_dataset(work_dir, dataset_data):
         with open(val_label_txt_path, "w") as f:
             f.write(label_content)
 
+    # Fallback: if images were not embedded directly in COCO images list, fetch source files from 0G Storage data_root_hash
+    if saved_images_count == 0 and isinstance(dataset_data, dict):
+        source_hash = dataset_data.get("info", {}).get("data_root_hash") or dataset_data.get("data_root_hash") or dataset_data.get("dataRootHash")
+        if source_hash:
+            source_data = fetch_from_0g(source_hash, parse_args().indexer_url)
+            source_list = source_data if isinstance(source_data, list) else list(source_data.values()) if isinstance(source_data, dict) else []
+            for idx, item in enumerate(source_list):
+                if isinstance(item, dict):
+                    b64 = item.get("data") or item.get("base64")
+                    file_name = item.get("name") or item.get("file_name") or f"img_{idx}.jpg"
+                    if b64:
+                        if "," in b64:
+                            b64 = b64.split(",")[1]
+                        try:
+                            img_bytes = base64.b64decode(b64)
+                            with open(img_dir / file_name, "wb") as f:
+                                f.write(img_bytes)
+                            with open(val_dir / file_name, "wb") as f:
+                                f.write(img_bytes)
+                            saved_images_count += 1
+                        except Exception:
+                            pass
+
     yaml_path = dataset_path / "dataset.yaml"
     yaml_content = f"""path: {dataset_path.absolute()}
 train: images/train
@@ -166,7 +189,7 @@ names:
     with open(yaml_path, "w") as f:
         f.write(yaml_content)
 
-    return str(yaml_path), classes, saved_images_count
+    return str(yaml_path), classes
 
 def main():
     args = parse_args()
