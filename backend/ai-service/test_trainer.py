@@ -27,7 +27,7 @@ class TestHedaAIService(unittest.TestCase):
             "categories": [{"id": 0, "name": "hardhat"}, {"id": 1, "name": "safety_vest"}],
             "labels": ["hardhat", "safety_vest"]
         }
-        yaml_path, classes = prepare_yolo_dataset(self.test_dir, sample_dataset)
+        yaml_path, classes, saved_count = prepare_yolo_dataset(self.test_dir, sample_dataset)
 
         self.assertTrue(os.path.exists(yaml_path))
         self.assertEqual(classes, ["hardhat", "safety_vest"])

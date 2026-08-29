@@ -1,5 +1,53 @@
 const UPLOAD_API = import.meta.env.VITE_UPLOAD_API ?? "http://localhost:3001";
 
+// Global in-memory cache to handle large datasets (>5MB) without blowing localStorage quota
+const memoryCache: Map<string, any> = (window as any).__0G_MEMORY_CACHE__ || new Map();
+(window as any).__0G_MEMORY_CACHE__ = memoryCache;
+
+// Simple IndexedDB wrapper for large dataset storage (supports gigabytes)
+const DB_NAME = "Heda0GStorageDB";
+const STORE_NAME = "0g_data_cache";
+
+function openDB(): Promise<IDBDatabase> {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open(DB_NAME, 1);
+    request.onupgradeneeded = () => {
+      const db = request.result;
+      if (!db.objectStoreNames.contains(STORE_NAME)) {
+        db.createObjectStore(STORE_NAME);
+      }
+    };
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
+  });
+}
+
+async function getFromIndexedDB(key: string): Promise<any> {
+  try {
+    const db = await openDB();
+    return new Promise((resolve) => {
+      const tx = db.transaction(STORE_NAME, "readonly");
+      const store = tx.objectStore(STORE_NAME);
+      const req = store.get(key);
+      req.onsuccess = () => resolve(req.result ?? null);
+      req.onerror = () => resolve(null);
+    });
+  } catch {
+    return null;
+  }
+}
+
+async function setToIndexedDB(key: string, value: any): Promise<void> {
+  try {
+    const db = await openDB();
+    const tx = db.transaction(STORE_NAME, "readwrite");
+    const store = tx.objectStore(STORE_NAME);
+    store.put(value, key);
+  } catch {
+    /* ignore IndexedDB errors */
+  }
+}
+
 async function post(base64: string): Promise<string> {
   const res = await fetch(`${UPLOAD_API}/upload`, {
     method: "POST",
@@ -40,12 +88,24 @@ export async function uploadJson(data: object): Promise<string> {
 
 export function cache0GData(rootHash: string, data: any) {
   if (!rootHash) return;
-  const strData = typeof data === "string" ? data : JSON.stringify(data);
   const normHash = rootHash.startsWith("0x") ? rootHash : `0x${rootHash}`;
   const rawHash = rootHash.replace(/^0x/, "");
+
+  // 1. In-memory cache
+  memoryCache.set(normHash, data);
+  memoryCache.set(rawHash, data);
+
+  // 2. IndexedDB (supports multi-megabyte payloads)
+  setToIndexedDB(normHash, data);
+  setToIndexedDB(rawHash, data);
+
+  // 3. LocalStorage fallback for small metadata
   try {
-    localStorage.setItem(`0g_cache_${normHash}`, strData);
-    localStorage.setItem(`0g_cache_${rawHash}`, strData);
+    const strData = typeof data === "string" ? data : JSON.stringify(data);
+    if (strData.length < 3_000_000) {
+      localStorage.setItem(`0g_cache_${normHash}`, strData);
+      localStorage.setItem(`0g_cache_${rawHash}`, strData);
+    }
   } catch { /* ignore localStorage quota limits */ }
 }
 
@@ -55,12 +115,31 @@ export async function fetchFrom0GStorage<T = any>(rootHash: string, maxRetries =
   const normHash = rootHash.startsWith("0x") ? rootHash : `0x${rootHash}`;
   const rawHash = rootHash.replace(/^0x/, "");
 
-  // Check local storage cache first (both normalized & raw)
-  const cached = localStorage.getItem(`0g_cache_${normHash}`) || localStorage.getItem(`0g_cache_${rawHash}`);
-  if (cached) {
-    try { return JSON.parse(cached); } catch { return cached as any; }
+  // 1. In-memory cache check
+  if (memoryCache.has(normHash)) return memoryCache.get(normHash);
+  if (memoryCache.has(rawHash)) return memoryCache.get(rawHash);
+
+  // 2. IndexedDB check
+  const idbCached = (await getFromIndexedDB(normHash)) || (await getFromIndexedDB(rawHash));
+  if (idbCached) {
+    memoryCache.set(normHash, idbCached);
+    return idbCached as T;
   }
 
+  // 3. LocalStorage check
+  const cached = localStorage.getItem(`0g_cache_${normHash}`) || localStorage.getItem(`0g_cache_${rawHash}`);
+  if (cached) {
+    try {
+      const parsed = JSON.parse(cached);
+      memoryCache.set(normHash, parsed);
+      return parsed as T;
+    } catch {
+      memoryCache.set(normHash, cached);
+      return cached as any;
+    }
+  }
+
+  // 4. Remote 0G Storage Network endpoints
   const endpoints = [
     `${UPLOAD_API}/file?root=${normHash}`,
     `${UPLOAD_API}/file?root=${rawHash}`,

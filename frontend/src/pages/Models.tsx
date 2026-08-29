@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import { useWallet } from "../hooks/useWallet";
 import { useModelRegistry, ModelTypeNames } from "../hooks/useModelRegistry";
 import { fetchFrom0GStorage, uploadJson } from "../hooks/useStorage";
@@ -14,6 +15,7 @@ type ModelCardRow = {
   price: string;
   modelType: number;
   sourceDatasetId: number;
+  sourceDatasetName?: string;
   downloadCount: number;
   inferenceEndpoint: string;
   txHash: string;
@@ -71,6 +73,7 @@ export default function Models() {
                   base.description = meta.description;
                   base.architecture = meta.architecture;
                   base.metrics = meta.metrics;
+                  base.sourceDatasetName = meta.sourceDatasetName || meta.datasetName;
                   base.labels = Array.isArray(meta.labels) ? meta.labels : [];
                 }
               } catch {}
@@ -110,6 +113,82 @@ export default function Models() {
       setModels((prev) => prev.map((x) => x.modelId === m.modelId ? { ...x, hasLicense: true } : x));
     } catch (e: any) {
       alert(`Purchase failed: ${e.message}`);
+    }
+  }
+
+  async function handleDownloadWeights(m: ModelCardRow) {
+    try {
+      const cleanHash = m.weightsRootHash.startsWith("0x") ? m.weightsRootHash : `0x${m.weightsRootHash}`;
+      let blob: Blob | null = null;
+      const cleanName = (m.name || `model_${m.modelId}_weights`).toLowerCase().replace(/[^a-z0-9]/g, "_");
+      const fileName = `${cleanName}.pt`;
+
+      // 1. Try local 0G Relayer proxy first
+      try {
+        const proxyRes = await fetch(`http://localhost:3001/file?root=${cleanHash}`).catch(() => null);
+        if (proxyRes?.ok) {
+          const text = await proxyRes.text();
+          let b64Str = text;
+          try {
+            const parsed = JSON.parse(text);
+            if (parsed && parsed.data) b64Str = parsed.data;
+          } catch {}
+
+          if (b64Str && b64Str.length > 50) {
+            const cleanB64 = b64Str.includes(",") ? b64Str.split(",")[1] : b64Str;
+            const binaryStr = atob(cleanB64);
+            const len = binaryStr.length;
+            const bytes = new Uint8Array(len);
+            for (let i = 0; i < len; i++) {
+              bytes[i] = binaryStr.charCodeAt(i);
+            }
+            blob = new Blob([bytes], { type: "application/octet-stream" });
+          }
+        }
+      } catch {}
+
+      // 2. Fallback to 0G Storage Indexer directly
+      if (!blob) {
+        const indexerUrl = `https://indexer-storage-testnet-turbo.0g.ai/file?root=${cleanHash}`;
+        const res = await fetch(indexerUrl);
+        if (!res.ok) throw new Error("Failed to download model weights from 0G Storage Indexer");
+        const text = await res.text();
+        let b64Str = text;
+        try {
+          const parsed = JSON.parse(text);
+          if (parsed && parsed.data) b64Str = parsed.data;
+        } catch {}
+
+        if (b64Str && b64Str.length > 50) {
+          try {
+            const cleanB64 = b64Str.includes(",") ? b64Str.split(",")[1] : b64Str;
+            const binaryStr = atob(cleanB64);
+            const len = binaryStr.length;
+            const bytes = new Uint8Array(len);
+            for (let i = 0; i < len; i++) {
+              bytes[i] = binaryStr.charCodeAt(i);
+            }
+            blob = new Blob([bytes], { type: "application/octet-stream" });
+          } catch {
+            blob = new Blob([text], { type: "application/octet-stream" });
+          }
+        } else {
+          blob = new Blob([text], { type: "application/octet-stream" });
+        }
+      }
+
+      if (blob) {
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = fileName;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      }
+    } catch (err: any) {
+      alert(`Download error: ${err.message || "Failed to download model weights"}`);
     }
   }
 
@@ -237,9 +316,17 @@ export default function Models() {
                       {ModelTypeNames[m.modelType] ?? "YOLOv8"}
                     </span>
                     {m.sourceDatasetId > 0 && (
-                      <span style={{ fontSize: 10, color: "#60a5fa", background: "rgba(96,165,250,0.12)", padding: "2px 8px", borderRadius: 4 }}>
-                        Dataset #{m.sourceDatasetId}
-                      </span>
+                      <Link
+                        to={`/datasets/${m.sourceDatasetId}`}
+                        style={{
+                          fontSize: 10, fontWeight: 700, color: "#60a5fa", background: "rgba(96,165,250,0.12)",
+                          border: "1px solid rgba(96,165,250,0.25)", padding: "2px 8px", borderRadius: 4, textDecoration: "none",
+                          display: "inline-flex", alignItems: "center", gap: 4
+                        }}
+                      >
+                        <span className="material-symbols-outlined" style={{ fontSize: 12 }}>database</span>
+                        {m.sourceDatasetName ? `${m.sourceDatasetName} (#${m.sourceDatasetId})` : `Dataset #${m.sourceDatasetId}`}
+                      </Link>
                     )}
                   </div>
                   <h3 style={{ fontSize: 18, fontWeight: 700, color: "#fff" }}>
@@ -305,16 +392,14 @@ export default function Models() {
                 </button>
 
                 {m.hasLicense || parseFloat(m.price) === 0 ? (
-                  <a
-                    href={`https://indexer-storage-testnet-turbo.0g.ai/file?root=${m.weightsRootHash}`}
-                    target="_blank"
-                    rel="noreferrer"
+                  <button
+                    onClick={() => handleDownloadWeights(m)}
                     className="btn-primary"
-                    style={{ width: "100%", justifyContent: "center", textDecoration: "none" }}
+                    style={{ width: "100%", justifyContent: "center" }}
                   >
                     <span className="material-symbols-outlined" style={{ fontSize: 18 }}>download</span>
-                    Download Weights (.pt/.onnx)
-                  </a>
+                    Download Weights (.pt)
+                  </button>
                 ) : (
                   <button
                     className="btn-secondary"

@@ -53,7 +53,7 @@ export default function DatasetDetail() {
           const list = JSON.parse(stored);
           const found = list.find((x: any) => String(x.datasetId) === String(datasetId));
           if (found) {
-            setDataset({
+            d = {
               publisher: found.publisher ?? "0x0000000000000000000000000000000000000000",
               rootHash: found.rootHash,
               metadataURI: found.metadataURI ?? "",
@@ -61,18 +61,16 @@ export default function DatasetDetail() {
               dataType: found.dataType ?? 0,
               sourceJobId: found.sourceJobId ?? 0,
               active: true,
-            });
+            };
+            setDataset(d);
             setMetadata({
               name: found.name ?? `Custom Dataset #${datasetId}`,
               format: found.format ?? "COCO JSON",
               taskCount: found.taskCount ?? 1,
               labels: found.labels ?? ["object"],
+              dataRootHash: found.dataRootHash,
             });
             setHasLicense(true);
-            if (found.previewImage) {
-              setRealImages([{ name: "Sample Image", url: found.previewImage, anns: [] }]);
-            }
-            return;
           }
         }
       } catch {}
@@ -174,11 +172,11 @@ export default function DatasetDetail() {
         // 1. Save COCO annotations file
         zip.file("annotations/instances.json", JSON.stringify(cocoObj, null, 2));
 
-        // 2. Extract and zip images across 3 resilient fallback paths
-        const imagesList = cocoObj.images ?? [];
+        // 2. Extract and zip images directly from 0G Storage payloads
+        const imagesList: any[] = Array.isArray(cocoObj.images) ? cocoObj.images : [];
         let addedImages = 0;
 
-        // Path A: Extract base64 images directly from COCO images array
+        // Step A: Extract base64 images directly from COCO images array
         imagesList.forEach((imgObj: any, idx: number) => {
           let b64 = imgObj.base64 ?? imgObj.data ?? imgObj.url ?? imgObj.b64;
           if (b64 && typeof b64 === "string") {
@@ -189,9 +187,9 @@ export default function DatasetDetail() {
           }
         });
 
-        // Path B: If base64 was not embedded in COCO images, fetch source files from dataRootHash / data_root_hash
-        const sourceRoot = cocoObj.info?.data_root_hash ?? metadata?.dataRootHash ?? dataset?.dataRootHash;
-        if (addedImages === 0 && sourceRoot) {
+        // Step B: Fetch source image files from 0G Storage data_root_hash
+        const sourceRoot = cocoObj.info?.data_root_hash ?? metadata?.dataRootHash ?? dataset?.dataRootHash ?? dataset?.sourceDataRootHash;
+        if (sourceRoot) {
           try {
             const sourceData: any = await fetchFrom0GStorage(sourceRoot, 5).catch(() => null);
             const sourceFiles: any[] = Array.isArray(sourceData)
@@ -204,9 +202,11 @@ export default function DatasetDetail() {
               let b64 = f?.data ?? f?.base64 ?? f?.url;
               if (b64 && typeof b64 === "string") {
                 const cleanB64 = b64.includes(",") ? b64.split(",")[1] : b64;
-                const fileName = f.name ?? f.file_name ?? `image_${idx + 1}.jpg`;
-                zip.file(`images/${fileName}`, cleanB64, { base64: true });
-                addedImages++;
+                const fileName = f.name ?? f.file_name ?? (imagesList[idx]?.file_name) ?? `image_${idx + 1}.jpg`;
+                if (!zip.file(`images/${fileName}`)) {
+                  zip.file(`images/${fileName}`, cleanB64, { base64: true });
+                  addedImages++;
+                }
               }
             });
           } catch (err) {

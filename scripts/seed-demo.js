@@ -4,7 +4,7 @@
  *
  * Usage: node scripts/seed-demo.js
  */
-import { ethers } from 'ethers';
+import { ethers } from '../backend/relayer/node_modules/ethers/lib.esm/index.js';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';

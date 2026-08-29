@@ -76,24 +76,26 @@ This document provides a comprehensive technical breakdown of how **Heda Protoco
   ```
 - **0G Merkle Root Hash**: The dataset JSON is uploaded to 0G Storage nodes (`uploadJson`), generating an immutable 32-byte Merkle root hash (e.g. `0xc9d3a7e4...`).
 
-### Step 5: Dataset Marketplace & ZIP Packaging
-- **Marketplace Listing**: Published datasets are registered on **0G Galileo Testnet** (`DatasetRegistry.sol`) and rendered on the **Dataset Marketplace** (`/datasets`).
+### Step 5: Onchain Dataset Registration & Marketplace Listing
+- **Publisher Wallet Signature**: Published datasets are registered on **0G Galileo Testnet** via `DatasetRegistry.sol.publish(rootHash, metadataURI, price, dataType, sourceJobId)`, storing the publisher's wallet address onchain.
 - **Full ZIP Export**: When judges or developers click **Download Dataset (.ZIP)** on `DatasetDetail.tsx`:
   - `annotations/instances.json` (Full COCO format schema) is created.
   - Base64 image data strings are extracted and saved as actual binary image files (`images/hardhat1.jpg`, `images/hardhat2.jpg`, etc.).
   - A clean `.ZIP` archive containing **both images and annotations** is generated using `JSZip`.
 
-### Step 6: PyTorch YOLO Model Fine-Tuning
+### Step 6: Onchain Quota & PyTorch YOLO Model Fine-Tuning
+- **Onchain Credit Deduction**: Before fine-tuning begins, the Web3 wallet confirms an onchain transaction calling `PipelineSubscription.sol.consumeTrainingQuota(address)` on 0G Galileo Testnet.
 - **Gateway Retrieval**: When fine-tuning starts (`/train/start`), Python `train_yolo.py` fetches the dataset root hash directly from 0G Storage gateways.
 - **YOLO Directory Structuring**:
   - Decodes base64 strings into `.jpg` files in `dataset/images/train/` and `dataset/images/val/`.
   - Converts bounding box coordinates into normalized YOLO `.txt` files in `dataset/labels/train/` (`<class_id> <x_center> <y_center> <width> <height>`).
   - Creates `dataset.yaml` with custom class mappings (`hardhat`, etc.).
-- **PyTorch Training**: Executes Ultralytics PyTorch YOLOv8 training (`yolo train data=dataset.yaml epochs=30 imgz=640`) accelerated by Apple Metal (MPS) or NVIDIA CUDA GPUs.
-- **Artifact Output**: Exports fine-tuned PyTorch model weights (`best.pt`) and evaluation metrics (mAP50, Precision, Recall).
+- **PyTorch Training**: Executes Ultralytics PyTorch YOLOv8 training accelerated by Apple Metal (MPS) or NVIDIA CUDA GPUs.
+- **Real-Time Telemetry HUD**: Streams live progress bars, metrics grid (mAP@50, Precision, Box Loss, Cls Loss), and log timeline events (`[EPOCH]`, `[HARDWARE]`, `[0G DATA]`).
+- **Artifact Output**: Exports fine-tuned PyTorch model weights (`best.pt`) and evaluation metrics.
 
 ### Step 7: Onchain Model Registry & Live Inference
-- **Onchain Publishing**: Model weights and evaluation metrics are registered on `ModelRegistry.sol` on 0G Galileo Testnet.
+- **Onchain Publishing**: Model weights and evaluation metrics are registered on `ModelRegistry.sol` on 0G Galileo Testnet with `sourceDatasetName` metadata linking back to `/datasets/:id`.
 - **Sub-15ms Live Testing**: Developers can test trained models live in the browser (`/models` -> **Test Model**). Uploaded images are passed to `http://localhost:8000/predict`, returning custom bounding box detections with sub-15ms latency.
 
 ---
@@ -104,6 +106,9 @@ This document provides a comprehensive technical breakdown of how **Heda Protoco
 | :--- | :--- | :--- |
 | **Data Payload** | Base64 images + COCO annotations | ✅ Verified embedded in 0G Storage |
 | **0G Storage Pinning** | Decentralized Merkle root hash generation | ✅ Synced via 0G Indexer Gateways |
+| **Publisher Attribution** | Dataset registered onchain by wallet address | ✅ Verified on `DatasetRegistry.sol` |
+| **Onchain Subscription** | Credit deduction signed via Web3 wallet | ✅ Verified on `PipelineSubscription.sol` |
 | **Dataset Download** | `.ZIP` containing `images/` & `annotations/instances.json` | ✅ Complete binary image export |
 | **PyTorch Training** | Fine-tunes YOLOv8 on real custom images | ✅ Natively outputs `best.pt` |
-| **Onchain Registry** | `DatasetRegistry.sol` & `ModelRegistry.sol` | ✅ Deployed on 0G Galileo Testnet |
+| **Model Attribution** | Model cards link to source dataset and download `.pt` | ✅ Verified on `ModelRegistry.sol` |
+| **Onchain Contracts** | `AnnotationMarket`, `DatasetRegistry`, `ModelRegistry`, `PipelineSubscription` | ✅ Deployed on 0G Galileo Testnet |

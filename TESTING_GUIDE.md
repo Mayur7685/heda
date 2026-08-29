@@ -152,33 +152,43 @@ curl http://localhost:8000/
 
 ---
 
-## 🤖 Step 6: Fine-Tune PyTorch YOLO Model (`TrainingModal.tsx`)
+## 📜 Deployed 0G Galileo Smart Contracts
 
-1. On the Dataset detail page or **Rapid CV Pipeline**, click **Fine-Tune YOLO Model**.
-2. Click **Start Local PyTorch Training**.
-3. **Expected Terminal Output (`main.py` & `train_yolo.py`)**:
-   ```
-   ==============================================================
-   HEDA PROTOCOL — PYTORCH YOLO MODEL FINE-TUNING ENGINE
-   ==============================================================
-   [1/4] Fetching dataset root 0xc9d3... across 0G Storage gateways...
-   [2/4] Decoded 10 base64 images into images/train/
-   [3/4] Formatted YOLO label files in labels/train/
-   [4/4] Running PyTorch YOLOv8n fine-tuning...
-   Epoch 1/10 - loss: 0.842 - mAP50: 0.764
-   Epoch 10/10 - loss: 0.112 - mAP50: 0.914
-   ✔ Training Complete! Model weights saved to best.pt
-   ```
+| Contract Name | Deployed Galileo Address | Explorer Link |
+| :--- | :--- | :--- |
+| **`AnnotationMarket`** | `0x0577d4422B9065E2C8B7A29794DD176601Cf2c19` | [View on 0G Explorer](https://chainscan-galileo.0g.ai/address/0x0577d4422B9065E2C8B7A29794DD176601Cf2c19) |
+| **`DatasetRegistry`** | `0x27F3343C6e3e28Df23E14D0A1eB3c6E6BEff349c` | [View on 0G Explorer](https://chainscan-galileo.0g.ai/address/0x27F3343C6e3e28Df23E14D0A1eB3c6E6BEff349c) |
+| **`ModelRegistry`** | `0x93d4b1Ea040dA189B32D42AC6814585cE674FB8D` | [View on 0G Explorer](https://chainscan-galileo.0g.ai/address/0x93d4b1Ea040dA189B32D42AC6814585cE674FB8D) |
+| **`PipelineSubscription`** | `0x07231896B7dF2F51E6a56A6118850b43522E8f44` | [View on 0G Explorer](https://chainscan-galileo.0g.ai/address/0x07231896B7dF2F51E6a56A6118850b43522E8f44) |
 
 ---
 
-## ⚡ Step 7: Live Model Testing (`InferenceModal.tsx`)
+## 🤖 Step 6: Fine-Tune PyTorch YOLO Model (`TrainingModal.tsx` & `RapidCVPipeline.tsx`)
 
-1. Navigate to **Model Registry** (`http://localhost:5173/models`).
-2. Click **Test Model (Live Inference)** on your trained YOLO model.
-3. Upload any test image from your computer.
-4. Click **Run Live Inference**.
-5. **Expected Result**: The trained model detects bounding boxes on your uploaded image, displaying confidence percentages and detection latency (`<15ms`).
+1. On the Dataset detail page or **Rapid CV Studio** (`http://localhost:5173/rapid-cv`), click **Start YOLO Fine-Tuning**.
+2. **MetaMask Onchain Transaction Signature Prompt**:
+   - Prompts you to confirm 1 Training Credit deduction onchain (`PipelineSubscription.sol.consumeTrainingQuota`).
+   - If confirmed, credit is deducted on 0G Galileo Testnet and PyTorch training starts!
+3. **Live Visual Telemetry Dashboard**:
+   - **Progress Fill Bar**: Animates `Epoch X of Y (XX%)`.
+   - **Metrics HUD Grid**: Live mAP@50, Precision, Box Loss, and Cls Loss pills.
+   - **Live Event Stream**: Streaming badges for `[HARDWARE]` (⚡ Apple Metal MPS), `[0G DATA]`, `[YOLO SETUP]`, and `[EPOCH]`.
+4. **Publish Model to Universe**:
+   - When training completes, click **Publish Model to Model Universe**.
+   - Model weights `.pt` are uploaded to 0G Storage and registered onchain with `sourceDatasetName` metadata.
+
+---
+
+## ⚡ Step 7: Live Model Testing & Weights Downloading (`Models.tsx`)
+
+1. Navigate to **Model Universe** (`http://localhost:5173/models`).
+2. Every model card displays:
+   - **Source Dataset Badge & Link**: e.g., `🗄️ dataset of hardhat (#40)` linking straight to `/datasets/:id`.
+   - **Download Weights (.pt)**: Decodes base64 model binary and saves as `<model_name>.pt`.
+3. Click **Test Model (Live Inference)** on your trained YOLO model.
+4. Upload any test image from your computer.
+5. Click **Run Live Inference**.
+6. **Expected Result**: Clean green bounding box overlays render on your test image with realtime detection latency (`<15ms`).
 
 ---
 

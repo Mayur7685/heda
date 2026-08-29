@@ -45,6 +45,8 @@ contracts/lib/
 Thumbs.db
 .vscode/
 .idea/
+*.code-workspace
+**/*.code-workspace
 
 # ── Logs & Temp Files ───────────────────────────────────────────────────────
 *.log

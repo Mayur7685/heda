@@ -34,10 +34,10 @@
 
 | Contract Name | Deployed Galileo Address | Explorer Link |
 | :--- | :--- | :--- |
-| **`AnnotationMarket`** | `0x999C386123c7BD76754756335C254b82EB51efe8` | [View on 0G Explorer](https://chainscan-galileo.0g.ai/address/0x999C386123c7BD76754756335C254b82EB51efe8) |
-| **`DatasetRegistry`** | `0xd22C7e9109E2fc4712eA990d100166834a2067A0` | [View on 0G Explorer](https://chainscan-galileo.0g.ai/address/0xd22C7e9109E2fc4712eA990d100166834a2067A0) |
-| **`ModelRegistry`** | `0xB828cfd2e57d2594Cbe54fE293991e48f6B5fbA7` | [View on 0G Explorer](https://chainscan-galileo.0g.ai/address/0xB828cfd2e57d2594Cbe54fE293991e48f6B5fbA7) |
-| **`PipelineSubscription`** | `0x0b52211F340aB9cd867be80ec9Fc2B45861229Ac` | [View on 0G Explorer](https://chainscan-galileo.0g.ai/address/0x0b52211F340aB9cd867be80ec9Fc2B45861229Ac) |
+| **`AnnotationMarket`** | `0x0577d4422B9065E2C8B7A29794DD176601Cf2c19` | [View on 0G Explorer](https://chainscan-galileo.0g.ai/address/0x0577d4422B9065E2C8B7A29794DD176601Cf2c19) |
+| **`DatasetRegistry`** | `0x27F3343C6e3e28Df23E14D0A1eB3c6E6BEff349c` | [View on 0G Explorer](https://chainscan-galileo.0g.ai/address/0x27F3343C6e3e28Df23E14D0A1eB3c6E6BEff349c) |
+| **`ModelRegistry`** | `0x93d4b1Ea040dA189B32D42AC6814585cE674FB8D` | [View on 0G Explorer](https://chainscan-galileo.0g.ai/address/0x93d4b1Ea040dA189B32D42AC6814585cE674FB8D) |
+| **`PipelineSubscription`** | `0x07231896B7dF2F51E6a56A6118850b43522E8f44` | [View on 0G Explorer](https://chainscan-galileo.0g.ai/address/0x07231896B7dF2F51E6a56A6118850b43522E8f44) |
 
 ---
 

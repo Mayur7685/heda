@@ -75,6 +75,7 @@ class TrainRequest(BaseModel):
     epochs: int = 30
     imgSize: int = 640
     datasetName: str = "Dataset"
+    datasetPayload: Optional[Any] = None
 
 def upload_to_relayer(data_base64: str) -> str:
     """Relays upload request to Node.js 0G Storage Relayer service"""
@@ -98,6 +99,16 @@ def upload_to_relayer(data_base64: str) -> str:
 def run_training_job(job_id: str, req: TrainRequest):
     job = active_jobs[job_id]
     job["status"] = "training"
+
+    # Pre-save dataset payload if passed directly from frontend
+    if req.datasetPayload:
+        try:
+            work_dir = Path(__file__).parent / "runs" / job_id
+            work_dir.mkdir(parents=True, exist_ok=True)
+            with open(work_dir / "payload.json", "w", encoding="utf-8") as f:
+                json.dump(req.datasetPayload, f)
+        except Exception as e:
+            print(f"[AI Service] Warning pre-saving dataset payload: {e}")
 
     model_type_str = str(req.modelType or "YOLOv8n")
     if model_type_str in ["0", "yolov8n"]:
@@ -130,6 +141,7 @@ def run_training_job(job_id: str, req: TrainRequest):
                 parsed = json.loads(line)
                 if parsed.get("type") == "epoch_progress":
                     job["currentEpoch"] = parsed["epoch"]
+                    job["totalEpochs"] = parsed.get("total_epochs", job.get("totalEpochs", req.epochs))
                     job["metrics"] = {
                         "map50": parsed["map50"],
                         "map50_95": round(parsed["map50"] * 0.72, 3),
@@ -154,33 +166,69 @@ def run_training_job(job_id: str, req: TrainRequest):
             except Exception:
                 job["logs"].append(line)
 
-        proc.wait()
+        stdout, stderr = proc.communicate()
+        if stderr and stderr.strip():
+            job["logs"].append(f"[STDERR] {stderr.strip()[:500]}")
 
-        # Read weights file & upload to 0G via Relayer
-        weights_bytes = b"HEDA_TRAINED_WEIGHTS"
-        if weights_file and os.path.exists(weights_file):
-            with open(weights_file, "rb") as f:
-                weights_bytes = f.read()
+        if proc.returncode != 0:
+            raise RuntimeError(f"PyTorch training exited with code {proc.returncode}: {stderr or stdout}")
 
-        b64_weights = base64.b64encode(weights_bytes).decode("utf-8")
-        weights_hash = upload_to_relayer(b64_weights)
-        job["weightsRootHash"] = weights_hash
+        # Enforce REAL PyTorch model weights binary exists on disk (>100KB)
+        target_weights = Path(__file__).parent / "runs" / job_id / "best.pt"
+        if not target_weights.exists():
+            target_weights = Path(__file__).parent / "runs" / job_id / "yolo_run" / "weights" / "best.pt"
 
-        eval_report = {
-            "trainId": job_id,
-            "datasetId": req.datasetId,
-            "metrics": job["metrics"],
-            "completedAt": time.strftime("%Y-%m-%dT%H:%M:%SZ")
-        }
-        b64_report = base64.b64encode(json.dumps(eval_report).encode("utf-8")).decode("utf-8")
-        report_hash = upload_to_relayer(b64_report)
-        job["reportRootHash"] = report_hash
+        if not target_weights.exists() or target_weights.stat().st_size < 100000:
+            raise RuntimeError(f"Trained PyTorch model weights file best.pt not found or invalid size at {target_weights}")
 
+        job["weightsFile"] = str(target_weights)
         job["status"] = "completed"
 
     except Exception as e:
         job["status"] = "failed"
         job["error"] = str(e)
+
+class PublishWeightsRequest(BaseModel):
+    trainId: str
+
+@app.post("/train/publish-weights")
+def publish_weights(req: PublishWeightsRequest):
+    """Triggered ONLY when user confirms publishing model to 0G Storage & Model Universe"""
+    job = active_jobs.get(req.trainId)
+    if not job:
+        raise HTTPException(status_code=404, detail=f"Training job {req.trainId} not found")
+
+    target_weights = Path(__file__).parent / "runs" / req.trainId / "best.pt"
+    if not target_weights.exists():
+        target_weights = Path(__file__).parent / "runs" / req.trainId / "yolo_run" / "weights" / "best.pt"
+
+    if not target_weights.exists() or target_weights.stat().st_size < 100000:
+        raise HTTPException(status_code=400, detail="PyTorch model weights best.pt not found on disk")
+
+    print(f"[AI Service] 🚀 User confirmed publish! Uploading real PyTorch weights ({target_weights.stat().st_size} bytes) to 0G Storage...")
+    with open(target_weights, "rb") as f:
+        weights_bytes = f.read()
+
+    b64_weights = base64.b64encode(weights_bytes).decode("utf-8")
+    weights_hash = upload_to_relayer(b64_weights)
+    job["weightsRootHash"] = weights_hash
+
+    # Upload evaluation report
+    eval_report = {
+        "trainId": req.trainId,
+        "datasetId": job.get("datasetId", 0),
+        "metrics": job.get("metrics", {}),
+        "completedAt": time.strftime("%Y-%m-%dT%H:%M:%SZ")
+    }
+    b64_report = base64.b64encode(json.dumps(eval_report).encode("utf-8")).decode("utf-8")
+    report_hash = upload_to_relayer(b64_report)
+    job["reportRootHash"] = report_hash
+
+    return {
+        "ok": True,
+        "weightsRootHash": weights_hash,
+        "reportRootHash": report_hash
+    }
 
 class ChatLLMRequest(BaseModel):
     prompt: str
@@ -518,6 +566,7 @@ def get_status(train_id: str):
 
 class PredictRequest(BaseModel):
     imageBase64: str
+    trainId: Optional[str] = None
     weightsRootHash: str = ""
     modelType: str = "YOLOv8n"
     labels: list = []
@@ -528,22 +577,30 @@ def predict_objects(req: PredictRequest):
     try:
         from ultralytics import YOLO
         
-        # 1. Determine weights file path (check local active_jobs, recent trained temp files, or 0G Storage)
+        # 1. Determine weights file path (check trainId, runs/ directory, active_jobs, or 0G Storage)
         weights_path = "yolov8n.pt" # default base fallback
         
         cache_dir = Path(__file__).parent / ".weights_cache"
         cache_dir.mkdir(exist_ok=True)
         
-        # Check if any recent local trained weights file exists
-        latest_trained_pt = None
-        for p in Path("/tmp").glob("heda_train_*/best.pt"):
-            if p.stat().st_size > 1000:
-                latest_trained_pt = str(p)
-                break
-                
-        if latest_trained_pt:
-            weights_path = latest_trained_pt
-            
+        # Priority A: Specified trainId run folder
+        if req.trainId:
+            target_pt = Path(__file__).parent / "runs" / req.trainId / "best.pt"
+            if not target_pt.exists():
+                target_pt = Path(__file__).parent / "runs" / req.trainId / "yolo_run" / "weights" / "best.pt"
+            if target_pt.exists() and target_pt.stat().st_size > 100000:
+                weights_path = str(target_pt)
+
+        # Priority B: Most recently trained best.pt in runs/ directory
+        if weights_path == "yolov8n.pt":
+            runs_dir = Path(__file__).parent / "runs"
+            if runs_dir.exists():
+                recent_pts = sorted(runs_dir.glob("*/best.pt"), key=lambda p: p.stat().st_mtime, reverse=True)
+                if not recent_pts:
+                    recent_pts = sorted(runs_dir.glob("*/yolo_run/weights/best.pt"), key=lambda p: p.stat().st_mtime, reverse=True)
+                if recent_pts and recent_pts[0].stat().st_size > 100000:
+                    weights_path = str(recent_pts[0])
+
         if req.weightsRootHash and req.weightsRootHash != "0x":
             clean_hash = req.weightsRootHash if req.weightsRootHash.startswith("0x") else f"0x{req.weightsRootHash}"
             local_cached_pt = cache_dir / f"{clean_hash}.pt"

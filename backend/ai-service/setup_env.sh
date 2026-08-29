@@ -49,6 +49,8 @@ else:
 "
 echo "---------------------------------------------------------"
 echo "✅ Environment setup complete!"
-echo "👉 To start the server, run: python3 main.py"
-echo "   (or activate virtualenv first: source .venv/bin/activate or source .venv/bin/activate && python main.py)"
+echo "👉 To start Moondream 2 VLM GPU Server (Port 2020):"
+echo "   source .venv/bin/activate && python3 moondream_server.py"
+echo "👉 To start AI Fine-Tuning & Inference Server (Port 8000):"
+echo "   source .venv/bin/activate && python3 main.py"
 

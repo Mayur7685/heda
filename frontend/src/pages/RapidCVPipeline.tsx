@@ -6,7 +6,7 @@ import { useWallet } from "../hooks/useWallet";
 import { useDatasetRegistry } from "../hooks/useDatasetRegistry";
 import { useModelRegistry } from "../hooks/useModelRegistry";
 import { usePipelineSubscription } from "../hooks/usePipelineSubscription";
-import { uploadJson } from "../hooks/useStorage";
+import { uploadJson, fetchFrom0GStorage } from "../hooks/useStorage";
 
 interface ChatMessage {
   sender: "ai" | "user";
@@ -204,7 +204,7 @@ const uid = () => Math.random().toString(36).slice(2, 8);
 export default function RapidCVPipeline() {
   const navigate = useNavigate();
   const { signer, address, isCorrectChain } = useWallet();
-  useDatasetRegistry(signer);
+  const datasetRegistry = useDatasetRegistry(signer);
   const modelRegistry = useModelRegistry(signer);
   const subContract = usePipelineSubscription(signer);
 
@@ -242,9 +242,38 @@ export default function RapidCVPipeline() {
   const [targetClasses, setTargetClasses] = useState<string[]>([]);
   const [classInput, setClassInput] = useState<string>("");
   const [editingClasses, setEditingClasses] = useState<boolean>(false);
+  const [activeTrainId, setActiveTrainId] = useState<string>("");
+  const trainLogsEndRef = useRef<HTMLDivElement>(null);
 
-  // ── Onchain Quota State ──
-  const [quota, setQuota] = useState<{ remainingQuota: number; active: boolean }>({ remainingQuota: 3, active: true });
+  // ── Onchain & Persistent Quota State ──
+  const [quota, setQuota] = useState<{ remainingQuota: number; active: boolean }>(() => {
+    try {
+      const stored = localStorage.getItem("hedaprotocol_user_quota_active");
+      if (stored) return JSON.parse(stored);
+    } catch {}
+    return { remainingQuota: 3, active: true };
+  });
+
+  useEffect(() => {
+    const quotaKey = address ? `hedaprotocol_quota_${address}` : "hedaprotocol_user_quota_active";
+    const stored = localStorage.getItem(quotaKey);
+    if (stored) {
+      try {
+        setQuota(JSON.parse(stored));
+      } catch {}
+    }
+
+    if (subContract && address) {
+      subContract.getRemainingQuota(address).then((res: any) => {
+        if (res && typeof res.remainingQuota === "number") {
+          const updated = { remainingQuota: res.remainingQuota, active: res.active };
+          setQuota(updated);
+          localStorage.setItem(quotaKey, JSON.stringify(updated));
+          localStorage.setItem("hedaprotocol_user_quota_active", JSON.stringify(updated));
+        }
+      }).catch(() => {});
+    }
+  }, [address, subContract]);
 
   // ── Stage 1: AI Chat Assistant with Token Streaming (Matching Reference Image 2) ──
   const [messages, setMessages] = useState<ChatMessage[]>([
@@ -378,10 +407,11 @@ export default function RapidCVPipeline() {
   // ── Stage 6: YOLO Training Telemetry ──
   const [selectedArch, setSelectedArch] = useState("yolov8n");
   const [epochs, setEpochs] = useState(10);
+  const [imgSize, setImgSize] = useState(640);
   const [trainStatus, setTrainStatus] = useState<"idle" | "training" | "completed">("idle");
   const [trainProgress, setTrainProgress] = useState(0);
   const [trainLogs, setTrainLogs] = useState<string[]>([]);
-  const [trainMetrics, setTrainMetrics] = useState<{ map50: number; boxLoss: number; precision: number; recall: number }>({ map50: 0, boxLoss: 0, precision: 0, recall: 0 });
+  const [trainMetrics, setTrainMetrics] = useState<{ map50: number; boxLoss: number; precision: number; recall: number; currentEpoch?: number; totalEpochs?: number; clsLoss?: number }>({ map50: 0, boxLoss: 0, precision: 0, recall: 0 });
   const [weightsRootHash, setWeightsRootHash] = useState<string | null>(null);
   const [publishing, setPublishing] = useState(false);
 
@@ -679,14 +709,30 @@ export default function RapidCVPipeline() {
       const rootHash = await uploadJson(datasetMetadata);
       setDatasetRootHash(rootHash);
 
-      // Instantly register custom dataset so it appears on the Datasets page (/datasets)
+      let datasetTxHash = rootHash;
+      if (datasetRegistry && address) {
+        try {
+          const tx = await datasetRegistry.publish(
+            rootHash,
+            rootHash,
+            "0", // 0G ETH price (free open dataset)
+            0,   // Image dataset type
+            0    // sourceJobId
+          );
+          if (tx?.hash) datasetTxHash = tx.hash;
+        } catch (onchainErr) {
+          console.warn("Onchain dataset registration note:", onchainErr);
+        }
+      }
+
+      // Instantly register custom dataset so it appears on the Datasets page (/datasets) with user publisher address
       const newDatasetRow = {
         datasetId: Date.now(),
         publisher: address || "0x0000000000000000000000000000000000000000",
         rootHash: rootHash,
         price: "0.0",
         dataType: 0, // Image dataset
-        txHash: rootHash,
+        txHash: datasetTxHash,
         hasLicense: true,
         name: finalTitle,
         format: "YOLO Annotation",
@@ -704,7 +750,7 @@ export default function RapidCVPipeline() {
         console.warn("Dataset localStorage save note:", err);
       }
 
-      requestStageTransition("train", 5, "Confirm 0G Dataset Pinning & Lock Step 5", `Approved dataset "${finalTitle}" (${approvedBatch.length} images) successfully pinned to 0G Storage (Root Hash: ${rootHash.slice(0, 16)}…). Do you want to lock dataset configuration and proceed to Step 6: YOLO Training?`);
+      requestStageTransition("train", 5, "Confirm 0G Dataset Pinning & Lock Step 5", `Approved dataset "${finalTitle}" (${approvedBatch.length} images) successfully pinned to 0G Storage (Root Hash: ${rootHash.slice(0, 16)}…) and registered by publisher ${address ? address.slice(0, 6) + "…" + address.slice(-4) : "you"}. Do you want to lock dataset configuration and proceed to Step 6: YOLO Training?`);
     } catch (e: any) {
       alert(`0G Storage upload error: ${e.message}`);
     } finally {
@@ -712,10 +758,37 @@ export default function RapidCVPipeline() {
     }
   }
 
-  // Start YOLO Model Training
+  // Subscription Renewal Handler
+  async function handleRenewSubscription() {
+    if (!subContract || !signer || !address) {
+      alert("Please connect your Web3 wallet first!");
+      return;
+    }
+    try {
+      setTrainLogs((prev) => [...prev, "Initiating 0G Subscription Renewal (0.001 0G ETH) onchain..."]);
+      await subContract.subscribe("0.001");
+      const updated = await subContract.getRemainingQuota(address);
+      if (updated) {
+        setQuota({ remainingQuota: updated.remainingQuota, active: updated.active });
+        const quotaKey = `hedaprotocol_quota_${address}`;
+        localStorage.setItem(quotaKey, JSON.stringify({ remainingQuota: updated.remainingQuota, active: updated.active }));
+      }
+      alert("Subscription renewed successfully! You have 3 fresh model fine-tuning credits.");
+    } catch (err: any) {
+      alert(`Subscription renewal error: ${err.message}`);
+    }
+  }
+
+  // Start YOLO Model Training with Mandatory Web3 Wallet Onchain Signature
   async function handleStartTraining() {
+    if (!address || !signer) {
+      alert("Please connect your Web3 wallet using the top right button before starting fine-tuning!");
+      return;
+    }
     if (quota.remainingQuota <= 0) {
-      alert("Your 3/3 model training quota is exhausted! Please renew your subscription.");
+      if (confirm("Your 3/3 model training quota is exhausted! Would you like to renew your subscription onchain for 0.001 0G ETH?")) {
+        await handleRenewSubscription();
+      }
       return;
     }
     if (!datasetRootHash) {
@@ -724,18 +797,45 @@ export default function RapidCVPipeline() {
     }
 
     setTrainStatus("training");
-    setTrainProgress(10);
-    setTrainLogs([`Initiating 0G PyTorch YOLO fine-tuning job using 0G Dataset (${datasetRootHash.slice(0, 14)}…)...`]);
+    setTrainProgress(5);
+    setTrainLogs([
+      `Initiating 0G PyTorch YOLO fine-tuning job using 0G Dataset (${datasetRootHash.slice(0, 14)}…)...`,
+      "Please confirm transaction in MetaMask to sign 1 Training Credit deduction on 0G Galileo Testnet...",
+    ]);
 
-    if (subContract && address) {
+    // Mandatory Onchain Wallet Transaction Confirmation
+    if (subContract) {
       try {
-        setTrainLogs((prev) => [...prev, "Consuming 1 model training credit onchain (PipelineSubscription.sol)..."]);
-        await subContract.consumeTrainingQuota(address);
-        setQuota((prev) => ({ ...prev, remainingQuota: Math.max(0, prev.remainingQuota - 1) }));
-      } catch {}
+        const txResult = await subContract.consumeTrainingQuota(address);
+        setTrainLogs((prev) => [...prev, `Onchain credit deduction verified! Tx Hash: ${txResult.hash.slice(0, 16)}…`]);
+        
+        // Fetch updated onchain quota
+        const updatedOnchain = await subContract.getRemainingQuota(address).catch(() => null);
+        const remCount = updatedOnchain ? updatedOnchain.remainingQuota : Math.max(0, quota.remainingQuota - 1);
+        const updatedQuotaObj = { remainingQuota: remCount, active: true };
+        
+        setQuota(updatedQuotaObj);
+        const quotaKey = `hedaprotocol_quota_${address}`;
+        localStorage.setItem(quotaKey, JSON.stringify(updatedQuotaObj));
+        localStorage.setItem("hedaprotocol_user_quota_active", JSON.stringify(updatedQuotaObj));
+      } catch (onchainErr: any) {
+        setTrainStatus("idle");
+        setTrainLogs([]);
+        alert(`Wallet Transaction Cancelled/Rejected: ${onchainErr.message || "User declined transaction"}`);
+        return;
+      }
+    } else {
+      // Local fallback if contract address not configured
+      const remCount = Math.max(0, quota.remainingQuota - 1);
+      const updatedQuotaObj = { remainingQuota: remCount, active: true };
+      setQuota(updatedQuotaObj);
+      const quotaKey = `hedaprotocol_quota_${address}`;
+      localStorage.setItem(quotaKey, JSON.stringify(updatedQuotaObj));
+      localStorage.setItem("hedaprotocol_user_quota_active", JSON.stringify(updatedQuotaObj));
     }
 
     try {
+      const datasetPayload = await fetchFrom0GStorage(datasetRootHash, 3).catch(() => null);
       const res = await fetch("http://localhost:8000/train/start", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -743,13 +843,15 @@ export default function RapidCVPipeline() {
           datasetId: 0,
           datasetName: projectTitle,
           datasetRootHash: datasetRootHash,
+          datasetPayload: datasetPayload,
           modelType: selectedArch.toUpperCase(),
           epochs: epochs,
-          imgSize: 640,
+          imgSize: imgSize,
         }),
       });
       const data = await res.json();
-      if (data.ok) {
+      if (data.ok && data.trainId) {
+        setActiveTrainId(data.trainId);
         pollTrainingStatus(data.trainId);
       }
     } catch {
@@ -762,22 +864,40 @@ export default function RapidCVPipeline() {
       try {
         const res = await fetch(`http://localhost:8000/train/status/${id}`);
         const data = await res.json();
+        
+        const curEpoch = data.currentEpoch || 0;
+        const totEpochs = data.totalEpochs || data.total_epochs || epochs;
+        const pct = totEpochs > 0 ? Math.min(100, Math.round((curEpoch / totEpochs) * 100)) : 0;
+        
+        setTrainProgress(pct);
+        if (data.metrics) {
+          setTrainMetrics({ ...data.metrics, currentEpoch: curEpoch, totalEpochs: totEpochs });
+        }
+        if (Array.isArray(data.logs) && data.logs.length > 0) {
+          setTrainLogs(data.logs);
+        }
+
         if (data.status === "completed") {
           clearInterval(timer);
           setTrainStatus("completed");
           setTrainProgress(100);
           setWeightsRootHash(data.weightsRootHash || "0x8a92f00000000000000000000000000000000000000000000000000000000000");
-          if (data.metrics) setTrainMetrics(data.metrics);
-        } else {
-          setTrainProgress((p) => Math.min(92, p + 15));
-          if (data.logs && data.logs.length > 0) setTrainLogs(data.logs);
+        } else if (data.status === "failed") {
+          clearInterval(timer);
+          setTrainStatus("idle");
+          alert(`Training job failed: ${data.error || "Unknown error"}`);
         }
-      } catch {
-        clearInterval(timer);
-        simulateTraining();
+      } catch (err) {
+        console.warn("Polling training status error:", err);
       }
-    }, 2000);
+    }, 1000);
   }
+
+  useEffect(() => {
+    if (trainLogsEndRef.current) {
+      trainLogsEndRef.current.scrollIntoView({ behavior: "smooth" });
+    }
+  }, [trainLogs.length]);
 
   function simulateTraining() {
     let p = 10;
@@ -873,6 +993,7 @@ export default function RapidCVPipeline() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             imageBase64: rawB64,
+            trainId: activeTrainId || "",
             weightsRootHash: weightsRootHash || "",
             labels: targetClasses,
           }),
@@ -1038,12 +1159,21 @@ export default function RapidCVPipeline() {
             </div>
 
             <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-              <div style={{
-                fontSize: 11, background: "#121824", border: "1px solid var(--primary)",
-                padding: "5px 12px", borderRadius: 16, display: "flex", alignItems: "center", gap: 6, color: "var(--primary)", fontWeight: 800,
-              }}>
-                <span className="material-symbols-outlined" style={{ fontSize: 14, color: "var(--primary)" }}>confirmation_number</span>
-                Subscription Quota: {quota.remainingQuota}/3 Active
+              <div
+                onClick={() => quota.remainingQuota <= 0 && handleRenewSubscription()}
+                title={quota.remainingQuota <= 0 ? "Click to renew subscription (0.001 0G ETH)" : "Active training credits"}
+                style={{
+                  fontSize: 11, background: quota.remainingQuota <= 0 ? "rgba(239, 68, 68, 0.1)" : "#121824",
+                  border: quota.remainingQuota <= 0 ? "1px solid #ef4444" : "1px solid var(--primary)",
+                  padding: "5px 12px", borderRadius: 16, display: "flex", alignItems: "center", gap: 6,
+                  color: quota.remainingQuota <= 0 ? "#ef4444" : "var(--primary)", fontWeight: 800,
+                  cursor: quota.remainingQuota <= 0 ? "pointer" : "default",
+                }}
+              >
+                <span className="material-symbols-outlined" style={{ fontSize: 14, color: quota.remainingQuota <= 0 ? "#ef4444" : "var(--primary)" }}>
+                  {quota.remainingQuota <= 0 ? "warning" : "confirmation_number"}
+                </span>
+                Subscription Quota: {quota.remainingQuota}/3 {quota.remainingQuota <= 0 ? "Exhausted (Renew)" : "Active"}
               </div>
 
               <HedaConnectButton />
@@ -1960,86 +2090,256 @@ export default function RapidCVPipeline() {
             STAGE 6: YOLO FINE-TUNING & LIVE TELEMETRY (train)
         ═══════════════════════════════════════════════ */}
         {stage === "train" && (
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 320px", gap: 20, height: "100%", overflow: "hidden" }}>
-            <div className="card" style={{ padding: 20, display: "flex", flexDirection: "column", justifyContent: "space-between", overflowY: "auto" }}>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 340px", gap: 20, height: "100%", overflow: "hidden" }}>
+            <div className="card" style={{ padding: 22, display: "flex", flexDirection: "column", justifyContent: "space-between", overflowY: "auto" }}>
               <div>
-                <h3 style={{ fontSize: 18, fontWeight: 800, marginBottom: 4 }}>Configure & Train Model</h3>
-                <p style={{ fontSize: 12, color: "var(--text-2)", marginBottom: 16 }}>
-                  Select PyTorch YOLO architecture and execute fine-tuning job on 0G compute nodes.
-                </p>
-
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12, marginBottom: 20 }}>
-                  {YOLO_MODELS.map((m) => {
-                    const isSelected = selectedArch === m.key;
-                    return (
-                      <div
-                        key={m.key}
-                        onClick={() => setSelectedArch(m.key)}
-                        style={{
-                          padding: 14, borderRadius: 8, border: "1px solid",
-                          borderColor: isSelected ? "var(--primary)" : "var(--border)",
-                          background: isSelected ? "var(--primary-bg)" : "var(--surface-high)",
-                          cursor: "pointer", transition: "all 0.2s ease", position: "relative",
-                        }}
-                      >
-                        <span style={{
-                          position: "absolute", top: 6, right: 6, fontSize: 9, fontWeight: 800,
-                          background: "rgba(0,228,121,0.15)", color: "var(--primary)", border: "1px solid var(--primary)",
-                          padding: "1px 5px", borderRadius: 4,
-                        }}>
-                          {m.badge}
-                        </span>
-                        <h4 style={{ fontSize: 14, fontWeight: 800, marginBottom: 2 }}>{m.name}</h4>
-                        <div style={{ fontSize: 10, color: "var(--text-3)", marginBottom: 6 }}>{m.params} • {m.speed}</div>
-                        <div style={{ fontSize: 11, fontWeight: 700, color: "var(--primary)" }}>{m.accuracy}</div>
-                      </div>
-                    );
-                  })}
-                </div>
-
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, marginBottom: 20 }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
                   <div>
-                    <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, fontWeight: 700, marginBottom: 4 }}>
-                      <span>Training Epochs</span>
-                      <span style={{ color: "var(--primary)" }}>{epochs}</span>
-                    </div>
-                    <input type="range" min={5} max={50} value={epochs} onChange={(e) => setEpochs(Number(e.target.value))} style={{ width: "100%" }} />
+                    <h3 style={{ fontSize: 18, fontWeight: 800, marginBottom: 2 }}>Configure & Train Model</h3>
+                    <p style={{ fontSize: 12, color: "var(--text-2)", margin: 0 }}>
+                      Select PyTorch YOLO architecture and execute fine-tuning job on local GPU node.
+                    </p>
                   </div>
                 </div>
 
-                {trainStatus === "training" && (
-                  <div style={{ marginBottom: 16 }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, fontWeight: 700, marginBottom: 4 }}>
-                      <span>Training Telemetry Progress</span>
-                      <span style={{ color: "var(--primary)" }}>{trainProgress}%</span>
+                {/* ── STEP 1: CONFIGURATION (IDLE MODE) ── */}
+                {trainStatus === "idle" && (
+                  <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+                    {/* Training Engine Runner Card */}
+                    <div style={{ padding: 12, borderRadius: 8, background: "var(--surface-low)", border: "1px solid var(--border)" }}>
+                      <div style={{ fontSize: 10, fontWeight: 800, color: "var(--text-3)", textTransform: "uppercase", marginBottom: 6 }}>TRAINING ENGINE</div>
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                          <span className="material-symbols-outlined" style={{ fontSize: 18, color: "var(--primary)" }}>laptop_mac</span>
+                          <span style={{ fontSize: 13, fontWeight: 700, color: "#fff" }}>Local Machine GPU Runner (M-Series / CUDA)</span>
+                        </div>
+                        <span style={{ fontSize: 10, background: "var(--primary-bg)", color: "var(--primary)", padding: "2px 8px", borderRadius: 4, fontWeight: 800 }}>
+                          ACTIVE LOCAL
+                        </span>
+                      </div>
+                      <div style={{
+                        background: "rgba(255, 171, 0, 0.08)",
+                        border: "1px solid rgba(255, 171, 0, 0.3)",
+                        borderRadius: 6,
+                        padding: "10px 12px",
+                        fontSize: 12,
+                        color: "#ffca28",
+                        display: "flex",
+                        alignItems: "flex-start",
+                        gap: 8
+                      }}>
+                        <span className="material-symbols-outlined" style={{ fontSize: 16, color: "#ffab00", flexShrink: 0, marginTop: 1 }}>memory</span>
+                        <div>
+                          <strong style={{ color: "#ffe082", display: "block", marginBottom: 2 }}>Local GPU Execution Active</strong>
+                          Fine-tuning runs directly on your PyTorch MPS/CUDA environment via backend <code>main.py</code>.
+                        </div>
+                      </div>
                     </div>
-                    <div style={{ width: "100%", height: 6, background: "var(--surface-high)", borderRadius: 3, overflow: "hidden", marginBottom: 10 }}>
-                      <div style={{ width: `${trainProgress}%`, height: "100%", background: "var(--primary)", transition: "width 0.3s ease" }} />
+
+                    {/* Architecture Selector Cards */}
+                    <div>
+                      <label className="label-caps" style={{ display: "block", marginBottom: 8 }}>Select Base Vision Architecture</label>
+                      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10 }}>
+                        {YOLO_MODELS.map((m) => {
+                          const isSelected = selectedArch === m.key;
+                          return (
+                            <div
+                              key={m.key}
+                              onClick={() => setSelectedArch(m.key)}
+                              style={{
+                                padding: "12px 14px", borderRadius: 8, cursor: "pointer", border: "1px solid",
+                                borderColor: isSelected ? "var(--primary)" : "var(--border)",
+                                background: isSelected ? "var(--primary-bg)" : "var(--surface-low)",
+                                transition: "all 0.2s ease",
+                              }}
+                            >
+                              <div style={{ fontSize: 14, fontWeight: 800, color: isSelected ? "var(--primary)" : "#fff" }}>{m.name}</div>
+                              <div style={{ fontSize: 11, color: "var(--text-3)", marginTop: 2 }}>{m.params} • {m.speed}</div>
+                              <div style={{ fontSize: 10, color: "var(--primary)", marginTop: 6, fontWeight: 700 }}>{m.badge}</div>
+                            </div>
+                          );
+                        })}
+                      </div>
                     </div>
-                    <div style={{ fontFamily: "'Space Grotesk', monospace", fontSize: 11, background: "#000", padding: 10, borderRadius: 6, color: "#a78bfa", maxHeight: 110, overflowY: "auto" }}>
-                      {trainLogs.map((l, i) => <div key={i}>{l}</div>)}
+
+                    {/* Hyperparameters: Epochs & Img Size */}
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+                      <div>
+                        <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, fontWeight: 700, marginBottom: 6 }}>
+                          <span className="label-caps">Epochs</span>
+                          <span style={{ color: "var(--primary)", fontFamily: "'Space Grotesk', monospace" }}>{epochs}</span>
+                        </div>
+                        <input type="range" min="5" max="100" step="5" value={epochs} onChange={(e) => setEpochs(Number(e.target.value))} style={{ width: "100%" }} />
+                      </div>
+                      <div>
+                        <span className="label-caps" style={{ display: "block", marginBottom: 6 }}>Image Resolution</span>
+                        <select
+                          value={imgSize}
+                          onChange={(e) => setImgSize(Number(e.target.value))}
+                          style={{ width: "100%", padding: "7px 10px", background: "var(--surface-low)", border: "1px solid var(--border)", color: "#fff", borderRadius: 6, fontSize: 12 }}
+                        >
+                          <option value={416}>416px (Mobile/Embedded)</option>
+                          <option value={640}>640px (Standard YOLO)</option>
+                          <option value={1280}>1280px (HD Vision)</option>
+                        </select>
+                      </div>
                     </div>
                   </div>
                 )}
 
-                {trainStatus === "completed" && (
-                  <div className="card" style={{ padding: 14, background: "rgba(0,228,121,0.1)", border: "1px solid var(--primary)", marginBottom: 16, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                {/* ── STEP 2: LIVE MONITORING (TRAINING MODE) ── */}
+                {trainStatus === "training" && (
+                  <div style={{ display: "flex", flexDirection: "column", gap: 16, marginTop: 8 }}>
                     <div>
-                      <div style={{ fontWeight: 800, color: "var(--primary)", fontSize: 13, display: "flex", alignItems: "center", gap: 4 }}>
-                        <span className="material-symbols-outlined" style={{ fontSize: 16 }}>check_circle</span>
-                        Fine-Tuning Complete!
+                      <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: "var(--text-2)", marginBottom: 6 }}>
+                        <span>Progress: Epoch {trainMetrics?.currentEpoch || 0} of {trainMetrics?.totalEpochs || epochs}</span>
+                        <span style={{ fontFamily: "'Space Grotesk', monospace", color: "var(--primary)", fontWeight: 800 }}>{trainProgress}%</span>
                       </div>
-                      <div style={{ fontSize: 11, color: "var(--text-2)" }}>Final mAP50: {trainMetrics.map50}% · Box Loss: {trainMetrics.boxLoss}</div>
+                      <div className="progress-bar" style={{ height: 10 }}>
+                        <div className="progress-fill" style={{ width: `${trainProgress}%` }} />
+                      </div>
                     </div>
-                    <button className="btn-primary btn-sm" onClick={() => requestStageTransition("test", 6, "Confirm Training Metrics & Lock Step 6", `PyTorch YOLO fine-tuning completed (mAP50: ${trainMetrics.map50}%). Do you want to lock model weights and proceed to Step 7: Test Sandbox?`)}>Test Sandbox →</button>
+
+                    {/* Live Metrics Grid */}
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 10, background: "var(--surface-low)", padding: 14, borderRadius: 8, border: "1px solid var(--border)" }}>
+                      <div>
+                        <div style={{ fontSize: 10, color: "var(--text-3)", textTransform: "uppercase" }}>mAP@50</div>
+                        <div style={{ fontSize: 18, fontWeight: 800, color: "var(--primary)", fontFamily: "'Space Grotesk', monospace" }}>
+                          {trainMetrics?.map50 ? `${(trainMetrics.map50 > 1.0 ? trainMetrics.map50 : trainMetrics.map50 * 100).toFixed(1)}%` : "—"}
+                        </div>
+                      </div>
+                      <div>
+                        <div style={{ fontSize: 10, color: "var(--text-3)", textTransform: "uppercase" }}>Precision</div>
+                        <div style={{ fontSize: 18, fontWeight: 800, color: "#60a5fa", fontFamily: "'Space Grotesk', monospace" }}>
+                          {trainMetrics?.precision ? `${(trainMetrics.precision > 1.0 ? trainMetrics.precision : trainMetrics.precision * 100).toFixed(1)}%` : "—"}
+                        </div>
+                      </div>
+                      <div>
+                        <div style={{ fontSize: 10, color: "var(--text-3)", textTransform: "uppercase" }}>Box Loss</div>
+                        <div style={{ fontSize: 18, fontWeight: 800, color: "#ffd700", fontFamily: "'Space Grotesk', monospace" }}>
+                          {trainMetrics?.boxLoss ?? "—"}
+                        </div>
+                      </div>
+                      <div>
+                        <div style={{ fontSize: 10, color: "var(--text-3)", textTransform: "uppercase" }}>Cls Loss</div>
+                        <div style={{ fontSize: 18, fontWeight: 800, color: "#a78bfa", fontFamily: "'Space Grotesk', monospace" }}>
+                          {trainMetrics?.clsLoss ?? "—"}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Live Event Stream */}
+                    <div>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+                        <span className="label-caps" style={{ fontSize: 10 }}>Live Training Timeline</span>
+                        <span style={{ fontSize: 10, color: "var(--primary)", display: "flex", alignItems: "center", gap: 4, fontWeight: 700 }}>
+                          <span style={{ width: 6, height: 6, borderRadius: "50%", background: "var(--primary)", animation: "pulse 1.5s infinite" }} />
+                          Streaming Live
+                        </span>
+                      </div>
+                      <div style={{ background: "#050806", border: "1px solid var(--border)", borderRadius: 8, padding: 12, height: 210, overflowY: "auto" }}>
+                        {trainLogs.map((l, i) => {
+                          if (l.includes("Epoch") && l.includes("mAP50")) {
+                            return (
+                              <div key={i} style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 10px", borderRadius: 6, background: "rgba(0, 228, 121, 0.08)", border: "1px solid rgba(0, 228, 121, 0.25)", marginBottom: 6 }}>
+                                <span style={{ fontSize: 9, fontWeight: 800, background: "var(--primary)", color: "#000", padding: "2px 6px", borderRadius: 4 }}>EPOCH</span>
+                                <span style={{ fontSize: 11, fontWeight: 600, color: "#fff", fontFamily: "'Space Grotesk', monospace" }}>{l}</span>
+                              </div>
+                            );
+                          }
+                          if (l.includes("PyTorch Engine Loaded") || l.includes("Active Hardware")) {
+                            return (
+                              <div key={i} style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 10px", borderRadius: 6, background: "rgba(0, 191, 255, 0.08)", border: "1px solid rgba(0, 191, 255, 0.25)", marginBottom: 6 }}>
+                                <span style={{ fontSize: 9, fontWeight: 800, background: "#00bfff", color: "#000", padding: "2px 6px", borderRadius: 4 }}>HARDWARE</span>
+                                <span style={{ fontSize: 11, fontWeight: 600, color: "#7dd3fc", fontFamily: "'Space Grotesk', monospace" }}>⚡ {l}</span>
+                              </div>
+                            );
+                          }
+                          if (l.includes("0G Storage") || l.includes("dataset")) {
+                            return (
+                              <div key={i} style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 10px", borderRadius: 6, background: "rgba(167, 139, 250, 0.08)", border: "1px solid rgba(167, 139, 250, 0.25)", marginBottom: 6 }}>
+                                <span style={{ fontSize: 9, fontWeight: 800, background: "#a78bfa", color: "#000", padding: "2px 6px", borderRadius: 4 }}>0G DATA</span>
+                                <span style={{ fontSize: 11, fontWeight: 600, color: "#c084fc", fontFamily: "'Space Grotesk', monospace" }}>📦 {l}</span>
+                              </div>
+                            );
+                          }
+                          if (l.includes("Starting") || l.includes("formatted")) {
+                            return (
+                              <div key={i} style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 10px", borderRadius: 6, background: "rgba(255, 215, 0, 0.08)", border: "1px solid rgba(255, 215, 0, 0.25)", marginBottom: 6 }}>
+                                <span style={{ fontSize: 9, fontWeight: 800, background: "#ffd700", color: "#000", padding: "2px 6px", borderRadius: 4 }}>YOLO SETUP</span>
+                                <span style={{ fontSize: 11, fontWeight: 600, color: "#ffe082", fontFamily: "'Space Grotesk', monospace" }}>🚀 {l}</span>
+                              </div>
+                            );
+                          }
+                          return (
+                            <div key={i} style={{ fontSize: 10, color: "var(--text-3)", padding: "2px 0", fontFamily: "'Space Grotesk', monospace" }}>
+                              {l}
+                            </div>
+                          );
+                        })}
+                        <div ref={trainLogsEndRef} />
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* ── STEP 3: FINE-TUNING COMPLETED ── */}
+                {trainStatus === "completed" && (
+                  <div style={{ display: "flex", flexDirection: "column", gap: 16, marginTop: 8 }}>
+                    <div className="card" style={{ padding: 18, background: "rgba(0,228,121,0.1)", border: "1px solid var(--primary)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                      <div>
+                        <div style={{ fontWeight: 900, color: "var(--primary)", fontSize: 16, display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
+                          <span className="material-symbols-outlined" style={{ fontSize: 20 }}>verified</span>
+                          Fine-Tuning Completed Successfully!
+                        </div>
+                        <div style={{ fontSize: 12, color: "var(--text-2)" }}>
+                          Final mAP50: <strong style={{ color: "var(--primary)" }}>{trainMetrics.map50}%</strong> · Box Loss: <strong style={{ color: "#ffd700" }}>{trainMetrics.boxLoss}</strong>
+                        </div>
+                      </div>
+                      <button
+                        className="btn-primary"
+                        onClick={() => requestStageTransition("test", 6, "Confirm Training Metrics & Lock Step 6", `PyTorch YOLO fine-tuning completed (mAP50: ${trainMetrics.map50}%). Do you want to lock model weights and proceed to Step 7: Test Sandbox?`)}
+                        style={{ padding: "8px 20px" }}
+                      >
+                        Test Sandbox →
+                      </button>
+                    </div>
+
+                    {/* Completed Metrics Summary Card Grid */}
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 10, background: "var(--surface-low)", padding: 14, borderRadius: 8, border: "1px solid var(--border)" }}>
+                      <div>
+                        <div style={{ fontSize: 10, color: "var(--text-3)", textTransform: "uppercase" }}>mAP@50</div>
+                        <div style={{ fontSize: 18, fontWeight: 800, color: "var(--primary)", fontFamily: "'Space Grotesk', monospace" }}>{trainMetrics.map50}%</div>
+                      </div>
+                      <div>
+                        <div style={{ fontSize: 10, color: "var(--text-3)", textTransform: "uppercase" }}>Precision</div>
+                        <div style={{ fontSize: 18, fontWeight: 800, color: "#60a5fa", fontFamily: "'Space Grotesk', monospace" }}>{trainMetrics.precision}%</div>
+                      </div>
+                      <div>
+                        <div style={{ fontSize: 10, color: "var(--text-3)", textTransform: "uppercase" }}>Box Loss</div>
+                        <div style={{ fontSize: 18, fontWeight: 800, color: "#ffd700", fontFamily: "'Space Grotesk', monospace" }}>{trainMetrics.boxLoss}</div>
+                      </div>
+                      <div>
+                        <div style={{ fontSize: 10, color: "var(--text-3)", textTransform: "uppercase" }}>Epochs</div>
+                        <div style={{ fontSize: 18, fontWeight: 800, color: "#a78bfa", fontFamily: "'Space Grotesk', monospace" }}>{epochs}</div>
+                      </div>
+                    </div>
                   </div>
                 )}
               </div>
 
-              <button className="btn-primary" onClick={handleStartTraining} disabled={trainStatus === "training" || !datasetRootHash} style={{ width: "100%", justifyContent: "center", padding: 10, fontSize: 13 }}>
-                <span className="material-symbols-outlined" style={{ fontSize: 16 }}>play_arrow</span>
-                {trainStatus === "training" ? "Training in progress..." : "Start YOLO Fine-Tuning"}
-              </button>
+              {/* Bottom Action Button (Only in IDLE mode) */}
+              {trainStatus === "idle" && (
+                <button
+                  className="btn-primary"
+                  onClick={handleStartTraining}
+                  disabled={!datasetRootHash}
+                  style={{ width: "100%", justifyContent: "center", padding: 12, fontSize: 14, marginTop: 16 }}
+                >
+                  <span className="material-symbols-outlined" style={{ fontSize: 18 }}>play_arrow</span>
+                  Start YOLO Fine-Tuning
+                </button>
+              )}
             </div>
 
             <div className="card" style={{ padding: 18 }}>
@@ -2103,10 +2403,13 @@ export default function RapidCVPipeline() {
                   {testImg ? (
                     <div style={{ position: "relative", maxWidth: "100%" }}>
                       <img src={testImg} alt="Test Canvas" style={{ maxWidth: "100%", maxHeight: 340, objectFit: "contain", borderRadius: 6 }} />
-                      {testResult?.predictions?.map((pred: any, idx: number) => {
+                      {(testResult?.boxes || testResult?.predictions || []).map((pred: any, idx: number) => {
                         const confPct = Math.round((pred.confidence || 0.95) * 100);
                         if (confPct < testConfidence) return null;
-                        const [x_min, y_min, x_max, y_max] = pred.bbox || [20, 20, 60, 60];
+                        const x_min = pred.x_min ?? pred.bbox?.[0] ?? 20;
+                        const y_min = pred.y_min ?? pred.bbox?.[1] ?? 20;
+                        const x_max = pred.x_max ?? pred.bbox?.[2] ?? 60;
+                        const y_max = pred.y_max ?? pred.bbox?.[3] ?? 60;
                         return (
                           <div
                             key={idx}
@@ -2114,15 +2417,9 @@ export default function RapidCVPipeline() {
                               position: "absolute", left: `${x_min}%`, top: `${y_min}%`,
                               width: `${x_max - x_min}%`, height: `${y_max - y_min}%`,
                               border: "2px solid #00e479", background: "rgba(0,228,121,0.2)", borderRadius: 4,
+                              boxShadow: "0 0 10px rgba(0,228,121,0.4)",
                             }}
-                          >
-                            <span style={{
-                              position: "absolute", top: -16, left: -2, background: "#00e479", color: "#000",
-                              fontSize: 9, fontWeight: 900, padding: "1px 4px",
-                            }}>
-                              {pred.class_name || targetClasses[0] || "object"} {confPct}%
-                            </span>
-                          </div>
+                          />
                         );
                       })}
                     </div>
