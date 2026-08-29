@@ -174,35 +174,57 @@ export default function DatasetDetail() {
         // 1. Save COCO annotations file
         zip.file("annotations/instances.json", JSON.stringify(cocoObj, null, 2));
 
-        // 2. Extract and zip images
+        // 2. Extract and zip images across 3 resilient fallback paths
         const imagesList = cocoObj.images ?? [];
         let addedImages = 0;
 
-        // Try extracting base64 images directly from COCO images array
+        // Path A: Extract base64 images directly from COCO images array
         imagesList.forEach((imgObj: any, idx: number) => {
-          let b64 = imgObj.base64;
-          if (b64) {
+          let b64 = imgObj.base64 ?? imgObj.data ?? imgObj.url ?? imgObj.b64;
+          if (b64 && typeof b64 === "string") {
             const cleanB64 = b64.includes(",") ? b64.split(",")[1] : b64;
-            const fileName = imgObj.file_name ?? `image_${idx + 1}.jpg`;
+            const fileName = imgObj.file_name ?? imgObj.name ?? `image_${idx + 1}.jpg`;
             zip.file(`images/${fileName}`, cleanB64, { base64: true });
             addedImages++;
           }
         });
 
-        // If base64 was not embedded in COCO images, fetch source files from dataRootHash
-        const sourceRoot = cocoObj.info?.data_root_hash ?? metadata?.dataRootHash;
+        // Path B: If base64 was not embedded in COCO images, fetch source files from dataRootHash / data_root_hash
+        const sourceRoot = cocoObj.info?.data_root_hash ?? metadata?.dataRootHash ?? dataset?.dataRootHash;
         if (addedImages === 0 && sourceRoot) {
-          const sourceFiles: any[] = await fetchFrom0GStorage(sourceRoot, 5).catch(() => []);
-          if (Array.isArray(sourceFiles)) {
+          try {
+            const sourceData: any = await fetchFrom0GStorage(sourceRoot, 5).catch(() => null);
+            const sourceFiles: any[] = Array.isArray(sourceData)
+              ? sourceData
+              : sourceData && typeof sourceData === "object"
+              ? Object.values(sourceData)
+              : [];
+
             sourceFiles.forEach((f: any, idx: number) => {
-              if (f.data) {
-                const cleanB64 = f.data.includes(",") ? f.data.split(",")[1] : f.data;
-                const fileName = f.name ?? `image_${idx + 1}.jpg`;
+              let b64 = f?.data ?? f?.base64 ?? f?.url;
+              if (b64 && typeof b64 === "string") {
+                const cleanB64 = b64.includes(",") ? b64.split(",")[1] : b64;
+                const fileName = f.name ?? f.file_name ?? `image_${idx + 1}.jpg`;
                 zip.file(`images/${fileName}`, cleanB64, { base64: true });
                 addedImages++;
               }
             });
+          } catch (err) {
+            console.warn("Could not fetch source image files from 0G Storage:", err);
           }
+        }
+
+        // Path C: Fallback to realImages UI preview state array
+        if (addedImages === 0 && realImages.length > 0) {
+          realImages.forEach((imgObj: any, idx: number) => {
+            let b64 = imgObj.url ?? imgObj.data ?? imgObj.base64;
+            if (b64 && typeof b64 === "string") {
+              const cleanB64 = b64.includes(",") ? b64.split(",")[1] : b64;
+              const fileName = imgObj.name ?? `image_${idx + 1}.jpg`;
+              zip.file(`images/${fileName}`, cleanB64, { base64: true });
+              addedImages++;
+            }
+          });
         }
 
         zip.file(

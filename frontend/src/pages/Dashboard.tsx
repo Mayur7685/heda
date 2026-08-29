@@ -279,7 +279,12 @@ export default function Dashboard() {
       } else {
         // ── IMAGE → COCO ──────────────────────────────────────────────
         setTxMsg("Building COCO dataset…");
-        const allFiles: Array<{ name: string; type: string; data: string }> = await fetchFrom0GStorage(job.dataRootHash, 3).catch(() => []);
+        const rawFiles: any = await fetchFrom0GStorage(job.dataRootHash, 3).catch(() => []);
+        const allFiles: any[] = Array.isArray(rawFiles)
+          ? rawFiles
+          : rawFiles && typeof rawFiles === "object"
+          ? Object.values(rawFiles)
+          : [];
 
         const labelToId = Object.fromEntries(labels.map((l, i) => [l, i + 1]));
         const cocoImages: any[] = [];
@@ -289,7 +294,7 @@ export default function Dashboard() {
         annotationData.forEach((ann) => {
           if (!ann) return;
           const { taskId, annotation } = ann;
-          const file = allFiles[taskId];
+          const file = allFiles.find((f: any) => f.taskId === taskId) || allFiles[taskId];
           cocoImages.push({
             id: taskId,
             file_name: file?.name ?? `task_${taskId}.jpg`,
