@@ -60,7 +60,7 @@ export function useAnnotationMarketV2(signer: ethers.Signer | null) {
     const addr = GALILEO.contracts.annotationMarketV2;
 
     // Guard: return null if V2 not yet deployed (placeholder address)
-    if (!addr || addr === '0x0000000000000000000000000000000000000000') {
+    if (!addr || (addr as string) === '0x0000000000000000000000000000000000000000') {
       return null;
     }
 
