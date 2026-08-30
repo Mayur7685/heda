@@ -1,21 +1,21 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useWallet } from "../hooks/useWallet";
-import { useAnnotationMarket } from "../hooks/useAnnotationMarket";
+import { useAnnotationMarketV2 } from "../hooks/useAnnotationMarketV2";
 
 export default function Landing() {
   const navigate = useNavigate();
   const { signer } = useWallet();
-  const market = useAnnotationMarket(signer);
+  const marketV2 = useAnnotationMarketV2(signer);
   const [stats, setStats] = useState({ totalJobs: 18, storageMB: "640 MB", activeAnnotators: 42, modelsTrained: 12 });
   const [activeTab, setActiveTab] = useState<"label" | "health" | "train">("label");
 
   useEffect(() => {
-    if (!market) return;
-    market.totalJobs().then((total) => {
+    if (!marketV2) return;
+    marketV2.totalJobs().then((total) => {
       if (total) setStats((s) => ({ ...s, totalJobs: Number(total) }));
     }).catch(() => {});
-  }, [!!market]);
+  }, [!!marketV2]);
 
   return (
     <div style={{ background: "var(--bg)", minHeight: "100vh", overflowX: "hidden", color: "var(--text)" }}>

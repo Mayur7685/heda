@@ -17,7 +17,10 @@ const V2_ABI = [
   // Mutating
   'function createJob(bytes32 dataRootHash, string metadataURI, uint256 rewardPerTask, uint256 taskCount, uint8 maxAnnotatorsPerTask, uint8 dataType) payable returns (uint256)',
   'function submitWork(uint256 jobId, uint256 taskId, bytes32 annotationRootHash) external',
+  'function submitWorkBatch(uint256 jobId, uint256[] taskIds, bytes32[] annotationRootHashes) external',
   'function triggerEvaluation(uint256 jobId, uint256 taskId) external',
+  'function distributeRewards(uint256 jobId, uint256 taskId, address[] annotators, uint256[] sharesBps) external',
+  'function distributeRewardsBatch(uint256 jobId, uint256[] taskIds, address[][] annotatorsList, uint256[][] sharesBpsList) external',
   'function closeJob(uint256 jobId) external',
 
   // View
@@ -31,7 +34,8 @@ const V2_ABI = [
   'event JobCreated(uint256 indexed jobId, address indexed creator, bytes32 dataRootHash, uint256 rewardPerTask, uint256 taskCount, uint8 maxAnnotators, uint8 dataType)',
   'event WorkSubmitted(uint256 indexed jobId, uint256 indexed taskId, address indexed annotator, bytes32 annotationRootHash, uint256 slotIndex)',
   'event EvaluationTriggered(uint256 indexed jobId, uint256 indexed taskId, address triggeredBy)',
-  'event RewardsDistributed(uint256 indexed jobId, uint256 indexed taskId, address[] annotators, uint256[] amounts)',
+  'function resetTask(uint256 jobId, uint256 taskId) external',
+  'event TaskReset(uint256 indexed jobId, uint256 indexed taskId, uint256 failedSubmissions)',
 ];
 
 export const DataTypeV2 = { Image: 0, Text: 1 } as const;
@@ -57,14 +61,14 @@ export type JobV2 = {
 
 export function useAnnotationMarketV2(signer: ethers.Signer | null) {
   return useMemo(() => {
-    const addr = GALILEO.contracts.annotationMarketV2;
+    const rawAddr = GALILEO.contracts.annotationMarketV2;
 
     // Guard: return null if V2 not yet deployed (placeholder address)
-    if (!addr || (addr as string) === '0x0000000000000000000000000000000000000000') {
+    if (!rawAddr || (rawAddr as string) === '0x0000000000000000000000000000000000000000') {
       return null;
     }
 
-    // Use signer for write operations, fallback to read-only provider for views
+    const addr = ethers.getAddress((rawAddr as string).toLowerCase());
     const provider = new ethers.JsonRpcProvider(GALILEO.rpc);
     const contract = new ethers.Contract(addr, V2_ABI, signer ?? provider);
 
@@ -112,11 +116,35 @@ export function useAnnotationMarketV2(signer: ethers.Signer | null) {
       },
 
       /**
+       * Submit batch annotations for multiple tasks in 1 single transaction & signature.
+       */
+      async submitWorkBatch(jobId: number, taskIds: number[], annotationRootHashes: string[]) {
+        const tx = await contract.submitWorkBatch(jobId, taskIds, annotationRootHashes);
+        return tx.wait();
+      },
+
+      /**
        * Creator manually requests early evaluation before all slots fill.
        * Backend relayer picks up the EvaluationTriggered event and scores immediately.
        */
       async triggerEvaluation(jobId: number, taskId: number) {
         const tx = await contract.triggerEvaluation(jobId, taskId);
+        return tx.wait();
+      },
+
+      /**
+       * Creator manual override: distribute custom reward split onchain.
+       */
+      async distributeRewards(jobId: number, taskId: number, annotators: string[], sharesBps: number[]) {
+        const tx = await contract.distributeRewards(jobId, taskId, annotators, sharesBps);
+        return tx.wait();
+      },
+
+      /**
+       * Creator manual override batch: distribute custom reward splits for multiple tasks in 1 single transaction & signature.
+       */
+      async distributeRewardsBatch(jobId: number, taskIds: number[], annotatorsList: string[][], sharesBpsList: number[][]) {
+        const tx = await contract.distributeRewardsBatch(jobId, taskIds, annotatorsList, sharesBpsList);
         return tx.wait();
       },
 
@@ -130,7 +158,20 @@ export function useAnnotationMarketV2(signer: ethers.Signer | null) {
 
       // ── Read Operations ─────────────────────────────────────────
 
-      getJob: (jobId: number): Promise<JobV2> => contract.getJob(jobId),
+      getJob: async (jobId: number) => {
+        const raw = await contract.getJob(jobId);
+        return {
+          creator:              raw.creator,
+          dataRootHash:         raw.dataRootHash,
+          metadataURI:          raw.metadataURI,
+          rewardPerTask:        ethers.formatEther(raw.rewardPerTask),
+          taskCount:            Number(raw.taskCount),
+          maxAnnotatorsPerTask: Number(raw.maxAnnotatorsPerTask),
+          approvedTaskCount:    Number(raw.approvedTaskCount),
+          dataType:             Number(raw.dataType),
+          active:               Boolean(raw.active),
+        };
+      },
 
       getTaskSubmissions: (jobId: number, taskId: number): Promise<TaskSubmission[]> =>
         contract.getTaskSubmissions(jobId, taskId),
@@ -166,6 +207,24 @@ export function useAnnotationMarketV2(signer: ethers.Signer | null) {
           dataType:             Number(e.args.dataType),
           txHash:               e.transactionHash,
         }));
+      },
+
+      /** List submissions by a specific annotator on-chain */
+      async listMySubmissions(annotatorAddress: string) {
+        try {
+          const filter = contract.filters.WorkSubmitted(null, null, annotatorAddress);
+          const events = await contract.queryFilter(filter);
+          return events.map((e: any) => ({
+            jobId: Number(e.args.jobId),
+            taskId: Number(e.args.taskId),
+            annotator: e.args.annotator,
+            annotationRootHash: e.args.annotationRootHash,
+            slotIndex: Number(e.args.slotIndex),
+            txHash: e.transactionHash,
+          }));
+        } catch {
+          return [];
+        }
       },
 
       /** Fetch task submission count from annotation indexer REST API */

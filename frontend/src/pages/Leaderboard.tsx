@@ -1,8 +1,6 @@
 import { useEffect, useState } from "react";
 import { useWallet } from "../hooks/useWallet";
-import { useAnnotationMarket } from "../hooks/useAnnotationMarket";
 import { GALILEO } from "../config";
-import { ethers } from "ethers";
 
 interface AnnotatorStats {
   address: string;
@@ -16,89 +14,62 @@ interface AnnotatorStats {
 }
 
 export default function Leaderboard() {
-  const { signer, address: userAddress } = useWallet();
-  const market = useAnnotationMarket(signer);
+  const { address: userAddress } = useWallet();
   const [annotators, setAnnotators] = useState<AnnotatorStats[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [sortBy, setSortBy] = useState<"earned" | "approved">("earned");
 
   useEffect(() => {
-    if (!market) return;
     loadLeaderboard();
-  }, [!!market]);
+  }, []);
 
   async function loadLeaderboard() {
-    if (!market) return;
     setLoading(true);
-
     try {
-      // 1. Fetch all jobs to aggregate task rewards and submissions
-      const jobs = await market.listJobs();
-      const map: Record<string, { approved: number; submitted: number; totalEth: bigint }> = {};
+      // Fetch live V2 indexer leaderboard API
+      const res = await fetch("http://localhost:3001/annotations/leaderboard");
+      if (res.ok) {
+        const data = await res.json();
+        if (Array.isArray(data?.leaderboard) && data.leaderboard.length > 0) {
+          const list: AnnotatorStats[] = data.leaderboard.map((item: any, idx: number) => {
+            const avgIou = item.avg_iou_score || 0;
+            const approved = (item.total_evaluated || 0) - (item.total_rejected || 0);
+            const rate = item.total_evaluated > 0 ? Math.round((approved / item.total_evaluated) * 100) : 100;
 
-      await Promise.all(
-        jobs.map(async (job) => {
-          const rewardPerTask = ethers.parseEther(job.rewardPerTask);
-          for (let i = 0; i < job.taskCount; i++) {
-            try {
-              const sub = await market.getSubmission(job.jobId, i);
-              if (sub.exists && sub.annotator && sub.annotator !== ethers.ZeroAddress) {
-                const addr = sub.annotator.toLowerCase();
-                if (!map[addr]) {
-                  map[addr] = { approved: 0, submitted: 0, totalEth: 0n };
-                }
-                map[addr].submitted += 1;
-                if (sub.approved) {
-                  map[addr].approved += 1;
-                  map[addr].totalEth += rewardPerTask;
-                }
-              }
-            } catch {}
-          }
-        })
-      );
+            let level = "Verified Annotator";
+            let badgeColor = "#60a5fa";
+            if (avgIou >= 0.85 || approved >= 20) {
+              level = "Grandmaster Annotator";
+              badgeColor = "#ffd700";
+            } else if (avgIou >= 0.70 || approved >= 10) {
+              level = "Master Annotator";
+              badgeColor = "#00e479";
+            } else if (avgIou >= 0.50 || approved >= 3) {
+              level = "Expert Annotator";
+              badgeColor = "#7fff00";
+            }
 
-      // Convert map to array and compute rankings
-      const list: AnnotatorStats[] = Object.entries(map).map(([addr, data]) => {
-        const ethVal = parseFloat(ethers.formatEther(data.totalEth));
-        const rate = data.submitted > 0 ? Math.round((data.approved / data.submitted) * 100) : 100;
-        
-        let level = "Verified Annotator";
-        let badgeColor = "#60a5fa";
+            return {
+              address: item.address,
+              tasksApproved: approved,
+              tasksSubmitted: item.total_submissions,
+              totalEarned0G: (avgIou * 100).toFixed(1) + "% Avg IoU",
+              approvalRate: rate,
+              rank: idx + 1,
+              level,
+              badgeColor,
+            };
+          });
 
-        if (data.approved >= 20 || ethVal >= 5.0) {
-          level = "Grandmaster Annotator";
-          badgeColor = "#ffd700";
-        } else if (data.approved >= 10 || ethVal >= 2.0) {
-          level = "Master Annotator";
-          badgeColor = "#00e479";
-        } else if (data.approved >= 5) {
-          level = "Expert Annotator";
-          badgeColor = "#7fff00";
+          setAnnotators(list);
+        } else {
+          setAnnotators([]);
         }
-
-        return {
-          address: addr,
-          tasksApproved: data.approved,
-          tasksSubmitted: data.submitted,
-          totalEarned0G: ethVal.toFixed(2),
-          approvalRate: rate,
-          rank: 0,
-          level,
-          badgeColor,
-        };
-      });
-
-      // Sort by earned or approved
-      list.sort((a, b) => parseFloat(b.totalEarned0G) - parseFloat(a.totalEarned0G));
-      list.forEach((item, idx) => {
-        item.rank = idx + 1;
-      });
-
-      setAnnotators(list);
+      }
     } catch (e) {
-      console.warn("Leaderboard load error:", e);
+      console.warn("V2 leaderboard API note:", e);
+      setAnnotators([]);
     } finally {
       setLoading(false);
     }

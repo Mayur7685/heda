@@ -48,15 +48,26 @@ async function setToIndexedDB(key: string, value: any): Promise<void> {
   }
 }
 
-async function post(base64: string): Promise<string> {
-  const res = await fetch(`${UPLOAD_API}/upload`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ data: base64 }),
-  });
-  const json = await res.json();
-  if (!res.ok) throw new Error(json.error ?? res.statusText);
-  return json.rootHash;
+async function post(base64: string, maxRetries = 4): Promise<string> {
+  let lastErr: Error = new Error("Upload failed");
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    try {
+      const res = await fetch(`${UPLOAD_API}/upload`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ data: base64 }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? res.statusText);
+      return json.rootHash;
+    } catch (err: any) {
+      lastErr = err;
+      if (attempt < maxRetries - 1) {
+        await new Promise((r) => setTimeout(r, (attempt + 1) * 1000));
+      }
+    }
+  }
+  throw lastErr;
 }
 
 // Safe base64 encoding for large buffers — spread operator blows stack on >1MB

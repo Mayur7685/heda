@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from "react";
 import { useWallet } from "../hooks/useWallet";
-import { useAnnotationMarket } from "../hooks/useAnnotationMarket";
 import { useAnnotationMarketV2 } from "../hooks/useAnnotationMarketV2";
 import { useDatasetRegistry } from "../hooks/useDatasetRegistry";
 import { uploadJson, uploadBlob, fetchFrom0GStorage } from "../hooks/useStorage";
@@ -13,7 +12,6 @@ type SubRow = { taskId: number; annotator: string; annotationRootHash: string; a
 
 export default function Dashboard() {
   const { signer, address } = useWallet();
-  const market    = useAnnotationMarket(signer);
   const marketV2  = useAnnotationMarketV2(signer);
   const registry  = useDatasetRegistry(signer);
   const [myJobs, setMyJobs] = useState<JobRow[]>([]);
@@ -24,8 +22,8 @@ export default function Dashboard() {
   const [txErr, setTxErr] = useState(false);
   const [publishing, setPublishing] = useState(false);
   const [publishForm, setPublishForm] = useState({ name: "", description: "", price: "0", labels: "" });
-  // Batch select for approve/reject
-  const [selectedSubs, setSelectedSubs] = useState<Set<number>>(new Set());
+  // Batch select for approve/reject (keyed by "taskId:annotator")
+  const [selectedSubs, setSelectedSubs] = useState<Set<string>>(new Set());
   const [batchBusy, setBatchBusy] = useState(false);
   // Annotated image preview modal
   const [previewSub, setPreviewSub] = useState<SubRow | null>(null);
@@ -45,26 +43,22 @@ export default function Dashboard() {
   const loaded = useRef(false);
 
   useEffect(() => {
-    if ((!market && !marketV2) || !address || loaded.current) return;
+    if (!marketV2 || !address || loaded.current) return;
     loaded.current = true;
     loadMyJobs();
-  }, [!!market, !!marketV2, address]);
+  }, [!!marketV2, address]);
 
   async function loadMyJobs() {
     if (!address) return;
     setLoading(true);
     try {
-      const [v1Events, v2Events] = await Promise.all([
-        market ? market.listJobs().catch(() => []) : [],
-        marketV2 ? marketV2.listJobs().catch(() => []) : [],
-      ]);
-
-      const mineV2 = v2Events.filter((e) => e.creator.toLowerCase() === address.toLowerCase());
-      const mineV1 = v1Events.filter((e) => e.creator.toLowerCase() === address.toLowerCase());
+      // Only load V2 jobs — V1 is legacy and causes duplicate JOB #0 since both start at id=0
+      const v2Events = marketV2 ? await marketV2.listJobs().catch(() => []) : [];
+      const mineV2 = v2Events.filter((e: any) => e.creator.toLowerCase() === address.toLowerCase());
 
       const withStateV2 = marketV2
         ? await Promise.all(
-            mineV2.map(async (e) => {
+            mineV2.map(async (e: any) => {
               try {
                 const j = await marketV2.getJob(e.jobId);
                 return {
@@ -84,29 +78,7 @@ export default function Dashboard() {
           )
         : [];
 
-      const withStateV1 = market
-        ? await Promise.all(
-            mineV1.map(async (e) => {
-              try {
-                const j = await market.getJob(e.jobId);
-                return {
-                  jobId: e.jobId,
-                  dataRootHash: e.dataRootHash,
-                  rewardPerTask: e.rewardPerTask,
-                  taskCount: Number(j.taskCount),
-                  approvedCount: Number(j.approvedCount),
-                  active: j.active,
-                  dataType: Number(j.dataType),
-                  isV2: false,
-                };
-              } catch {
-                return null;
-              }
-            })
-          )
-        : [];
-
-      const allMine = [...withStateV2.filter(Boolean), ...withStateV1.filter(Boolean)] as JobRow[];
+      const allMine = withStateV2.filter(Boolean) as JobRow[];
       setMyJobs(allMine);
 
       if (registry) {
@@ -118,6 +90,7 @@ export default function Dashboard() {
       }
     } finally {
       setLoading(false);
+
     }
   }
 
@@ -129,38 +102,55 @@ export default function Dashboard() {
     const rows: SubRow[] = [];
 
     if ((job as any).isV2 || marketV2) {
-      // For V2 jobs, fetch task annotations from indexer REST API & V2 contract
-      const taskData: Record<number, any> = {};
+      // For V2 jobs, fetch task annotations from BOTH V2 onchain contract & indexer REST API
+      const taskDataMap: Record<number, any> = {};
       for (let i = 0; i < job.taskCount; i++) {
         try {
-          const res = await fetch(`http://localhost:3001/annotations/task/${job.jobId}/${i}`);
-          if (res.ok) {
-            const data = await res.json();
-            taskData[i] = data;
-            if (Array.isArray(data.submissions)) {
-              for (const sub of data.submissions) {
+          const [onchainSubs, indexerRes] = await Promise.all([
+            marketV2 ? marketV2.getTaskSubmissions(job.jobId, i).catch(() => []) : [],
+            fetch(`http://localhost:3001/annotations/task/${job.jobId}/${i}`).then((r) => r.ok ? r.json() : null).catch(() => null),
+          ]);
+
+          if (indexerRes) {
+            taskDataMap[i] = indexerRes;
+          }
+
+          const seenAnnotators = new Set<string>();
+
+          // Add submissions returned by indexer
+          if (indexerRes && Array.isArray(indexerRes.submissions)) {
+            for (const sub of indexerRes.submissions) {
+              const addrLower = (sub.annotator || "").toLowerCase();
+              if (addrLower) seenAnnotators.add(addrLower);
+              rows.push({
+                taskId: i,
+                annotator: sub.annotator,
+                annotationRootHash: sub.annotation_root_hash || sub.annotationRootHash || "",
+                approved: sub.status === "rewarded",
+              });
+            }
+          }
+
+          // Merge any on-chain submissions that indexer hasn't synced yet
+          if (Array.isArray(onchainSubs)) {
+            for (const oSub of onchainSubs) {
+              const addrLower = (oSub.annotator || "").toLowerCase();
+              if (addrLower && !seenAnnotators.has(addrLower)) {
+                seenAnnotators.add(addrLower);
                 rows.push({
                   taskId: i,
-                  annotator: sub.annotator,
-                  annotationRootHash: sub.annotation_root_hash || sub.annotationRootHash || "",
-                  approved: sub.status === "rewarded",
+                  annotator: oSub.annotator,
+                  annotationRootHash: oSub.annotationRootHash || "",
+                  approved: Boolean(oSub.rewarded),
                 });
               }
             }
           }
-        } catch {}
+        } catch (e) {
+          console.warn(`Error loading task ${i} submissions:`, e);
+        }
       }
-      setV2TaskData(taskData);
-    }
-
-    if (rows.length === 0 && market) {
-      // Fallback for V1 jobs
-      for (let i = 0; i < job.taskCount; i++) {
-        try {
-          const sub = await market.getSubmission(job.jobId, i);
-          if (sub.exists) rows.push({ taskId: i, annotator: sub.annotator, annotationRootHash: sub.annotationRootHash, approved: sub.approved });
-        } catch {}
-      }
+      setV2TaskData(taskDataMap);
     }
 
     setSubs(rows);
@@ -185,72 +175,46 @@ export default function Dashboard() {
     } catch { /* ignore */ }
   }
 
-  async function approve(jobId: number, taskId: number) {
-    if (!market) return;
-    try { await market.approveWork(jobId, taskId); setSubs((s) => s.map((x) => x.taskId === taskId ? { ...x, approved: true } : x)); } catch (e: any) { setTxMsg(e.message); setTxErr(true); }
-  }
-
-  async function reject(jobId: number, taskId: number) {
-    if (!market) return;
-    try { await market.rejectWork(jobId, taskId); setSubs((s) => s.filter((x) => x.taskId !== taskId)); } catch (e: any) { setTxMsg(e.message); setTxErr(true); }
-  }
-
-  // ── Batch approve / reject (1 single wallet transaction!) ─────────
-  async function batchApprove() {
-    if (!market || !selected || selectedSubs.size === 0) return;
-    setBatchBusy(true);
-    setTxMsg("Approving batch onchain…"); setTxErr(false);
-    const taskIds = Array.from(selectedSubs);
-    try {
-      const receipt = await market.approveBatch(selected.jobId, taskIds);
-      setSubs((s) => s.map((x) => selectedSubs.has(x.taskId) ? { ...x, approved: true } : x));
-      setTxMsg(`✓ Approved ${taskIds.length} tasks in 1 signature — ${GALILEO.explorer}/tx/${receipt.hash}`);
-      setSelectedSubs(new Set());
-      await loadMyJobs();
-    } catch (e: any) {
-      setTxMsg(e.message);
-      setTxErr(true);
-    } finally {
-      setBatchBusy(false);
-    }
-  }
-
-  async function batchReject() {
-    if (!market || !selected || selectedSubs.size === 0) return;
-    setBatchBusy(true);
-    setTxMsg("Rejecting batch onchain…"); setTxErr(false);
-    const taskIds = Array.from(selectedSubs);
-    try {
-      const receipt = await market.rejectBatch(selected.jobId, taskIds);
-      setSubs((s) => s.filter((x) => !selectedSubs.has(x.taskId)));
-      setTxMsg(`✓ Rejected ${taskIds.length} tasks in 1 signature — ${GALILEO.explorer}/tx/${receipt.hash}`);
-      setSelectedSubs(new Set());
-      await loadMyJobs();
-    } catch (e: any) {
-      setTxMsg(e.message);
-      setTxErr(true);
-    } finally {
-      setBatchBusy(false);
-    }
-  }
-
-  function toggleSelectSub(taskId: number) {
-    setSelectedSubs((prev) => { const n = new Set(prev); n.has(taskId) ? n.delete(taskId) : n.add(taskId); return n; });
+  function toggleSelectSub(key: string) {
+    setSelectedSubs((prev) => { const n = new Set(prev); n.has(key) ? n.delete(key) : n.add(key); return n; });
   }
 
   function selectAllPending() {
-    const pending = subs.filter((s) => !s.approved).map((s) => s.taskId);
+    const pending = subs.filter((s) => !s.approved).map((s) => `${s.taskId}:${s.annotator.toLowerCase()}`);
     setSelectedSubs((prev) => prev.size === pending.length ? new Set() : new Set(pending));
+  }
+
+  async function batchEvaluate() {
+    if (!marketV2 || !selected || selectedSubs.size === 0) return;
+    setBatchBusy(true);
+    setTxMsg("Triggering evaluation for selected tasks…"); setTxErr(false);
+    const taskIds = Array.from(new Set(Array.from(selectedSubs).map(k => Number(k.split(":")[0]))));
+    try {
+      for (const tid of taskIds) {
+        fetch("http://localhost:3001/annotations/evaluate", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ jobId: selected.jobId, taskId: tid }),
+        }).catch(() => {});
+      }
+      setTxMsg(`⚡ Triggered Moondream evaluation for ${taskIds.length} tasks.`);
+      setSelectedSubs(new Set());
+    } catch (e: any) {
+      setTxMsg(e.message);
+      setTxErr(true);
+    } finally {
+      setBatchBusy(false);
+    }
   }
 
   // ── Close / Archive Job (refunds unspent bounty) ───────────────────
   async function handleCloseJob(jobId: number) {
-    if (!market) return;
+    if (!marketV2) return;
     if (!window.confirm(`Are you sure you want to archive Job #${jobId}? All unspent bounty ETH will be refunded to your wallet.`)) return;
     setTxMsg("Closing job & refunding unspent bounty onchain…");
     setTxErr(false);
     try {
-      const receipt = await market.closeJob(jobId);
+      const receipt = await marketV2.closeJob(jobId);
       setTxMsg(`✓ Job #${jobId} archived & unspent bounty refunded — ${GALILEO.explorer}/tx/${receipt.hash}`);
       await loadMyJobs();
       if (selected?.jobId === jobId) {
@@ -262,23 +226,49 @@ export default function Dashboard() {
     }
   }
 
-  // ── Annotated image preview ────────────────────────────────────────
+  // ── Multi-Layer Annotated image preview + Moondream GT Inspection ──────
+  const [previewGTBoxes, setPreviewGTBoxes] = useState<any[]>([]);
+  const [previewTaskSubmissions, setPreviewTaskSubmissions] = useState<any[]>([]);
+  const [layerVisibility, setLayerVisibility] = useState<Record<string, boolean>>({ gt: true, anno: true });
+  const [customSharesBps, setCustomSharesBps] = useState<Record<string, number>>({});
+  const [overrideBusy, setOverrideBusy] = useState(false);
+
   async function openPreview(sub: SubRow) {
     if (!selected) return;
     setPreviewSub(sub);
     setPreviewLoading(true);
     setPreviewImageUrl("");
     setPreviewAnnotations([]);
+    setPreviewGTBoxes([]);
+    setPreviewTaskSubmissions([]);
     setPreviewImgSize(null);
+    setCustomSharesBps({});
+    setLayerVisibility({ gt: true, anno: true });
+
     try {
-      // Fetch annotation JSON (contains bboxes) & raw dataset data files in parallel
-      const [annData, files] = await Promise.all([
+      // Fetch annotation JSON, dataset files, indexer GT & all submissions in parallel
+      const [annData, files, gtRes, taskAnnoRes] = await Promise.all([
         fetchFrom0GStorage(sub.annotationRootHash, 5).catch(() => null),
         fetchFrom0GStorage(selected.dataRootHash, 5).catch(() => null),
+        fetch(`http://localhost:3001/annotations/ground-truth/${selected.jobId}/${sub.taskId}`).then(r => r.ok ? r.json() : null).catch(() => null),
+        fetch(`http://localhost:3001/annotations/task/${selected.jobId}/${sub.taskId}`).then(r => r.ok ? r.json() : null).catch(() => null),
       ]);
 
       const boxes: any[] = Array.isArray(annData?.annotation) ? annData.annotation : [];
       setPreviewAnnotations(boxes);
+
+      if (gtRes?.groundTruth && Array.isArray(gtRes.groundTruth)) {
+        setPreviewGTBoxes(gtRes.groundTruth);
+      }
+
+      if (taskAnnoRes?.submissions && Array.isArray(taskAnnoRes.submissions)) {
+        setPreviewTaskSubmissions(taskAnnoRes.submissions);
+        const initShares: Record<string, number> = {};
+        taskAnnoRes.submissions.forEach((s: any) => {
+          initShares[s.annotator.toLowerCase()] = s.reward_share_bps || 0;
+        });
+        setCustomSharesBps(initShares);
+      }
 
       if (Array.isArray(files)) {
         const file = files[sub.taskId];
@@ -601,15 +591,10 @@ export default function Dashboard() {
                   <span style={{ fontSize: 13, fontWeight: 600, color: "var(--primary)" }}>
                     {selectedSubs.size} selected
                   </span>
-                  <button className="btn-primary btn-sm" onClick={batchApprove} disabled={batchBusy}
+                  <button className="btn-primary btn-sm" onClick={batchEvaluate} disabled={batchBusy}
                     style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                    <span className="material-symbols-outlined" style={{ fontSize: 15 }}>check_circle</span>
-                    {batchBusy ? "Approving…" : `Approve ${selectedSubs.size}`}
-                  </button>
-                  <button className="btn-sm" onClick={batchReject} disabled={batchBusy}
-                    style={{ display: "flex", alignItems: "center", gap: 4, padding: "5px 12px", borderRadius: 4, border: "1px solid var(--error)", background: "rgba(255,68,68,0.08)", color: "var(--error)", fontSize: 12, fontWeight: 600, cursor: batchBusy ? "not-allowed" : "pointer" }}>
-                    <span className="material-symbols-outlined" style={{ fontSize: 15 }}>cancel</span>
-                    {batchBusy ? "Rejecting…" : `Reject ${selectedSubs.size}`}
+                    <span className="material-symbols-outlined" style={{ fontSize: 15 }}>bolt</span>
+                    {batchBusy ? "Triggering…" : `Evaluate ${selectedSubs.size} Tasks`}
                   </button>
                   <button className="btn-ghost btn-sm" onClick={() => setSelectedSubs(new Set())} style={{ marginLeft: "auto" }}>Clear</button>
                 </div>
@@ -626,6 +611,7 @@ export default function Dashboard() {
                     </th>
                     <th>Task #</th>
                     <th>Annotator</th>
+                    <th>0G Storage Root</th>
                     {/* V2: IoU quality score column */}
                     <th style={{ textAlign: "center" }}>
                       <span title="Moondream IoU quality score (auto-evaluated)" style={{ display: "inline-flex", alignItems: "center", gap: 3, cursor: "help" }}>
@@ -639,10 +625,11 @@ export default function Dashboard() {
                 </thead>
                 <tbody>
                   {subs.length === 0 && (
-                    <tr><td colSpan={5} style={{ textAlign: "center", color: "var(--text-3)", padding: 24 }}>No submissions yet.</td></tr>
+                    <tr><td colSpan={6} style={{ textAlign: "center", color: "var(--text-3)", padding: 24 }}>No submissions yet.</td></tr>
                   )}
-                  {subs.map((sub) => {
+                  {subs.map((sub, idx) => {
                     // Try to find V2 quality data from indexer for this annotator+task
+                    const subKey = `${sub.taskId}:${sub.annotator.toLowerCase()}`;
                     const taskAnno = v2TaskData[sub.taskId];
                     const v2Sub = taskAnno?.submissions?.find((s: any) =>
                       s.annotator?.toLowerCase() === sub.annotator?.toLowerCase()
@@ -652,17 +639,33 @@ export default function Dashboard() {
                     const subStatus: string = v2Sub?.status ?? "";
 
                     return (
-                    <tr key={sub.taskId} style={{ background: selectedSubs.has(sub.taskId) ? "rgba(0,228,121,0.04)" : "transparent" }}>
+                    <tr key={`${sub.taskId}-${sub.annotator}-${idx}`} style={{ background: selectedSubs.has(subKey) ? "rgba(0,228,121,0.04)" : "transparent" }}>
                       <td style={{ paddingRight: 0 }}>
                         {!sub.approved && (
                           <input type="checkbox"
-                            checked={selectedSubs.has(sub.taskId)}
-                            onChange={() => toggleSelectSub(sub.taskId)}
+                            checked={selectedSubs.has(subKey)}
+                            onChange={() => toggleSelectSub(subKey)}
                             style={{ cursor: "pointer", accentColor: "var(--primary)" }} />
                         )}
                       </td>
                       <td style={{ fontFamily: "'Space Grotesk', monospace" }}>#{sub.taskId + 1}</td>
                       <td><span className="mono-tag">{sub.annotator.slice(0, 6)}…{sub.annotator.slice(-4)}</span></td>
+                      <td>
+                        {sub.annotationRootHash ? (
+                          <a
+                            href={`${GALILEO.storageExplorer}/file/${sub.annotationRootHash}`}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="mono-tag"
+                            style={{ color: "var(--primary)", textDecoration: "none" }}
+                            title="View annotation file on 0G Storage Explorer"
+                          >
+                            {sub.annotationRootHash.slice(0, 8)}…{sub.annotationRootHash.slice(-4)} ↗
+                          </a>
+                        ) : (
+                          <span style={{ fontSize: 11, color: "var(--text-3)" }}>—</span>
+                        )}
+                      </td>
 
                       {/* V2 IoU Score cell */}
                       <td style={{ textAlign: "center" }}>
@@ -696,44 +699,70 @@ export default function Dashboard() {
                         </button>
                       </td>
                       <td style={{ textAlign: "right" }}>
-                        {subStatus === "rewarded" ? (
-                          <span className="badge badge-approved">Auto-Rewarded</span>
+                        {v2Sub?.status === "rewarded" || subStatus === "rewarded" ? (
+                          <span className="badge badge-approved" title={`Rewarded ${v2Sub?.reward_share_bps ? (v2Sub.reward_share_bps / 100) : 100}% share`}>
+                            Auto-Rewarded ({v2Sub?.reward_share_bps ? `${(v2Sub.reward_share_bps / 100).toFixed(0)}%` : "100%"})
+                          </span>
+                        ) : v2Sub?.status === "evaluating" || evalBusy === sub.taskId ? (
+                          <span className="badge" style={{ background: "rgba(96,165,250,0.12)", color: "#60a5fa", border: "1px solid rgba(96,165,250,0.3)", display: "inline-flex", alignItems: "center", gap: 4 }}>
+                            <span className="material-symbols-outlined" style={{ fontSize: 13, animation: "spin 1.5s linear infinite" }}>progress_activity</span>
+                            Evaluating Moondream…
+                          </span>
+                        ) : v2Sub?.status === "evaluated" ? (
+                          <span className="badge" style={{ background: "rgba(234,179,8,0.12)", color: "#eab308", border: "1px solid rgba(234,179,8,0.3)" }}>
+                            Evaluated ({v2Sub?.reward_share_bps ? `${(v2Sub.reward_share_bps / 100).toFixed(0)}%` : "Pending Tx"})
+                          </span>
+                        ) : v2Sub?.status === "rejected" ? (
+                          <span className="badge" style={{ background: "rgba(255,68,68,0.12)", color: "var(--error)", border: "1px solid rgba(255,68,68,0.3)" }}>
+                            Low IoU ({((v2Sub.iou_score || 0) * 100).toFixed(0)}%)
+                          </span>
                         ) : sub.approved ? (
                           <span className="badge badge-approved">Approved</span>
                         ) : (
                           <div style={{ display: "flex", justifyContent: "flex-end", gap: 6 }}>
-                            {/* V2: Per-task manual evaluate override */}
-                            {marketV2 && (
+                            {/* V2: Per-task manual evaluate trigger */}
+                            {marketV2 ? (
                               <button
                                 onClick={async () => {
                                   setEvalBusy(sub.taskId);
+                                  setV2TaskData((prev) => ({
+                                    ...prev,
+                                    [sub.taskId]: {
+                                      ...prev[sub.taskId],
+                                      submissions: prev[sub.taskId]?.submissions?.map((s: any) =>
+                                        s.annotator.toLowerCase() === sub.annotator.toLowerCase() ? { ...s, status: "evaluating" } : s
+                                      ) || [{ annotator: sub.annotator, status: "evaluating" }]
+                                    }
+                                  }));
                                   try {
+                                    // Trigger backend indexer evaluation immediately via HTTP REST API
+                                    fetch("http://localhost:3001/annotations/evaluate", {
+                                      method: "POST",
+                                      headers: { "Content-Type": "application/json" },
+                                      body: JSON.stringify({ jobId: selected!.jobId, taskId: sub.taskId }),
+                                    }).catch(() => {});
+
+                                    // Also emit onchain event as backup
                                     await marketV2!.triggerEvaluation(selected!.jobId, sub.taskId);
-                                    setTxMsg(`Evaluation triggered for task #${sub.taskId + 1} — scores will appear shortly.`);
+                                    setTxMsg(`⚡ Evaluation triggered for Task #${sub.taskId + 1} — Moondream is scoring now.`);
                                     setTxErr(false);
                                   } catch (e: any) {
                                     setTxMsg(e.message); setTxErr(true);
                                   } finally { setEvalBusy(null); }
                                 }}
-                                disabled={evalBusy === sub.taskId}
-                                title="Trigger Moondream IoU evaluation for this task"
+                                disabled={evalBusy === sub.taskId || evalBusy === -1}
+                                title="Trigger Moondream IoU quality evaluation for this task"
                                 style={{
-                                  padding: "4px 8px", borderRadius: 4, border: "1px solid rgba(0,228,121,0.3)",
+                                  padding: "4px 10px", borderRadius: 4, border: "1px solid rgba(0,228,121,0.3)",
                                   background: "rgba(0,228,121,0.07)", color: "var(--primary)",
-                                  fontSize: 11, fontWeight: 600, cursor: evalBusy === sub.taskId ? "not-allowed" : "pointer",
+                                  fontSize: 11, fontWeight: 600, cursor: evalBusy !== null ? "not-allowed" : "pointer",
                                   display: "flex", alignItems: "center", gap: 3,
                                 }}
                               >
                                 <span className="material-symbols-outlined" style={{ fontSize: 13 }}>bolt</span>
-                                {evalBusy === sub.taskId ? "…" : "Eval"}
+                                {evalBusy === sub.taskId ? "Triggering…" : "Eval"}
                               </button>
-                            )}
-                            <button className="btn-ghost btn-icon" onClick={() => approve(selected!.jobId, sub.taskId)} title="Approve this task">
-                              <span className="material-symbols-outlined" style={{ color: "var(--primary)", fontSize: 20 }}>check_circle</span>
-                            </button>
-                            <button className="btn-ghost btn-icon" onClick={() => reject(selected!.jobId, sub.taskId)} title="Reject this task">
-                              <span className="material-symbols-outlined" style={{ color: "var(--error)", fontSize: 20 }}>cancel</span>
-                            </button>
+                            ) : null}
                           </div>
                         )}
                       </td>
@@ -744,108 +773,211 @@ export default function Dashboard() {
               </table>
             </div>
 
-            {/* Annotated Image Preview Modal */}
+            {/* Annotated Image Preview + Moondream GT & Manual Override Modal */}
             {previewSub && (
               <div style={{ position: "fixed", inset: 0, zIndex: 200, background: "rgba(0,0,0,0.85)",
                 display: "flex", alignItems: "center", justifyContent: "center", backdropFilter: "blur(6px)" }}
                 onClick={() => setPreviewSub(null)}>
                 <div style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 12,
-                  padding: 24, maxWidth: 700, width: "90vw", maxHeight: "90vh", overflow: "auto" }}
+                  padding: 24, maxWidth: 760, width: "92vw", maxHeight: "90vh", overflow: "auto" }}
                   onClick={(e) => e.stopPropagation()}>
+
                   {/* Modal header */}
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
                     <div>
-                      <div style={{ fontSize: 15, fontWeight: 700 }}>Task #{previewSub.taskId + 1} — Annotated Preview</div>
+                      <div style={{ fontSize: 16, fontWeight: 700, display: "flex", alignItems: "center", gap: 8 }}>
+                        Task #{previewSub.taskId + 1} Inspection &amp; AI Ground Truth
+                        {previewGTBoxes.length > 0 && (
+                          <span style={{ fontSize: 11, background: "rgba(255,215,0,0.15)", color: "#ffd700", border: "1px solid rgba(255,215,0,0.3)", padding: "2px 8px", borderRadius: 12, fontWeight: 600 }}>
+                            {previewGTBoxes.length} Moondream GT {previewGTBoxes.length === 1 ? "box" : "boxes"}
+                          </span>
+                        )}
+                      </div>
                       <div style={{ fontSize: 12, color: "var(--text-3)", marginTop: 2 }}>
-                        by <span className="mono-tag">{previewSub.annotator.slice(0, 8)}…{previewSub.annotator.slice(-6)}</span>
+                        Submitted by <span className="mono-tag">{previewSub.annotator.slice(0, 8)}…{previewSub.annotator.slice(-6)}</span>
                       </div>
                     </div>
-                    <div style={{ display: "flex", gap: 8 }}>
-                      {!previewSub.approved && (
-                        <><button className="btn-primary btn-sm" onClick={() => { approve(selected!.jobId, previewSub.taskId); setPreviewSub(null); }}>
-                          <span className="material-symbols-outlined" style={{ fontSize: 14 }}>check_circle</span> Approve
-                        </button>
-                        <button className="btn-sm" onClick={() => { reject(selected!.jobId, previewSub.taskId); setPreviewSub(null); }}
-                          style={{ padding: "5px 12px", borderRadius: 4, border: "1px solid var(--error)", background: "rgba(255,68,68,0.08)", color: "var(--error)", fontSize: 12, fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", gap: 4 }}>
-                          <span className="material-symbols-outlined" style={{ fontSize: 14 }}>cancel</span> Reject
-                        </button></>
-                      )}
-                      <button className="btn-ghost btn-icon" onClick={() => setPreviewSub(null)}>
-                        <span className="material-symbols-outlined">close</span>
-                      </button>
-                    </div>
+                    <button className="btn-ghost btn-icon" onClick={() => setPreviewSub(null)}>
+                      <span className="material-symbols-outlined">close</span>
+                    </button>
+                  </div>
+
+                  {/* Layer Visibility Toggles */}
+                  <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 16, padding: "8px 12px", background: "var(--surface-high)", borderRadius: 6, border: "1px solid var(--border)", flexWrap: "wrap" }}>
+                    <span style={{ fontSize: 12, fontWeight: 600, color: "var(--text-2)" }}>Layers:</span>
+                    <label style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 12, cursor: "pointer", color: "#ffd700", fontWeight: 600 }}>
+                      <input type="checkbox" checked={layerVisibility.gt} onChange={(e) => setLayerVisibility(p => ({ ...p, gt: e.target.checked }))} />
+                      <span className="material-symbols-outlined" style={{ fontSize: 16, color: "#ffd700" }}>auto_awesome</span>
+                      Moondream AI Ground Truth ({previewGTBoxes.length})
+                    </label>
+                    <label style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 12, cursor: "pointer", color: "#00e479", fontWeight: 600 }}>
+                      <input type="checkbox" checked={layerVisibility.anno} onChange={(e) => setLayerVisibility(p => ({ ...p, anno: e.target.checked }))} />
+                      <span className="material-symbols-outlined" style={{ fontSize: 16, color: "#00e479" }}>draw</span>
+                      Annotator Submissions ({previewAnnotations.length})
+                    </label>
                   </div>
 
                   {/* Image + overlaid bboxes */}
                   {previewLoading && (
-                    <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: 200, color: "var(--text-3)", gap: 10 }}>
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: 220, color: "var(--text-3)", gap: 10 }}>
                       <span className="material-symbols-outlined" style={{ animation: "spin 1s linear infinite" }}>progress_activity</span>
-                      Loading from 0G Storage…
+                      Loading image &amp; ground-truth from 0G Storage…
                     </div>
                   )}
+
                   {!previewLoading && previewImageUrl && (
                     <div style={{ position: "relative", display: "inline-block", width: "100%" }}>
                       <img
                         src={previewImageUrl}
                         alt="annotated"
                         style={{ width: "100%", height: "auto", display: "block", borderRadius: 6 }}
-                        // Capture natural size on load so bbox coords map correctly
                         onLoad={(e) => {
                           const img = e.currentTarget;
                           setPreviewImgSize({ w: img.naturalWidth, h: img.naturalHeight });
                         }}
                       />
-                      {/* Render bbox overlays — coordinates are in Workspace canvas space:
-                          x, w → 0..CANVAS_W (640px)
-                          y, h → 0..CANVAS_H (= naturalH/naturalW × 640)
-                          We convert to % of the rendered image size. */}
-                      {previewImgSize && previewAnnotations.filter((a) => a.type === "bbox").map((box: any, i: number) => {
-                        const palette = ["#00e479","#ff6b6b","#ffd700","#00bfff","#ff69b4","#7fff00"];
-                        const col = palette[i % palette.length];
-                        const CANVAS_W = 640;
-                        // Match exactly how ImageWorkspace computes canvas height:
-                        const CANVAS_H = Math.round((previewImgSize.h / previewImgSize.w) * CANVAS_W);
+
+                      {/* Render Moondream AI Ground-Truth Box Overlay Layer (Gold Dashed #ffd700) */}
+                      {layerVisibility.gt && previewGTBoxes.map((gt: any, i: number) => {
+                        // Coords normalized relative 0..1 or pixel
+                        const relX = gt.relX ?? (gt.x > 1.0 ? gt.x / (previewImgSize?.w || 820) : gt.x);
+                        const relY = gt.relY ?? (gt.y > 1.0 ? gt.y / (previewImgSize?.h || 500) : gt.y);
+                        const relW = gt.relW ?? (gt.w > 1.0 ? gt.w / (previewImgSize?.w || 820) : gt.w);
+                        const relH = gt.relH ?? (gt.h > 1.0 ? gt.h / (previewImgSize?.h || 500) : gt.h);
+
                         return (
-                          <div key={box.id ?? i} style={{
+                          <div key={`gt_${i}`} style={{
                             position: "absolute",
-                            left:   `${(box.x / CANVAS_W) * 100}%`,
-                            top:    `${(box.y / CANVAS_H) * 100}%`,
-                            width:  `${(box.w / CANVAS_W) * 100}%`,
-                            height: `${(box.h / CANVAS_H) * 100}%`,
-                            border: `2px solid ${col}`,
+                            left:   `${relX * 100}%`,
+                            top:    `${relY * 100}%`,
+                            width:  `${relW * 100}%`,
+                            height: `${relH * 100}%`,
+                            border: "2px dashed #ffd700",
+                            background: "rgba(255,215,0,0.12)",
                             pointerEvents: "none",
+                            boxShadow: "0 0 10px rgba(255,215,0,0.4)",
                           }}>
                             <span style={{
-                              position: "absolute", top: -18, left: 0,
-                              background: col, color: "#000", fontSize: 10, fontWeight: 700,
-                              padding: "1px 5px", borderRadius: 2, whiteSpace: "nowrap",
-                            }}>{box.label}</span>
+                              position: "absolute", top: -20, left: 0,
+                              background: "#ffd700", color: "#000", fontSize: 10, fontWeight: 800,
+                              padding: "1px 6px", borderRadius: 2, whiteSpace: "nowrap",
+                              display: "inline-flex", alignItems: "center", gap: 3,
+                            }}>
+                              <span className="material-symbols-outlined" style={{ fontSize: 11 }}>auto_awesome</span>
+                              AI GT: {gt.label}
+                            </span>
                           </div>
                         );
                       })}
-                      {/* Show skeleton boxes until image natural size is known */}
-                      {!previewImgSize && previewAnnotations.length > 0 && (
-                        <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                          <span style={{ fontSize: 11, color: "rgba(255,255,255,0.4)" }}>Loading overlays…</span>
-                        </div>
-                      )}
-                    </div>
-                  )}
-                  {!previewLoading && !previewImageUrl && (
-                    <div style={{ color: "var(--text-3)", textAlign: "center", padding: 32, fontSize: 13 }}>
-                      <span className="material-symbols-outlined" style={{ fontSize: 32, display: "block", marginBottom: 8 }}>image_not_supported</span>
-                      Image unavailable from 0G Storage
+
+                      {/* Render Annotator Submission Box Overlay Layer (Green Solid #00e479) */}
+                      {layerVisibility.anno && previewImgSize && previewAnnotations.filter((a) => a.type === "bbox" || a.x !== undefined).map((box: any, i: number) => {
+                        const CANVAS_W = 680; // Matches Workspace.tsx canvas width exactly
+                        const CANVAS_H = Math.round((previewImgSize.h / previewImgSize.w) * CANVAS_W);
+
+                        const relX = box.relX ?? (box.x > 1.0 ? box.x / CANVAS_W : box.x);
+                        const relY = box.relY ?? (box.y > 1.0 ? box.y / CANVAS_H : box.y);
+                        const relW = box.relW ?? (box.w > 1.0 ? box.w / CANVAS_W : box.w);
+                        const relH = box.relH ?? (box.h > 1.0 ? box.h / CANVAS_H : box.h);
+
+                        return (
+                          <div key={`sub_${i}`} style={{
+                            position: "absolute",
+                            left:   `${relX * 100}%`,
+                            top:    `${relY * 100}%`,
+                            width:  `${relW * 100}%`,
+                            height: `${relH * 100}%`,
+                            border: "2px solid #00e479",
+                            background: "rgba(0,228,121,0.08)",
+                            pointerEvents: "none",
+                          }}>
+                            <span style={{
+                              position: "absolute", bottom: -20, left: 0,
+                              background: "#00e479", color: "#000", fontSize: 10, fontWeight: 700,
+                              padding: "1px 5px", borderRadius: 2, whiteSpace: "nowrap",
+                              display: "inline-flex", alignItems: "center", gap: 3,
+                            }}>
+                              <span className="material-symbols-outlined" style={{ fontSize: 11 }}>draw</span>
+                              Annotator: {box.label}
+                            </span>
+                          </div>
+                        );
+                      })}
                     </div>
                   )}
 
-                  {/* Annotation summary */}
-                  {previewAnnotations.length > 0 && (
-                    <div style={{ marginTop: 16, display: "flex", gap: 8, flexWrap: "wrap" }}>
-                      {previewAnnotations.map((a: any, i: number) => (
-                        <span key={i} style={{ fontSize: 11, padding: "2px 8px", borderRadius: 4, background: "var(--surface-high)", color: "var(--text-2)", border: "1px solid var(--border)" }}>
-                          {a.label} · {Math.round(a.w)}×{Math.round(a.h)}
-                        </span>
-                      ))}
+                  {/* Creator Manual Override & Custom Settlement Panel */}
+                  {marketV2 && previewTaskSubmissions.length > 0 && (
+                    <div style={{ marginTop: 20, padding: 16, background: "rgba(255,255,255,0.02)", border: "1px solid var(--border)", borderRadius: 8 }}>
+                      <div style={{ fontSize: 13, fontWeight: 700, color: "var(--text)", marginBottom: 4, display: "flex", alignItems: "center", gap: 6 }}>
+                        <span className="material-symbols-outlined" style={{ fontSize: 16, color: "var(--primary)" }}>tune</span>
+                        Human Override — Custom Onchain Reward Settlement
+                      </div>
+                      <div style={{ fontSize: 12, color: "var(--text-3)", marginBottom: 12 }}>
+                        As the job creator, you can manually adjust the percentage reward split and override AI scores directly onchain.
+                      </div>
+
+                      <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 16 }}>
+                        {previewTaskSubmissions.map((ts: any, idx: number) => {
+                          const addrKey = ts.annotator.toLowerCase();
+                          const currentBps = customSharesBps[addrKey] ?? ts.reward_share_bps ?? 0;
+                          const currentPct = (currentBps / 100).toFixed(0);
+
+                          return (
+                            <div key={ts.annotator} style={{ display: "flex", alignItems: "center", gap: 12, padding: "8px 12px", background: "var(--surface-high)", borderRadius: 6 }}>
+                              <span style={{ fontSize: 12, fontWeight: 600, color: "var(--text-2)", fontFamily: "monospace" }}>
+                                Annotator #{idx + 1} ({ts.annotator.slice(0, 6)}…{ts.annotator.slice(-4)})
+                              </span>
+                              <span style={{ fontSize: 11, color: "var(--text-3)", marginLeft: "auto" }}>
+                                IoU: {ts.iou_score ? `${(ts.iou_score * 100).toFixed(1)}%` : "N/A"}
+                              </span>
+                              <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                                <input
+                                  type="number"
+                                  min="0"
+                                  max="100"
+                                  value={currentPct}
+                                  onChange={(e) => {
+                                    const pct = Math.max(0, Math.min(100, Number(e.target.value) || 0));
+                                    setCustomSharesBps(p => ({ ...p, [addrKey]: pct * 100 }));
+                                  }}
+                                  style={{ width: 60, padding: "4px 8px", background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 4, color: "var(--text)", fontSize: 12, textAlign: "center", fontWeight: 700 }}
+                                />
+                                <span style={{ fontSize: 12, fontWeight: 600, color: "var(--text-2)" }}>%</span>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+
+                      <button
+                        className="btn-primary btn-sm"
+                        disabled={overrideBusy}
+                        onClick={async () => {
+                          if (!marketV2 || !selected) return;
+                          setOverrideBusy(true);
+                          try {
+                            const annotators = previewTaskSubmissions.map((s: any) => s.annotator);
+                            const shares = annotators.map((a: string) => customSharesBps[a.toLowerCase()] || 0);
+
+                            setTxMsg(`Submitting custom reward settlement onchain…`);
+                            setTxErr(false);
+                            const tx = await marketV2.distributeRewards(selected.jobId, previewSub.taskId, annotators, shares);
+                            setTxMsg(`✓ Custom settlement confirmed onchain — tx ${tx.hash}`);
+                            setPreviewSub(null);
+                            await loadSubs(selected);
+                          } catch (e: any) {
+                            setTxMsg(`Manual settlement failed: ${e.message}`);
+                            setTxErr(true);
+                          } finally {
+                            setOverrideBusy(false);
+                          }
+                        }}
+                        style={{ display: "inline-flex", alignItems: "center", gap: 6 }}
+                      >
+                        <span className="material-symbols-outlined" style={{ fontSize: 15 }}>bolt</span>
+                        {overrideBusy ? "Signing Tx…" : "Submit Custom Onchain Settlement"}
+                      </button>
                     </div>
                   )}
                 </div>

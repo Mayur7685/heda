@@ -1,18 +1,26 @@
 import express from 'express';
 import cors from 'cors';
 import { ethers } from 'ethers';
-import 'dotenv/config';
-import os from 'os';
+import dotenv from 'dotenv';
 import path from 'path';
+import os from 'os';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+dotenv.config({ path: path.join(__dirname, '.env') });
+dotenv.config();
 import fs from 'fs';
 import Database from 'better-sqlite3';
 import { startIndexer, getIndexedJobs, getIndexedDatasets, getIndexedModels, getIndexerStatus } from './indexer.js';
 import {
   startAnnotationIndexer,
   getTaskAnnotations,
+  getTaskGroundTruth,
   getJobAnnotationStatus,
   getAnnotatorStats,
   getLeaderboard,
+  triggerTaskEvaluation,
 } from './annotation-indexer.js';
 
 const app = express();
@@ -135,12 +143,38 @@ app.get('/annotations/task/:jobId/:taskId', (req, res) => {
   }
 });
 
+// GET /annotations/ground-truth/:jobId/:taskId
+// Cached Moondream / Consensus ground-truth bounding boxes for a task.
+app.get('/annotations/ground-truth/:jobId/:taskId', (req, res) => {
+  try {
+    const gt = getTaskGroundTruth(db, req.params.jobId, req.params.taskId);
+    res.json(gt || { jobId: Number(req.params.jobId), taskId: Number(req.params.taskId), groundTruth: [] });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // GET /annotations/job/:jobId/status
 // Per-task breakdown (pending / evaluated / rewarded counts) for a job.
 app.get('/annotations/job/:jobId/status', (req, res) => {
   try {
     const tasks = getJobAnnotationStatus(db, Number(req.params.jobId));
     res.json({ jobId: Number(req.params.jobId), tasks });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /annotations/evaluate
+// Direct evaluation trigger from creator dashboard
+app.post('/annotations/evaluate', (req, res) => {
+  try {
+    const { jobId, taskId } = req.body;
+    if (jobId === undefined || taskId === undefined) {
+      return res.status(400).json({ error: 'jobId and taskId required' });
+    }
+    triggerTaskEvaluation(Number(jobId), Number(taskId));
+    res.json({ ok: true, message: `Evaluation triggered for job ${jobId} task ${taskId}` });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -178,20 +212,8 @@ app.post('/annotations/evaluate', async (req, res) => {
       return res.status(400).json({ error: 'Missing jobId or taskId' });
     }
 
-    const count = db.prepare(
-      `SELECT COUNT(*) as cnt FROM annotation_submissions WHERE job_id=? AND task_id=? AND status='pending'`
-    ).get(Number(jobId), Number(taskId));
-
-    if (!count || count.cnt === 0) {
-      return res.status(400).json({ error: 'No pending submissions for this task' });
-    }
-
-    // Respond immediately — evaluation happens async
+    triggerTaskEvaluation(Number(jobId), Number(taskId));
     res.json({ ok: true, message: `Evaluation triggered for task ${jobId}:${taskId}` });
-
-    console.log(`[Server] Manual evaluation queued for ${jobId}:${taskId}`);
-    // annotation-indexer's evaluateTask picks this up next poll cycle via EvaluationTriggered events
-    // or the creator can also call triggerEvaluation() directly on the contract from the frontend
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

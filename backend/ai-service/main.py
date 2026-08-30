@@ -700,22 +700,81 @@ if __name__ == "__main__":
 # ─────────────────────────────────────────────────────────────────────────────
 
 class AnnotationScoreRequest(BaseModel):
-    """Request body for POST /annotation/score"""
-    imageBase64: str                        # Raw base64 or data-URI of the task image
-    submittedBoxes: list                    # List of {label, x, y, w, h} dicts
-    moondreamClasses: list = ["object"]     # Classes to detect via Moondream API
+    """Request body for POST /annotation/score — accepts camelCase & snake_case"""
+    imageBase64: Optional[str] = None
+    image_base64: Optional[str] = None
+    image_data: Optional[str] = None
+    imageData: Optional[str] = None
+    submittedBoxes: Optional[list] = None
+    submitted_boxes: Optional[list] = None
+    moondreamClasses: Optional[list] = None
+    moondream_classes: Optional[list] = None
+    labels: Optional[list] = None
+
+    class Config:
+        extra = "allow"
 
 
-def compute_iou(box_a: dict, box_b: dict) -> float:
+def to_relative_box(box: dict, img_w: float = 680.0, img_h: float = 400.0) -> dict:
     """
-    Compute Intersection-over-Union (IoU) for two bounding boxes.
-    Boxes in {x, y, w, h} format (top-left origin, pixel coords).
-    Returns float in [0.0, 1.0].
+    Normalizes any bounding box {label, x, y, w, h} into relative [0.0, 1.0] coordinates.
+    Checks for explicit relX/relW properties first, then converts 680px canvas pixel coordinates.
     """
-    ax1, ay1 = box_a["x"], box_a["y"]
-    ax2, ay2 = ax1 + box_a["w"], ay1 + box_a["h"]
-    bx1, by1 = box_b["x"], box_b["y"]
-    bx2, by2 = bx1 + box_b["w"], by1 + box_b["h"]
+    label = str(box.get("label", "object"))
+
+    # Check for explicit relative coordinates
+    if "relX" in box and "relW" in box:
+        return {
+            "label": label,
+            "x": max(0.0, min(1.0, float(box["relX"]))),
+            "y": max(0.0, min(1.0, float(box["relY"]))),
+            "w": max(0.0, min(1.0, float(box["relW"]))),
+            "h": max(0.0, min(1.0, float(box["relH"]))),
+        }
+    if "rel_x" in box and "rel_w" in box:
+        return {
+            "label": label,
+            "x": max(0.0, min(1.0, float(box["rel_x"]))),
+            "y": max(0.0, min(1.0, float(box["rel_y"]))),
+            "w": max(0.0, min(1.0, float(box["rel_w"]))),
+            "h": max(0.0, min(1.0, float(box["rel_h"]))),
+        }
+
+    x = float(box.get("x", 0))
+    y = float(box.get("y", 0))
+    w = float(box.get("w", 0))
+    h = float(box.get("h", 0))
+
+    if x > 1.0 or y > 1.0 or w > 1.0 or h > 1.0:
+        c_w = float(box.get("canvasW", box.get("canvas_w", img_w)))
+        c_h = float(box.get("canvasH", box.get("canvas_h", img_h)))
+        return {
+            "label": label,
+            "x": max(0.0, min(1.0, x / c_w)),
+            "y": max(0.0, min(1.0, y / c_h)),
+            "w": max(0.0, min(1.0, w / c_w)),
+            "h": max(0.0, min(1.0, h / c_h)),
+        }
+    return {
+        "label": label,
+        "x": max(0.0, min(1.0, x)),
+        "y": max(0.0, min(1.0, y)),
+        "w": max(0.0, min(1.0, w)),
+        "h": max(0.0, min(1.0, h)),
+    }
+
+
+def compute_iou(box_a: dict, box_b: dict, img_w: float = 820.0, img_h: float = 500.0) -> float:
+    """
+    Compute Intersection-over-Union (IoU) for two bounding boxes in relative [0.0, 1.0] space.
+    """
+    a = to_relative_box(box_a, img_w, img_h)
+    b = to_relative_box(box_b, img_w, img_h)
+
+    ax1, ay1 = a["x"], a["y"]
+    ax2, ay2 = ax1 + a["w"], ay1 + a["h"]
+    bx1, by1 = b["x"], b["y"]
+    bx2, by2 = bx1 + b["w"], by1 + b["h"]
 
     ix1 = max(ax1, bx1)
     iy1 = max(ay1, by1)
@@ -730,11 +789,10 @@ def compute_iou(box_a: dict, box_b: dict) -> float:
     return inter / union if union > 0 else 0.0
 
 
-def score_submission(submitted: list, ground_truth: list) -> float:
+def score_submission(submitted: list, ground_truth: list, img_w: float = 820.0, img_h: float = 500.0) -> float:
     """
-    Mean best-match IoU per GT box.
+    Mean best-match IoU per GT box in relative [0.0, 1.0] space.
     Only matches submitted boxes with the same label.
-    Returns 0.0 if no GT boxes available.
     """
     if not ground_truth:
         return 0.0
@@ -743,16 +801,60 @@ def score_submission(submitted: list, ground_truth: list) -> float:
     for gt in ground_truth:
         gt_label = gt.get("label", "")
         same_label = [b for b in submitted if b.get("label", "") == gt_label]
-        best_iou = max((compute_iou(gt, s) for s in same_label), default=0.0)
+        best_iou = max((compute_iou(gt, s, img_w, img_h) for s in same_label), default=0.0)
         per_box_scores.append(best_iou)
 
     return sum(per_box_scores) / len(per_box_scores) if per_box_scores else 0.0
 
 
-def normalize_moondream_boxes(moondream_objects: list, img_w: int, img_h: int, label: str) -> list:
+def build_consensus_ground_truth(all_submissions: list, img_w: float = 820.0, img_h: float = 500.0) -> list:
     """
-    Convert Moondream fractional bbox coords to {label, x, y, w, h} pixel coords.
-    Supports both list [x0,y0,x1,y1] and dict {'x_min':...} formats.
+    Consensus Fallback: Builds consensus ground-truth boxes from annotator submissions
+    when Moondream zero-shot detection returns 0 boxes.
+    """
+    all_boxes = []
+    for sub in all_submissions:
+        if isinstance(sub, list):
+            for b in sub:
+                if isinstance(b, dict):
+                    all_boxes.append(to_relative_box(b, img_w, img_h))
+        elif isinstance(sub, dict) and "x" in sub:
+            all_boxes.append(to_relative_box(sub, img_w, img_h))
+
+    if not all_boxes:
+        return []
+
+    clusters = []
+    for box in all_boxes:
+        matched = False
+        for c in clusters:
+            if c[0]["label"] == box["label"] and compute_iou(c[0], box, img_w, img_h) >= 0.30:
+                c.append(box)
+                matched = True
+                break
+        if not matched:
+            clusters.append([box])
+
+    consensus_boxes = []
+    for c in clusters:
+        mean_x = sum(b["x"] for b in c) / len(c)
+        mean_y = sum(b["y"] for b in c) / len(c)
+        mean_w = sum(b["w"] for b in c) / len(c)
+        mean_h = sum(b["h"] for b in c) / len(c)
+        consensus_boxes.append({
+            "label": c[0]["label"],
+            "x": round(mean_x, 4),
+            "y": round(mean_y, 4),
+            "w": round(mean_w, 4),
+            "h": round(mean_h, 4),
+        })
+
+    return consensus_boxes
+
+
+def normalize_moondream_boxes(moondream_objects: list, label: str) -> list:
+    """
+    Convert Moondream fractional bbox coords [0.0..1.0] to relative {label, x, y, w, h} dicts.
     """
     boxes = []
     for obj in moondream_objects:
@@ -768,10 +870,10 @@ def normalize_moondream_boxes(moondream_objects: list, img_w: int, img_h: int, l
             continue
         boxes.append({
             "label": label,
-            "x": x0 * img_w,
-            "y": y0 * img_h,
-            "w": (x1 - x0) * img_w,
-            "h": (y1 - y0) * img_h,
+            "x": max(0.0, min(1.0, float(x0))),
+            "y": max(0.0, min(1.0, float(y0))),
+            "w": max(0.0, min(1.0, float(x1 - x0))),
+            "h": max(0.0, min(1.0, float(y1 - y0))),
         })
     return boxes
 
@@ -787,10 +889,27 @@ async def score_annotation(req: AnnotationScoreRequest):
     3. Compute mean-best-match IoU vs submitted boxes.
     4. Return iouScore + ground-truth boxes (cached by annotation-indexer to avoid re-calling Moondream).
     """
-    moondream_api_key = os.getenv("MOONDREAM_API_KEY", "")
+    img_b64 = req.imageBase64 or req.image_base64 or req.image_data or req.imageData or ""
+    submitted_boxes = req.submittedBoxes if req.submittedBoxes is not None else (req.submitted_boxes or [])
+    moondream_classes = req.moondreamClasses if req.moondreamClasses is not None else (req.moondream_classes or req.labels or ["object"])
+
+    if not img_b64:
+        raise HTTPException(status_code=400, detail="Missing image base64 data")
+
+    # If img_b64 is a JSON string payload, extract the inner base64 data field
+    if isinstance(img_b64, str) and (img_b64.strip().startswith("{") or img_b64.strip().startswith("[")):
+        try:
+            parsed = json.loads(img_b64)
+            if isinstance(parsed, list) and len(parsed) > 0:
+                first = parsed[0]
+                img_b64 = first.get("data") or first.get("base64") or img_b64 if isinstance(first, dict) else img_b64
+            elif isinstance(parsed, dict):
+                img_b64 = parsed.get("data") or parsed.get("base64") or img_b64
+        except Exception:
+            pass
 
     try:
-        img_bytes = base64.b64decode(req.imageBase64.split(",")[-1])
+        img_bytes = base64.b64decode(img_b64.split(",")[-1])
         img = Image.open(BytesIO(img_bytes)).convert("RGB")
         img_w, img_h = img.size
     except Exception as e:
@@ -804,20 +923,25 @@ async def score_annotation(req: AnnotationScoreRequest):
 
     # Collect GT boxes from Moondream for all requested classes
     all_gt_boxes: list = []
-    for cls_name in req.moondreamClasses:
+    moondream_api_key = os.getenv("MOONDREAM_API_KEY", "")
+    for cls_name in moondream_classes:
         result = call_moondream_detect(data_uri, cls_name, moondream_api_key)
         if result and "objects" in result:
-            boxes = normalize_moondream_boxes(result["objects"], img_w, img_h, cls_name)
+            boxes = normalize_moondream_boxes(result["objects"], cls_name)
             all_gt_boxes.extend(boxes)
 
-    iou_score = score_submission(req.submittedBoxes, all_gt_boxes)
+    # Fallback to Annotator Consensus if Moondream returns 0 GT boxes
+    if not all_gt_boxes and submitted_boxes:
+        all_gt_boxes = build_consensus_ground_truth([submitted_boxes], img_w, img_h)
 
-    print(f"[Annotation/Score] GT={len(all_gt_boxes)}, submitted={len(req.submittedBoxes)}, IoU={iou_score:.4f}")
+    iou_score = score_submission(submitted_boxes, all_gt_boxes, img_w, img_h)
+
+    print(f"[Annotation/Score] GT={len(all_gt_boxes)}, submitted={len(submitted_boxes)}, IoU={iou_score:.4f}")
 
     return {
         "ok": True,
         "iouScore":         round(iou_score, 4),
         "groundTruthBoxes": all_gt_boxes,
-        "submittedBoxes":   req.submittedBoxes,
+        "submittedBoxes":   submitted_boxes,
         "imageSize":        {"width": img_w, "height": img_h},
     }

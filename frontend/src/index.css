@@ -397,6 +397,10 @@ a:hover { text-decoration: underline; }
   from { transform: rotate(0deg); }
   to   { transform: rotate(360deg); }
 }
+.spin {
+  display: inline-block;
+  animation: spin 0.9s linear infinite;
+}
 @keyframes pulse-fade {
   0%, 100% { opacity: 1; }
   50%       { opacity: 0.5; }

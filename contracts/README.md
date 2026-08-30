@@ -9,7 +9,7 @@ Solidity smart contracts deployed on **0G Galileo Testnet** (Chain ID `16602`) m
 | Contract | Address | Explorer |
 | :--- | :--- | :--- |
 | **`AnnotationMarket`** (V1) | `0x4B791da8eD9C4d3b1812b51F63359c1f3AeB8C0A` | [View Address](https://chainscan-galileo.0g.ai/address/0x4B791da8eD9C4d3b1812b51F63359c1f3AeB8C0A) |
-| **`AnnotationMarketV2`** ⭐ | `0x401fBd48959DC36cab4ddd5898952dCcCdf004f2` | [View Address](https://chainscan-galileo.0g.ai/address/0x401fBd48959DC36cab4ddd5898952dCcCdf004f2) |
+| **`AnnotationMarketV2`** ⭐ | `0xDF69C008eEBDC1EC147B5A795eA0CAbdB3d778B5` | [View Address](https://chainscan-galileo.0g.ai/address/0xDF69C008eEBDC1EC147B5A795eA0CAbdB3d778B5) |
 | **`DatasetRegistry`** | `0x4AC6935DE58CeB54f2152a984ae5C597be9eFA5d` | [View Address](https://chainscan-galileo.0g.ai/address/0x4AC6935DE58CeB54f2152a984ae5C597be9eFA5d) |
 | **`ModelRegistry`** | `0x86758906B8f2b3AFffe10aAC7fD1257647F9166e` | [View Address](https://chainscan-galileo.0g.ai/address/0x86758906B8f2b3AFffe10aAC7fD1257647F9166e) |
 | **`PipelineSubscription`** | `0xdEF5D5C9DA844C56dd3D59481B5d1265E7101403` | [View Address](https://chainscan-galileo.0g.ai/address/0xdEF5D5C9DA844C56dd3D59481B5d1265E7101403) |
@@ -20,6 +20,8 @@ Solidity smart contracts deployed on **0G Galileo Testnet** (Chain ID `16602`) m
 
 ### `AnnotationMarketV2.sol` (new — multi-annotator)
 - **Open submission**: up to `maxAnnotatorsPerTask` (1–5) wallets can submit per task — no claim/lock.
+- **Batch Submission (`submitWorkBatch`)**: submit $N$ tasks in 1 single transaction & signature.
+- **Batch Reward Settlement (`distributeRewardsBatch`)**: distribute rewards for $N$ tasks in 1 single transaction & signature.
 - **`distributeRewards(jobId, taskId, annotators[], bpsShares[])`**: called by the backend relayer after Moondream IoU scoring. Sends proportional ETH shares.
 - **`triggerEvaluation(jobId, taskId)`**: creator manual override to request early evaluation.
 - **`closeJob(jobId)`**: reclaims unspent ETH from unrewarded tasks.

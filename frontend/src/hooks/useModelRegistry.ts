@@ -7,10 +7,12 @@ export const ModelTypeNames = ["YOLOv8", "CLIP", "QwenFineTune", "SAM", "Other"]
 
 export function useModelRegistry(signer: ethers.Signer | null) {
   return useMemo(() => {
-    if (!signer) return null;
+    const rawAddr = GALILEO.contracts.modelRegistry;
+    if (!rawAddr || (rawAddr as string) === "0x0000000000000000000000000000000000000000") return null;
+    const addr = ethers.getAddress((rawAddr as string).toLowerCase());
 
     const contract = new ethers.Contract(
-      GALILEO.contracts.modelRegistry,
+      addr,
       ABI,
       signer
     );

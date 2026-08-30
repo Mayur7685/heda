@@ -4,20 +4,16 @@ import path from 'path';
 
 const GALILEO_RPC = process.env.GALILEO_RPC || 'https://evmrpc-testnet.0g.ai';
 
-const ANNOTATION_MARKET_ADDR    = process.env.VITE_MARKET_ADDRESS || '0x4B791da8eD9C4d3b1812b51F63359c1f3AeB8C0A';
-const ANNOTATION_MARKET_V2_ADDR = process.env.VITE_MARKET_V2_ADDRESS || '0x401fBd48959DC36cab4ddd5898952dCcCdf004f2';
-const DATASET_REGISTRY_ADDR     = process.env.VITE_DATASET_REGISTRY_ADDRESS || '0x4AC6935DE58CeB54f2152a984ae5C597be9eFA5d';
-const MODEL_REGISTRY_ADDR       = process.env.VITE_MODEL_REGISTRY_ADDRESS || '0x86758906B8f2b3AFffe10aAC7fD1257647F9166e';
+const ANNOTATION_MARKET_V2_ADDR = ethers.getAddress((process.env.VITE_MARKET_V2_ADDRESS || '0xCBbb84EB5740630B4654Fbf963a503d86E67b939').toLowerCase());
+const DATASET_REGISTRY_ADDR     = ethers.getAddress((process.env.VITE_DATASET_REGISTRY_ADDRESS || '0x63988395140a19662B3C1dC13B0B64286B0c7cc5').toLowerCase());
+const MODEL_REGISTRY_ADDR       = ethers.getAddress((process.env.VITE_MODEL_REGISTRY_ADDRESS || '0xffc1A5A9a1bE52027142686079d8A78D9dBF4987').toLowerCase());
 
 // Minimal ABIs for event indexing
-const MARKET_ABI = [
-  'event JobCreated(uint256 indexed jobId, address indexed creator, bytes32 dataRootHash, uint256 rewardPerTask, uint256 taskCount, uint8 dataType)',
-  'function jobs(uint256 jobId) external view returns (address creator, bytes32 dataRootHash, string metadataURI, uint256 rewardPerTask, uint256 taskCount, uint256 approvedCount, uint8 dataType, bool active)',
-];
 
 const MARKET_V2_ABI = [
-  'event JobCreated(uint256 indexed jobId, address indexed creator, bytes32 dataRootHash, uint256 rewardPerTask, uint256 taskCount, uint8 maxAnnotatorsPerTask, uint8 dataType)',
+  'event JobCreated(uint256 indexed jobId, address indexed creator, bytes32 dataRootHash, uint256 rewardPerTask, uint256 taskCount, uint8 maxAnnotators, uint8 dataType)',
   'function getJob(uint256 jobId) external view returns (tuple(address creator, bytes32 dataRootHash, string metadataURI, uint256 rewardPerTask, uint256 taskCount, uint8 maxAnnotatorsPerTask, uint256 approvedTaskCount, uint8 dataType, bool active))',
+  'event TaskReset(uint256 indexed jobId, uint256 indexed taskId, uint256 failedSubmissions)',
 ];
 
 const DATASET_ABI = [
@@ -114,8 +110,9 @@ export async function syncEvents() {
     const provider = new ethers.JsonRpcProvider(GALILEO_RPC);
     const latestBlock = await provider.getBlockNumber();
 
+    const defaultStartBlock = Number(process.env.START_BLOCK || 52184500);
     const storedLastBlock = stmtGetState.get('last_indexed_block')?.value;
-    let fromBlock = storedLastBlock ? parseInt(storedLastBlock, 10) + 1 : 51650000;
+    let fromBlock = storedLastBlock ? parseInt(storedLastBlock, 10) + 1 : defaultStartBlock;
 
     if (fromBlock > latestBlock) {
       isSyncing = false;
@@ -125,35 +122,9 @@ export async function syncEvents() {
     // Limit block chunk size to 10000 blocks to prevent RPC timeouts
     const toBlock = Math.min(latestBlock, fromBlock + 9999);
 
-    const marketContract   = new ethers.Contract(ANNOTATION_MARKET_ADDR, MARKET_ABI, provider);
-    const marketV2Contract = ANNOTATION_MARKET_V2_ADDR ? new ethers.Contract(ANNOTATION_MARKET_V2_ADDR, MARKET_V2_ABI, provider) : null;
+    const marketV2Contract = new ethers.Contract(ANNOTATION_MARKET_V2_ADDR, MARKET_V2_ABI, provider);
     const datasetContract  = new ethers.Contract(DATASET_REGISTRY_ADDR, DATASET_ABI, provider);
     const modelContract    = new ethers.Contract(MODEL_REGISTRY_ADDR, MODEL_ABI, provider);
-
-    // 1. Sync Jobs (V1)
-    try {
-      const jobLogs = await marketContract.queryFilter(marketContract.filters.JobCreated(), fromBlock, toBlock);
-      for (const log of jobLogs) {
-        const jobId = Number(log.args.jobId);
-        const creator = log.args.creator;
-        const dataRootHash = log.args.dataRootHash;
-        const rewardPerTask = ethers.formatEther(log.args.rewardPerTask);
-        const taskCount = Number(log.args.taskCount);
-        const dataType = Number(log.args.dataType);
-
-        let metadataURI = '';
-        try {
-          const jobObj = await marketContract.jobs(jobId);
-          metadataURI = jobObj.metadataURI;
-        } catch {}
-
-        stmtUpsertJob.run(
-          jobId, creator, dataRootHash, metadataURI, rewardPerTask, taskCount, dataType, log.transactionHash, log.blockNumber, Date.now()
-        );
-      }
-    } catch (e) {
-      console.warn('[Indexer] V1 Job log fetch note:', e.message);
-    }
 
     // 1b. Sync Jobs (V2)
     if (marketV2Contract) {

@@ -2,14 +2,13 @@ import { useEffect, useRef, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { Stage, Layer, Image as KonvaImage, Rect, Line, Circle, Text, Transformer } from "react-konva";
 import { useWallet } from "../hooks/useWallet";
-import { useAnnotationMarket } from "../hooks/useAnnotationMarket";
 import { useAnnotationMarketV2 } from "../hooks/useAnnotationMarketV2";
 import { uploadJson, fetchFrom0GStorage } from "../hooks/useStorage";
 import { GALILEO } from "../config";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
-type BBox = { id: string; type: "bbox"; x: number; y: number; w: number; h: number; label: string };
+type BBox = { id: string; type: "bbox"; x: number; y: number; w: number; h: number; relX?: number; relY?: number; relW?: number; relH?: number; label: string };
 type Polygon = { id: string; type: "polygon"; points: number[]; label: string; closed: boolean };
 type Annotation = BBox | Polygon;
 
@@ -19,11 +18,11 @@ const uid = () => Math.random().toString(36).slice(2, 8);
 // ── Image Annotation Workspace ───────────────────────────────────────────────
 
 function ImageWorkspace({
-  imageUrl, labels, taskId, jobId, totalTasks, savedAnnotations,
+  imageUrl, labels, taskId, jobId, totalTasks, savedAnnotations, userAlreadySubmitted,
   onSubmit, onNext, onPrev,
 }: {
   imageUrl: string; labels: string[]; taskId: number; jobId: number; totalTasks: number;
-  savedAnnotations?: any;
+  savedAnnotations?: any; userAlreadySubmitted?: boolean;
   onSubmit: (annotations: Annotation[]) => void;
   onNext: () => void; onPrev: () => void;
 }) {
@@ -165,6 +164,19 @@ function ImageWorkspace({
       <div style={{ display: "flex", flex: 1, overflow: "hidden" }}>
         {/* Canvas area */}
         <div style={{ flex: 1, background: "var(--bg)", overflow: "auto", display: "flex", flexDirection: "column", alignItems: "center", cursor: "crosshair", position: "relative" }}>
+
+          {/* Warning banner if user has already submitted this task */}
+          {userAlreadySubmitted && (
+            <div style={{
+              width: "100%", padding: "10px 16px", background: "rgba(255,219,121,0.12)",
+              borderBottom: "1px solid rgba(255,219,121,0.35)",
+              display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
+              color: "var(--warn)", fontSize: 13, fontWeight: 600, zIndex: 30,
+            }}>
+              <span className="material-symbols-outlined" style={{ fontSize: 18 }}>lock</span>
+              You have already submitted an annotation for Task #{taskId + 1}. Re-submitting is blocked onchain.
+            </div>
+          )}
 
           {/* Toolbar — anchored inside canvas, not over full page */}
           <div style={{
@@ -352,8 +364,12 @@ function ImageWorkspace({
           {/* Save & Next / Save & Submit on last task */}
           <div style={{ padding: 12, background: "var(--surface-high)", borderTop: "1px solid var(--border)" }}>
             <button className="btn-primary" style={{ width: "100%", justifyContent: "center" }}
-              onClick={() => onSubmit(annotations)}>
-              {isLastTask ? (
+              onClick={() => onSubmit(annotations)}
+              disabled={userAlreadySubmitted}
+              title={userAlreadySubmitted ? "Task already submitted onchain" : ""}>
+              {userAlreadySubmitted ? (
+                <><span className="material-symbols-outlined" style={{ fontSize: 16 }}>lock</span>Already Submitted</>
+              ) : isLastTask ? (
                 <><span className="material-symbols-outlined" style={{ fontSize: 16 }}>upload</span>Save & Submit</>
               ) : (
                 <>Save & Next<span className="material-symbols-outlined" style={{ fontSize: 16 }}>arrow_forward</span></>
@@ -468,7 +484,6 @@ export default function Workspace() {
   const { jobId: jobIdStr, taskId: taskIdStr } = useParams<{ jobId: string; taskId: string }>();
   const navigate = useNavigate();
   const { signer } = useWallet();
-  const market = useAnnotationMarket(signer);
   const marketV2 = useAnnotationMarketV2(signer);
 
   const [job, setJob] = useState<any>(null);
@@ -484,15 +499,37 @@ export default function Workspace() {
   // Per-task upload progress: maps taskId → "pending" | "uploading" | "done" | "error"
   const [uploadProgress, setUploadProgress] = useState<Record<number, string>>({});
   const [uploadCount, setUploadCount] = useState(0);
+  // Cache of successfully uploaded task rootHashes (tid -> rootHash)
+  const [uploadedHashes, setUploadedHashes] = useState<Record<number, string>>({});
   // V2: track submission count per task (from indexer REST API)
   const [taskSubCounts, setTaskSubCounts] = useState<Record<number, number>>({});
+  // Track tasks already submitted by the connected wallet address
+  const [userSubmittedTasks, setUserSubmittedTasks] = useState<Set<number>>(new Set());
 
+  const { address: userWalletAddress } = useWallet();
   const jobId = Number(jobIdStr ?? 0);
 
   useEffect(() => {
-    if (!market && !marketV2) return;
+    if (!marketV2) return;
     loadJob();
-  }, [!!market, !!marketV2, jobId]);
+  }, [!!marketV2, jobId]);
+
+  // Fetch tasks already submitted by current wallet address
+  useEffect(() => {
+    if (!userWalletAddress || !job) return;
+    fetch(`http://localhost:3001/annotations/annotator/${userWalletAddress}`)
+      .then(r => r.ok ? r.json() : null)
+      .then(data => {
+        if (Array.isArray(data?.submissions)) {
+          const submitted = new Set<number>();
+          data.submissions.forEach((s: any) => {
+            if (s.job_id === jobId) submitted.add(s.task_id);
+          });
+          setUserSubmittedTasks(submitted);
+        }
+      })
+      .catch(() => {});
+  }, [userWalletAddress, job, jobId]);
 
   // Fetch submission counts from indexer for slot indicators
   useEffect(() => {
@@ -518,21 +555,12 @@ export default function Workspace() {
 
   async function loadJob() {
     try {
-      let j: any = null;
-      if (marketV2) {
-        try {
-          const v2j = await marketV2.getJob(jobId);
-          if (v2j && v2j.creator !== "0x0000000000000000000000000000000000000000") {
-            j = { ...v2j, isV2: true };
-          }
-        } catch {}
+      if (!marketV2) throw new Error("V2 Marketplace not initialized");
+      const v2j = await marketV2.getJob(jobId);
+      if (!v2j || v2j.creator === "0x0000000000000000000000000000000000000000") {
+        throw new Error("Job not found");
       }
-
-      if (!j && market) {
-        j = await market.getJob(jobId);
-      }
-
-      if (!j) throw new Error("Job not found");
+      const j = { ...v2j, isV2: true };
       setJob(j);
 
       // Resilient 0G storage fetching with retries and multiple indexer fallback
@@ -564,59 +592,63 @@ export default function Workspace() {
 
   // Upload all drafts to 0G Storage sequentially, then one batch tx
   async function handleSubmitAll(draftsOverride?: Record<number, any>) {
-    if (!market || !signer) return;
+    if (!marketV2) return;
+    if (!signer) return;
     const drafts = draftsOverride ?? draftAnnotations;
     const annotatedIds = Object.keys(drafts).map(Number);
     if (annotatedIds.length === 0) return;
 
     // Init progress
     const initProg: Record<number, string> = {};
-    annotatedIds.forEach((tid) => { initProg[tid] = "pending"; });
+    annotatedIds.forEach((tid) => {
+      initProg[tid] = uploadedHashes[tid] ? "done" : "pending";
+    });
     setUploadProgress(initProg);
-    setUploadCount(0);
+    setUploadCount(Object.keys(uploadedHashes).length);
     setStep("uploading");
     setError("");
-    setShowPreview(false);
 
     try {
       const uploads: { taskId: number; rootHash: string }[] = [];
+      const currentUploaded = { ...uploadedHashes };
+
       for (let i = 0; i < annotatedIds.length; i++) {
         const tid = annotatedIds[i];
+
+        if (currentUploaded[tid]) {
+          // Already uploaded previously — reuse rootHash!
+          uploads.push({ taskId: tid, rootHash: currentUploaded[tid] });
+          setUploadProgress((p) => ({ ...p, [tid]: "done" }));
+          continue;
+        }
+
         setUploadProgress((p) => ({ ...p, [tid]: "uploading" }));
         try {
           const rootHash = await uploadJson({ jobId, taskId: tid, annotation: drafts[tid], timestamp: Date.now() });
+          currentUploaded[tid] = rootHash;
+          setUploadedHashes({ ...currentUploaded });
           uploads.push({ taskId: tid, rootHash });
           setUploadProgress((p) => ({ ...p, [tid]: "done" }));
-          setUploadCount(i + 1);
-        } catch {
+          setUploadCount((c) => c + 1);
+        } catch (err: any) {
           setUploadProgress((p) => ({ ...p, [tid]: "error" }));
-          throw new Error(`Upload failed for task ${tid}`);
+          throw new Error(`Upload failed for Task #${tid + 1}: ${err.message}. Previously uploaded tasks are saved.`);
         }
       }
 
       setStep("submitting");
-      let lastTxHash = "";
+      const tids = uploads.map((u) => u.taskId);
+      const hashes = uploads.map((u) => u.rootHash);
+      const receipt = await marketV2.submitWorkBatch(jobId, tids, hashes);
+      const lastTxHash = receipt.hash;
 
-      if (job?.isV2 || marketV2) {
-        // V2 Submission Flow
-        for (const u of uploads) {
-          const receipt = await marketV2!.submitWork(jobId, u.taskId, u.rootHash);
-          lastTxHash = receipt.hash;
-        }
-      } else if (market) {
-        // V1 Batch Submission Flow
-        const taskIds = uploads.map((u) => u.taskId);
-        const rootHashes = uploads.map((u) => u.rootHash);
-        const receipt = await market.submitBatch(jobId, taskIds, rootHashes);
-        lastTxHash = receipt.hash;
-      }
-
-      // Clear all drafts
+      // Clear all drafts & upload cache
       annotatedIds.forEach((tid) => {
         localStorage.removeItem(`draft-${jobId}-${tid}`);
         localStorage.removeItem(`draft-text-${jobId}-${tid}`);
       });
       setDraftAnnotations({});
+      setUploadedHashes({});
       setTxHash(lastTxHash);
       setStep("done");
     } catch (e: any) {
@@ -719,51 +751,46 @@ export default function Workspace() {
                 </div>
                 <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
                   {Array.from({ length: totalTasks }).map((_, i) => {
-                    const isDone      = draftAnnotations[i] !== undefined;
-                    const isCurrent   = i === taskId;
-                    const slotCount   = taskSubCounts[i] ?? 0;
-                    const maxSlots    = Number(job?.maxAnnotatorsPerTask ?? job?.maxAnnotators ?? 5);
-                    const isFull      = slotCount >= maxSlots;
-                    const iHaveSubmitted = isDone; // after submit, we count as 1 slot
+                    const isDrafted     = draftAnnotations[i] !== undefined;
+                    const isSubmitted   = userSubmittedTasks.has(i);
+                    const isDone        = isDrafted || isSubmitted;
+                    const isCurrent     = i === taskId;
+                    const slotCount     = taskSubCounts[i] ?? 0;
+                    const maxSlots      = Number(job?.maxAnnotatorsPerTask ?? job?.maxAnnotators ?? 5);
+                    const isFull        = slotCount >= maxSlots;
 
                     return (
                       <div key={i}
                         onClick={() => goToTask(i)}
-                        title={isFull ? `Task ${i + 1}: Slots full (${slotCount}/${maxSlots} submitted)` : `Task ${i + 1}`}
+                        title={isSubmitted ? `Task ${i + 1}: Already submitted by your wallet` : isFull ? `Task ${i + 1}: Slots full (${slotCount}/${maxSlots} submitted)` : `Task ${i + 1}`}
                         style={{
                           display: "flex", alignItems: "center", gap: 8, padding: "6px 8px",
                           borderRadius: 4,
-                          cursor: isFull && !iHaveSubmitted ? "not-allowed" : "pointer",
-                          opacity: isFull && !iHaveSubmitted ? 0.5 : 1,
-                          background: isCurrent ? "var(--primary-bg)" : "transparent",
-                          border: isCurrent ? "1px solid rgba(0,228,121,0.3)" : "1px solid transparent",
+                          cursor: isSubmitted || (isFull && !isDone) ? "not-allowed" : "pointer",
+                          opacity: isSubmitted ? 0.65 : (isFull && !isDone ? 0.5 : 1),
+                          background: isSubmitted ? "rgba(0,228,121,0.06)" : (isCurrent ? "var(--primary-bg)" : "transparent"),
+                          border: isSubmitted ? "1px solid rgba(0,228,121,0.25)" : (isCurrent ? "1px solid rgba(0,228,121,0.3)" : "1px solid transparent"),
                         }}>
                         <span className="material-symbols-outlined" style={{
                           fontSize: 14,
-                          color: isDone ? "var(--primary)" : isFull ? "#ffd700" : "var(--text-3)",
+                          color: isSubmitted || isDrafted ? "var(--primary)" : isFull ? "#ffd700" : "var(--text-3)",
                         }}>
-                          {isDone ? "check_circle" : isFull ? "group" : "radio_button_unchecked"}
+                          {isSubmitted || isDrafted ? "check_circle" : isFull ? "group" : "radio_button_unchecked"}
                         </span>
                         <span style={{ fontSize: 12, color: isCurrent ? "var(--primary)" : isDone ? "var(--text)" : "var(--text-3)" }}>
                           Task {i + 1}
                         </span>
 
-                        {/* Slot counter pill — e.g. 2/5 */}
+                        {/* Slot counter / Submitted pill */}
                         <span style={{
                           marginLeft: "auto", fontSize: 9, fontWeight: 700,
                           padding: "1px 5px", borderRadius: 3,
-                          background: isFull ? "rgba(255,215,0,0.12)" : slotCount > 0 ? "rgba(0,228,121,0.1)" : "transparent",
-                          color: isFull ? "#ffd700" : slotCount > 0 ? "var(--primary)" : "var(--text-3)",
-                          border: isFull ? "1px solid rgba(255,215,0,0.3)" : slotCount > 0 ? "1px solid rgba(0,228,121,0.2)" : "none",
+                          background: isSubmitted ? "rgba(0,228,121,0.15)" : (isFull ? "rgba(255,215,0,0.12)" : slotCount > 0 ? "rgba(0,228,121,0.1)" : "transparent"),
+                          color: isSubmitted ? "var(--primary)" : (isFull ? "#ffd700" : slotCount > 0 ? "var(--primary)" : "var(--text-3)"),
+                          border: isSubmitted ? "1px solid rgba(0,228,121,0.3)" : (isFull ? "1px solid rgba(255,215,0,0.3)" : slotCount > 0 ? "1px solid rgba(0,228,121,0.2)" : "none"),
                         }}>
-                          {slotCount}/{maxSlots}
+                          {isSubmitted ? "DONE" : `${slotCount}/${maxSlots}`}
                         </span>
-
-                        {isDone && (
-                          <span style={{ fontSize: 10, color: "var(--primary)", fontWeight: 700, marginLeft: 2 }}>
-                            {Array.isArray(draftAnnotations[i]) ? `${draftAnnotations[i].length}ann` : ""}
-                          </span>
-                        )}
                       </div>
                     );
                   })}
@@ -821,6 +848,7 @@ export default function Workspace() {
                 imageUrl={imageUrl} labels={labels}
                 taskId={taskId} jobId={jobId} totalTasks={totalTasks}
                 savedAnnotations={draftAnnotations[taskId]}
+                userAlreadySubmitted={userSubmittedTasks.has(taskId)}
                 onSubmit={handleSaveAndNext}
                 onNext={() => goToTask(taskId + 1)}
                 onPrev={() => goToTask(taskId - 1)}
@@ -840,7 +868,7 @@ export default function Workspace() {
       )}
 
       {/* Upload Progress Modal */}
-      {(step === "uploading" || step === "submitting") && (
+      {(step === "uploading" || step === "submitting" || step === "error") && (
         <div style={{ position: "fixed", inset: 0, zIndex: 200, background: "rgba(0,0,0,0.8)",
           display: "flex", alignItems: "center", justifyContent: "center", backdropFilter: "blur(6px)" }}>
           <div style={{ background: "var(--surface)", border: "1px solid var(--border)",
@@ -893,6 +921,28 @@ export default function Workspace() {
                 <div>
                   <div style={{ fontSize: 13, fontWeight: 600, color: "#93c5fd" }}>Open MetaMask</div>
                   <div style={{ fontSize: 12, color: "var(--text-3)", marginTop: 2 }}>One signature submits all {uploadCount} annotations onchain</div>
+                </div>
+              </div>
+            )}
+
+            {/* Error & Retry State */}
+            {step === "error" && (
+              <div style={{ padding: 16, background: "rgba(255,68,68,0.08)", border: "1px solid rgba(255,68,68,0.3)", borderRadius: 8, marginBottom: 20 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, color: "var(--error)", fontWeight: 600, fontSize: 13, marginBottom: 4 }}>
+                  <span className="material-symbols-outlined" style={{ fontSize: 18 }}>warning</span>
+                  Upload Error
+                </div>
+                <div style={{ fontSize: 12, color: "var(--text-2)", marginBottom: 16 }}>
+                  {error}
+                </div>
+                <div style={{ display: "flex", gap: 8 }}>
+                  <button className="btn-primary btn-sm" onClick={() => handleSubmitAll()} style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+                    <span className="material-symbols-outlined" style={{ fontSize: 14 }}>refresh</span>
+                    Retry Failed Uploads
+                  </button>
+                  <button className="btn-secondary btn-sm" onClick={() => setStep("idle")}>
+                    Cancel / Back to Workspace
+                  </button>
                 </div>
               </div>
             )}

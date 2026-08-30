@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useWallet } from "../hooks/useWallet";
-import { useAnnotationMarket } from "../hooks/useAnnotationMarket";
 import { useAnnotationMarketV2 } from "../hooks/useAnnotationMarketV2";
 import { fetchFrom0GStorage } from "../hooks/useStorage";
 
@@ -28,25 +27,21 @@ type Filter = "all" | "image" | "text" | "open" | "closed";
 export default function Jobs() {
   const navigate = useNavigate();
   const { signer, isCorrectChain } = useWallet();
-  const market = useAnnotationMarket(signer);
   const marketV2 = useAnnotationMarketV2(signer);
   const [jobs, setJobs] = useState<JobRow[]>([]);
   const [filter, setFilter] = useState<Filter>("open");
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    if (!market && !marketV2) return;
+    if (!marketV2) return;
     loadJobs();
-  }, [!!market, !!marketV2]);
+  }, [!!marketV2]);
 
   async function loadJobs() {
     setLoading(true);
     try {
-      const [v1Events, v2Events] = await Promise.all([
-        market ? market.listJobs().catch(() => []) : [],
-        marketV2 ? marketV2.listJobs().catch(() => []) : [],
-      ]);
-
+      // Only query V2 jobs (V1 is legacy and causes duplicate Job #0)
+      const v2Events = marketV2 ? await marketV2.listJobs().catch(() => []) : [];
       const allRows: JobRow[] = [];
 
       // Process V2 Jobs
@@ -94,42 +89,6 @@ export default function Jobs() {
           })
         );
         allRows.push(...(v2Rows.filter(Boolean) as JobRow[]));
-      }
-
-      // Process V1 Jobs
-      if (market && v1Events.length > 0) {
-        const v1Rows = await Promise.all(
-          v1Events.map(async (e: any) => {
-            try {
-              const j = await market.getJob(e.jobId);
-              const base: JobRow = { ...e, approvedCount: Number(j.approvedCount), active: j.active, isV2: false };
-
-              const [metaResult, dataResult] = await Promise.allSettled([
-                fetchFrom0GStorage(j.metadataURI, 4),
-                fetchFrom0GStorage(j.dataRootHash, 4),
-              ]);
-
-              if (metaResult.status === "fulfilled" && metaResult.value) {
-                const meta = metaResult.value;
-                base.name = meta.name;
-                base.instructions = meta.instructions;
-                base.labels = meta.labels;
-              }
-
-              if (Number(j.dataType) === 0 && dataResult.status === "fulfilled" && dataResult.value) {
-                const files = dataResult.value;
-                if (Array.isArray(files) && files[0]?.data && files[0]?.type) {
-                  base.previewImage = `data:${files[0].type};base64,${files[0].data}`;
-                }
-              }
-
-              return base;
-            } catch {
-              return null;
-            }
-          })
-        );
-        allRows.push(...(v1Rows.filter(Boolean) as JobRow[]));
       }
 
       setJobs(allRows.reverse());

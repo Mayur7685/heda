@@ -62,13 +62,10 @@ contract AnnotationMarketV2 {
         uint256 indexed taskId,
         address triggeredBy
     );
-    event RewardsDistributed(
-        uint256 indexed jobId,
-        uint256 indexed taskId,
-        address[] annotators,
-        uint256[] amounts
-    );
+    event RewardsDistributed(uint256 indexed jobId, uint256 indexed taskId, address[] annotators, uint256[] amounts);
     event JobClosed(uint256 indexed jobId, uint256 unspentReturned);
+    /// @notice Emitted when all annotators fail evaluation and task is reopened for new submissions.
+    event TaskReset(uint256 indexed jobId, uint256 indexed taskId, uint256 failedSubmissions);
 
     modifier onlyRelayerOrCreator(uint256 jobId) {
         require(
@@ -111,11 +108,11 @@ contract AnnotationMarketV2 {
         emit JobCreated(jobId, msg.sender, dataRootHash, rewardPerTask, taskCount, maxAnnotatorsPerTask, dataType);
     }
 
-    function submitWork(
+    function _submitWorkInternal(
         uint256 jobId,
         uint256 taskId,
         bytes32 annotationRootHash
-    ) external {
+    ) internal {
         Job storage job = jobs[jobId];
         require(job.active, "job not active");
         require(taskId < job.taskCount, "invalid taskId");
@@ -142,6 +139,14 @@ contract AnnotationMarketV2 {
         }
     }
 
+    function submitWork(
+        uint256 jobId,
+        uint256 taskId,
+        bytes32 annotationRootHash
+    ) external {
+        _submitWorkInternal(jobId, taskId, annotationRootHash);
+    }
+
     function triggerEvaluation(uint256 jobId, uint256 taskId) external {
         require(msg.sender == jobs[jobId].creator, "only creator");
         require(taskId < jobs[jobId].taskCount, "invalid taskId");
@@ -149,12 +154,52 @@ contract AnnotationMarketV2 {
         emit EvaluationTriggered(jobId, taskId, msg.sender);
     }
 
-    function distributeRewards(
+    /**
+     * @notice Reset a task whose submissions all scored 0 IoU (all rejected).
+     *         Clears the submission slots so new annotators can retry.
+     *         ETH stays locked in the contract — it will pay whoever does it correctly next round.
+     *         Only callable by the relayer (auto) or the job creator (manual).
+     */
+    function resetTask(uint256 jobId, uint256 taskId) external onlyRelayerOrCreator(jobId) {
+        Job storage job = jobs[jobId];
+        require(job.active, "job not active");
+        require(taskId < job.taskCount, "invalid taskId");
+
+        TaskSubmission[] storage subs = taskSubmissions[jobId][taskId];
+        require(subs.length > 0, "no submissions to reset");
+        require(!subs[0].rewarded, "task already rewarded - cannot reset");
+
+        uint256 count = subs.length;
+
+        // Clear hasSubmitted so the same annotators CAN retry (or new ones join)
+        for (uint256 i = 0; i < count; i++) {
+            hasSubmitted[jobId][taskId][subs[i].annotator] = false;
+        }
+
+        // Delete all submissions to reopen the slot array
+        delete taskSubmissions[jobId][taskId];
+
+        emit TaskReset(jobId, taskId, count);
+    }
+
+    function submitWorkBatch(
+        uint256 jobId,
+        uint256[] calldata taskIds,
+        bytes32[] calldata annotationRootHashes
+    ) external {
+        require(taskIds.length == annotationRootHashes.length, "length mismatch");
+        require(taskIds.length > 0, "empty task list");
+        for (uint256 i = 0; i < taskIds.length; i++) {
+            _submitWorkInternal(jobId, taskIds[i], annotationRootHashes[i]);
+        }
+    }
+
+    function _distributeRewardsInternal(
         uint256   jobId,
         uint256   taskId,
-        address[] calldata annotators,
-        uint256[] calldata sharesBps
-    ) external onlyRelayerOrCreator(jobId) {
+        address[] memory annotators,
+        uint256[] memory sharesBps
+    ) internal {
         require(annotators.length == sharesBps.length, "length mismatch");
         require(annotators.length > 0, "empty annotator list");
 
@@ -197,6 +242,31 @@ contract AnnotationMarketV2 {
         }
 
         emit RewardsDistributed(jobId, taskId, paid, amounts);
+    }
+
+    function distributeRewards(
+        uint256   jobId,
+        uint256   taskId,
+        address[] calldata annotators,
+        uint256[] calldata sharesBps
+    ) external onlyRelayerOrCreator(jobId) {
+        _distributeRewardsInternal(jobId, taskId, annotators, sharesBps);
+    }
+
+    function distributeRewardsBatch(
+        uint256     jobId,
+        uint256[]   calldata taskIds,
+        address[][] calldata annotatorsList,
+        uint256[][] calldata sharesBpsList
+    ) external onlyRelayerOrCreator(jobId) {
+        require(
+            taskIds.length == annotatorsList.length && taskIds.length == sharesBpsList.length,
+            "length mismatch"
+        );
+        require(taskIds.length > 0, "empty task list");
+        for (uint256 i = 0; i < taskIds.length; i++) {
+            _distributeRewardsInternal(jobId, taskIds[i], annotatorsList[i], sharesBpsList[i]);
+        }
     }
 
     function closeJob(uint256 jobId) external {

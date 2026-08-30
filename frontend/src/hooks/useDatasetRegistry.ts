@@ -5,10 +5,12 @@ import ABI from "../abis/DatasetRegistry.json";
 
 export function useDatasetRegistry(signer: ethers.Signer | null) {
   return useMemo(() => {
-    if (!signer) return null;
+    const rawAddr = GALILEO.contracts.datasetRegistry;
+    if (!rawAddr || (rawAddr as string) === "0x0000000000000000000000000000000000000000") return null;
+    const addr = ethers.getAddress((rawAddr as string).toLowerCase());
 
     const contract = new ethers.Contract(
-      GALILEO.contracts.datasetRegistry,
+      addr,
       ABI,
       signer
     );

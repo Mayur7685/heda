@@ -13,14 +13,15 @@ const SUBSCRIPTION_ABI = [
 
 export function usePipelineSubscription(signer: ethers.Signer | null) {
   return useMemo(() => {
-    const address = GALILEO.contracts.pipelineSubscription;
-    if (!address || (address as string) === "0x0000000000000000000000000000000000000000") return null;
+    const rawAddr = GALILEO.contracts.pipelineSubscription;
+    if (!rawAddr || (rawAddr as string) === "0x0000000000000000000000000000000000000000") return null;
+    const addr = ethers.getAddress((rawAddr as string).toLowerCase());
 
     const providerOrSigner = signer ?? new ethers.JsonRpcProvider(GALILEO.rpc);
-    const contract = new ethers.Contract(address, SUBSCRIPTION_ABI, providerOrSigner);
+    const contract = new ethers.Contract(addr, SUBSCRIPTION_ABI, providerOrSigner);
 
     return {
-      address,
+      address: addr,
 
       async getRemainingQuota(userAddress: string) {
         const [remainingQuota, periodEnd, active] = await contract.getRemainingQuota(userAddress);

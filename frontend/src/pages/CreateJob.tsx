@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useWallet } from "../hooks/useWallet";
-import { useAnnotationMarket } from "../hooks/useAnnotationMarket";
 import { useAnnotationMarketV2 } from "../hooks/useAnnotationMarketV2";
 import { uploadBlob, uploadJson, cache0GData } from "../hooks/useStorage";
 import { GALILEO } from "../config";
@@ -55,7 +54,6 @@ function StepIndicator({ current }: { current: Step }) {
 export default function CreateJob() {
   const navigate = useNavigate();
   const { signer, isCorrectChain } = useWallet();
-  const market    = useAnnotationMarket(signer);
   const marketV2  = useAnnotationMarketV2(signer);
 
   const [step, setStep] = useState<Step>(1);
@@ -69,6 +67,7 @@ export default function CreateJob() {
   const [maxAnnotators, setMaxAnnotators] = useState(5);   // V2: 1-5 annotators per task
   const [status, setStatus] = useState<"idle" | "uploading" | "posting" | "done" | "error">("idle");
   const [txHash, setTxHash] = useState("");
+  const [uploadedDataRootHash, setUploadedDataRootHash] = useState("");
   const [error, setError] = useState("");
   // Balance check state
   const [balanceWarn, setBalanceWarn] = useState<string | null>(null);
@@ -83,7 +82,10 @@ export default function CreateJob() {
   }
 
   async function handlePost() {
-    if (!market || !signer) return;
+    if (!marketV2 || !signer) {
+      setError("V2 Marketplace contract not initialized. Please check wallet connection.");
+      return;
+    }
     setError("");
     setBalanceWarn(null);
 
@@ -124,17 +126,12 @@ export default function CreateJob() {
       );
       const dataRootHash = await uploadBlob(new Blob([JSON.stringify(fileContents)], { type: "application/json" }));
       cache0GData(dataRootHash, fileContents);
+      setUploadedDataRootHash(dataRootHash);
       const metadataRootHash = await uploadJson({ instructions, labels, dataType: dataType === 0 ? "image" : "text", jsonlSchema: dataType === 1 ? jsonlSchema : undefined, fileCount: files.length, dataRootHash });
 
       setStatus("posting");
-      // Use V2 if available (multi-annotator IoU pipeline), fall back to V1
-      if (marketV2) {
-        const receipt = await marketV2.createJob(dataRootHash, metadataRootHash, rewardPerTask, files.length, maxAnnotators, dataType);
-        setTxHash(receipt.hash);
-      } else {
-        const receipt = await market!.createJob(dataRootHash, metadataRootHash, rewardPerTask, files.length, dataType);
-        setTxHash(receipt.hash);
-      }
+      const receipt = await marketV2.createJob(dataRootHash, metadataRootHash, rewardPerTask, files.length, maxAnnotators, dataType);
+      setTxHash(receipt.hash);
       setStatus("done");
     } catch (e: any) {
       // Friendly message for the most common error
@@ -172,10 +169,18 @@ export default function CreateJob() {
         </p>
         
         <div style={{ display: "flex", gap: 12, justifyContent: "center", flexWrap: "wrap" }}>
-          <a href={`${GALILEO.explorer}/tx/${txHash}`} target="_blank" rel="noreferrer" className="btn-secondary" style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-            <span className="material-symbols-outlined" style={{ fontSize: 16 }}>open_in_new</span>
-            View Transaction ↗
-          </a>
+          {txHash && (
+            <a href={`${GALILEO.explorer}/tx/${txHash}`} target="_blank" rel="noreferrer" className="btn-secondary" style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+              <span className="material-symbols-outlined" style={{ fontSize: 16 }}>open_in_new</span>
+              View Transaction (Chainscan) ↗
+            </a>
+          )}
+          {uploadedDataRootHash && (
+            <a href={`${GALILEO.storageExplorer}/file/${uploadedDataRootHash}`} target="_blank" rel="noreferrer" className="btn-secondary" style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+              <span className="material-symbols-outlined" style={{ fontSize: 16 }}>folder_open</span>
+              View 0G Dataset File (Storagescan) ↗
+            </a>
+          )}
           <button className="btn-secondary" onClick={() => navigate("/jobs")}>
             Browse Active Jobs
           </button>
@@ -429,6 +434,116 @@ export default function CreateJob() {
         )}
 
       </div>
+
+      {/* Job Upload & Onchain Escrow Telemetry Progress Modal */}
+      {(status === "uploading" || status === "posting" || (status === "error" && Boolean(error))) && (
+        <div style={{
+          position: "fixed", inset: 0, zIndex: 1000, background: "rgba(0,0,0,0.85)",
+          display: "flex", alignItems: "center", justifyContent: "center", backdropFilter: "blur(8px)", padding: 24
+        }}>
+          <div style={{
+            background: "var(--surface)", border: "1px solid var(--border)",
+            borderRadius: 16, padding: 32, maxWidth: 480, width: "100%", boxShadow: "0 24px 64px rgba(0,0,0,0.8)"
+          }}>
+            {/* Header */}
+            <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 24 }}>
+              {status === "error" ? (
+                <div style={{ width: 44, height: 44, borderRadius: "50%", background: "rgba(255,68,68,0.12)", border: "1px solid rgba(255,68,68,0.3)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                  <span className="material-symbols-outlined" style={{ fontSize: 24, color: "var(--error)" }}>error</span>
+                </div>
+              ) : (
+                <div style={{ width: 44, height: 44, borderRadius: "50%", background: "rgba(0,228,121,0.12)", border: "1px solid rgba(0,228,121,0.3)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                  <span className="material-symbols-outlined spin" style={{ fontSize: 24, color: "var(--primary)" }}>progress_activity</span>
+                </div>
+              )}
+              <div>
+                <h3 style={{ fontSize: 18, fontWeight: 700, margin: 0, color: "var(--text)" }}>
+                  {status === "error" ? "Job Creation Failed" : status === "uploading" ? "Uploading Dataset to 0G Storage" : "Locking Bounty Onchain"}
+                </h3>
+                <p style={{ fontSize: 13, color: "var(--text-3)", margin: "2px 0 0 0" }}>
+                  {status === "error" ? "An error occurred during submission" : status === "uploading" ? `Serializing & pinning ${files.length} file(s) to 0G Merkle Nodes` : "Please confirm the transaction in MetaMask"}
+                </p>
+              </div>
+            </div>
+
+            {/* Step Telemetry Tracker */}
+            <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: status === "error" ? 20 : 0 }}>
+              {/* Step 1: 0G Storage Image Upload */}
+              <div style={{
+                display: "flex", alignItems: "center", gap: 12, padding: "10px 14px", borderRadius: 8,
+                background: status === "uploading" ? "rgba(96,165,250,0.08)" : "var(--surface-high)",
+                border: status === "uploading" ? "1px solid rgba(96,165,250,0.3)" : "1px solid var(--border)"
+              }}>
+                {status === "uploading" ? (
+                  <span className="material-symbols-outlined spin" style={{ fontSize: 18, color: "#60a5fa" }}>progress_activity</span>
+                ) : (
+                  <span className="material-symbols-outlined" style={{ fontSize: 18, color: "var(--primary)" }}>check_circle</span>
+                )}
+                <div>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: "var(--text)" }}>0G Storage Dataset Upload</div>
+                  <div style={{ fontSize: 11, color: "var(--text-3)" }}>
+                    {status === "uploading" ? `Uploading ${files.length} images to 0G Turbo Indexer...` : "Dataset pinned to 0G Storage Merkle Tree ✓"}
+                  </div>
+                </div>
+              </div>
+
+              {/* Step 2: Metadata & Label Pinning */}
+              <div style={{
+                display: "flex", alignItems: "center", gap: 12, padding: "10px 14px", borderRadius: 8,
+                background: status === "posting" ? "rgba(0,228,121,0.08)" : "var(--surface-high)",
+                border: status === "posting" ? "1px solid rgba(0,228,121,0.3)" : "1px solid var(--border)"
+              }}>
+                {status === "uploading" ? (
+                  <span className="material-symbols-outlined" style={{ fontSize: 18, color: "var(--text-3)" }}>radio_button_unchecked</span>
+                ) : status === "posting" ? (
+                  <span className="material-symbols-outlined" style={{ fontSize: 18, color: "var(--primary)" }}>check_circle</span>
+                ) : (
+                  <span className="material-symbols-outlined" style={{ fontSize: 18, color: "var(--text-3)" }}>radio_button_unchecked</span>
+                )}
+                <div>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: "var(--text)" }}>Metadata & Class Labels</div>
+                  <div style={{ fontSize: 11, color: "var(--text-3)" }}>
+                    {status === "uploading" ? "Waiting for dataset upload..." : "Job instructions & class labels pinned to 0G ✓"}
+                  </div>
+                </div>
+              </div>
+
+              {/* Step 3: Onchain Smart Contract Escrow */}
+              <div style={{
+                display: "flex", alignItems: "center", gap: 12, padding: "10px 14px", borderRadius: 8,
+                background: status === "posting" ? "rgba(255,215,0,0.08)" : "var(--surface-high)",
+                border: status === "posting" ? "1px solid rgba(255,215,0,0.3)" : "1px solid var(--border)"
+              }}>
+                {status === "posting" ? (
+                  <span className="material-symbols-outlined spin" style={{ fontSize: 18, color: "#ffd700" }}>progress_activity</span>
+                ) : (
+                  <span className="material-symbols-outlined" style={{ fontSize: 18, color: "var(--text-3)" }}>radio_button_unchecked</span>
+                )}
+                <div>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: "var(--text)" }}>0G Galileo Testnet Escrow</div>
+                  <div style={{ fontSize: 11, color: status === "posting" ? "#ffd700" : "var(--text-3)" }}>
+                    {status === "posting" ? "Check MetaMask — confirm bounty transaction" : `Locking ${totalCost} 0G in escrow`}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Error Message & Retry */}
+            {status === "error" && (
+              <div style={{ background: "rgba(255,68,68,0.1)", border: "1px solid rgba(255,68,68,0.3)", borderRadius: 8, padding: 14, color: "var(--error)", fontSize: 13 }}>
+                <p style={{ margin: 0, fontWeight: 600 }}>{error}</p>
+                <button
+                  className="btn-secondary btn-sm"
+                  style={{ marginTop: 12, width: "100%", justifyContent: "center" }}
+                  onClick={() => setStatus("idle")}
+                >
+                  Dismiss & Try Again
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
