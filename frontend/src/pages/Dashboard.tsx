@@ -1,18 +1,21 @@
 import { useEffect, useRef, useState } from "react";
 import { useWallet } from "../hooks/useWallet";
 import { useAnnotationMarket } from "../hooks/useAnnotationMarket";
+import { useAnnotationMarketV2 } from "../hooks/useAnnotationMarketV2";
 import { useDatasetRegistry } from "../hooks/useDatasetRegistry";
 import { uploadJson, uploadBlob, fetchFrom0GStorage } from "../hooks/useStorage";
 import { GALILEO } from "../config";
 import DatasetHealthCard from "../components/DatasetHealthCard";
+
 
 type JobRow = { jobId: number; dataRootHash: string; rewardPerTask: string; taskCount: number; approvedCount: number; active: boolean; dataType: number };
 type SubRow = { taskId: number; annotator: string; annotationRootHash: string; approved: boolean };
 
 export default function Dashboard() {
   const { signer, address } = useWallet();
-  const market = useAnnotationMarket(signer);
-  const registry = useDatasetRegistry(signer);
+  const market    = useAnnotationMarket(signer);
+  const marketV2  = useAnnotationMarketV2(signer);
+  const registry  = useDatasetRegistry(signer);
   const [myJobs, setMyJobs] = useState<JobRow[]>([]);
   const [selected, setSelected] = useState<JobRow | null>(null);
   const [subs, setSubs] = useState<SubRow[]>([]);
@@ -36,6 +39,9 @@ export default function Dashboard() {
   const [healthLabels, setHealthLabels] = useState<string[]>([]);
   const [publishedJobIds, setPublishedJobIds] = useState<Set<number>>(new Set());
   const [pubBusy, setPubBusy] = useState(false);
+  // V2: per-task annotation quality from indexer REST API
+  const [v2TaskData, setV2TaskData] = useState<Record<number, { submissions: any[]; submissionCount: number }>>({});
+  const [evalBusy, setEvalBusy] = useState<number | null>(null); // taskId being evaluated
   const loaded = useRef(false);
 
   useEffect(() => {
@@ -78,6 +84,18 @@ export default function Dashboard() {
       if (sub.exists) rows.push({ taskId: i, annotator: sub.annotator, annotationRootHash: sub.annotationRootHash, approved: sub.approved });
     }
     setSubs(rows);
+
+    // V2: fetch quality data from indexer REST API
+    if (rows.length > 0) {
+      const taskData: Record<number, any> = {};
+      await Promise.all(rows.map(async (sub) => {
+        try {
+          const res = await fetch(`http://localhost:3001/annotations/task/${job.jobId}/${sub.taskId}`);
+          if (res.ok) taskData[sub.taskId] = await res.json();
+        } catch {}
+      }));
+      setV2TaskData(taskData);
+    }
 
     // Fetch metadata to get labels for health check
     try {
@@ -431,19 +449,57 @@ export default function Dashboard() {
               </div>
               <div style={{ display: "flex", gap: 10 }}>
                 {selected.active && (
-                  <button
-                    className="btn-ghost"
-                    onClick={() => handleCloseJob(selected.jobId)}
-                    title="Archive this job and refund unspent bounty 0G"
-                    style={{
-                      display: "flex", alignItems: "center", gap: 6,
-                      padding: "8px 14px", border: "1px solid var(--border)",
-                      color: "var(--text-2)", borderRadius: 6, fontSize: 13, fontWeight: 600,
-                    }}
-                  >
-                    <span className="material-symbols-outlined" style={{ fontSize: 16, color: "var(--warn)" }}>archive</span>
-                    Archive & Refund Job
-                  </button>
+                  <>
+                    {/* V2: Evaluate All Pending — triggers Moondream IoU for all tasks */}
+                    {marketV2 && subs.some((s) => !s.approved) && (
+                      <button
+                        onClick={async () => {
+                          if (!selected) return;
+                          setEvalBusy(-1);
+                          setTxMsg("Triggering evaluation for all pending tasks…");
+                          setTxErr(false);
+                          try {
+                            // Call triggerEvaluation for each unapproved task on-chain (one tx each)
+                            const pending = subs.filter((s) => !s.approved);
+                            for (const sub of pending) {
+                              try {
+                                await marketV2!.triggerEvaluation(selected.jobId, sub.taskId);
+                              } catch { /* may already be evaluated */ }
+                            }
+                            setTxMsg(`✓ Evaluation triggered for ${pending.length} tasks — Moondream will score and auto-distribute rewards.`);
+                          } catch (e: any) {
+                            setTxMsg(e.message);
+                            setTxErr(true);
+                          } finally {
+                            setEvalBusy(null);
+                          }
+                        }}
+                        disabled={evalBusy !== null}
+                        style={{
+                          display: "flex", alignItems: "center", gap: 6,
+                          padding: "8px 14px", border: "1px solid rgba(0,228,121,0.4)",
+                          background: "rgba(0,228,121,0.08)", color: "var(--primary)",
+                          borderRadius: 6, fontSize: 13, fontWeight: 600, cursor: evalBusy !== null ? "not-allowed" : "pointer",
+                        }}
+                      >
+                        <span className="material-symbols-outlined" style={{ fontSize: 16 }}>bolt</span>
+                        {evalBusy === -1 ? "Evaluating…" : "Evaluate All (Moondream)"}
+                      </button>
+                    )}
+                    <button
+                      className="btn-ghost"
+                      onClick={() => handleCloseJob(selected.jobId)}
+                      title="Archive this job and refund unspent bounty 0G"
+                      style={{
+                        display: "flex", alignItems: "center", gap: 6,
+                        padding: "8px 14px", border: "1px solid var(--border)",
+                        color: "var(--text-2)", borderRadius: 6, fontSize: 13, fontWeight: 600,
+                      }}
+                    >
+                      <span className="material-symbols-outlined" style={{ fontSize: 16, color: "var(--warn)" }}>archive</span>
+                      Archive &amp; Refund Job
+                    </button>
+                  </>
                 )}
                 {publishedJobIds.has(selected.jobId) ? (
                   <a href="/datasets" className="badge badge-approved" style={{ display: "inline-flex", alignItems: "center", gap: 6, textDecoration: "none", padding: "8px 14px", borderRadius: 6, fontSize: 13, fontWeight: 600 }}>
@@ -502,6 +558,13 @@ export default function Dashboard() {
                     </th>
                     <th>Task #</th>
                     <th>Annotator</th>
+                    {/* V2: IoU quality score column */}
+                    <th style={{ textAlign: "center" }}>
+                      <span title="Moondream IoU quality score (auto-evaluated)" style={{ display: "inline-flex", alignItems: "center", gap: 3, cursor: "help" }}>
+                        IoU Score
+                        <span className="material-symbols-outlined" style={{ fontSize: 13, color: "var(--text-3)" }}>help_outline</span>
+                      </span>
+                    </th>
                     <th>Preview</th>
                     <th style={{ textAlign: "right" }}>Actions</th>
                   </tr>
@@ -510,7 +573,17 @@ export default function Dashboard() {
                   {subs.length === 0 && (
                     <tr><td colSpan={5} style={{ textAlign: "center", color: "var(--text-3)", padding: 24 }}>No submissions yet.</td></tr>
                   )}
-                  {subs.map((sub) => (
+                  {subs.map((sub) => {
+                    // Try to find V2 quality data from indexer for this annotator+task
+                    const taskAnno = v2TaskData[sub.taskId];
+                    const v2Sub = taskAnno?.submissions?.find((s: any) =>
+                      s.annotator?.toLowerCase() === sub.annotator?.toLowerCase()
+                    );
+                    const iouScore: number | null = v2Sub?.iou_score ?? null;
+                    const rewardBps: number = v2Sub?.reward_share_bps ?? 0;
+                    const subStatus: string = v2Sub?.status ?? "";
+
+                    return (
                     <tr key={sub.taskId} style={{ background: selectedSubs.has(sub.taskId) ? "rgba(0,228,121,0.04)" : "transparent" }}>
                       <td style={{ paddingRight: 0 }}>
                         {!sub.approved && (
@@ -522,8 +595,28 @@ export default function Dashboard() {
                       </td>
                       <td style={{ fontFamily: "'Space Grotesk', monospace" }}>#{sub.taskId + 1}</td>
                       <td><span className="mono-tag">{sub.annotator.slice(0, 6)}…{sub.annotator.slice(-4)}</span></td>
+
+                      {/* V2 IoU Score cell */}
+                      <td style={{ textAlign: "center" }}>
+                        {iouScore !== null ? (
+                          <div style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+                            <span style={{
+                              fontFamily: "'Space Grotesk', monospace", fontSize: 13, fontWeight: 700,
+                              color: iouScore >= 0.7 ? "var(--primary)" : iouScore >= 0.3 ? "#ffd700" : "var(--error)",
+                            }}>{(iouScore * 100).toFixed(1)}%</span>
+                            {rewardBps > 0 && (
+                              <span style={{ fontSize: 10, color: "var(--text-3)" }}>({(rewardBps / 100).toFixed(1)}%)</span>
+                            )}
+                            {subStatus === "rewarded" && (
+                              <span className="material-symbols-outlined" style={{ fontSize: 13, color: "var(--primary)" }}>paid</span>
+                            )}
+                          </div>
+                        ) : (
+                          <span style={{ fontSize: 11, color: "var(--text-3)" }}>—</span>
+                        )}
+                      </td>
+
                       <td>
-                        {/* Preview annotated image — replaces raw hash link */}
                         <button
                           onClick={() => openPreview(sub)}
                           style={{ display: "flex", alignItems: "center", gap: 5,
@@ -535,10 +628,38 @@ export default function Dashboard() {
                         </button>
                       </td>
                       <td style={{ textAlign: "right" }}>
-                        {sub.approved ? (
+                        {subStatus === "rewarded" ? (
+                          <span className="badge badge-approved">Auto-Rewarded</span>
+                        ) : sub.approved ? (
                           <span className="badge badge-approved">Approved</span>
                         ) : (
                           <div style={{ display: "flex", justifyContent: "flex-end", gap: 6 }}>
+                            {/* V2: Per-task manual evaluate override */}
+                            {marketV2 && (
+                              <button
+                                onClick={async () => {
+                                  setEvalBusy(sub.taskId);
+                                  try {
+                                    await marketV2!.triggerEvaluation(selected!.jobId, sub.taskId);
+                                    setTxMsg(`Evaluation triggered for task #${sub.taskId + 1} — scores will appear shortly.`);
+                                    setTxErr(false);
+                                  } catch (e: any) {
+                                    setTxMsg(e.message); setTxErr(true);
+                                  } finally { setEvalBusy(null); }
+                                }}
+                                disabled={evalBusy === sub.taskId}
+                                title="Trigger Moondream IoU evaluation for this task"
+                                style={{
+                                  padding: "4px 8px", borderRadius: 4, border: "1px solid rgba(0,228,121,0.3)",
+                                  background: "rgba(0,228,121,0.07)", color: "var(--primary)",
+                                  fontSize: 11, fontWeight: 600, cursor: evalBusy === sub.taskId ? "not-allowed" : "pointer",
+                                  display: "flex", alignItems: "center", gap: 3,
+                                }}
+                              >
+                                <span className="material-symbols-outlined" style={{ fontSize: 13 }}>bolt</span>
+                                {evalBusy === sub.taskId ? "…" : "Eval"}
+                              </button>
+                            )}
                             <button className="btn-ghost btn-icon" onClick={() => approve(selected!.jobId, sub.taskId)} title="Approve this task">
                               <span className="material-symbols-outlined" style={{ color: "var(--primary)", fontSize: 20 }}>check_circle</span>
                             </button>
@@ -549,7 +670,8 @@ export default function Dashboard() {
                         )}
                       </td>
                     </tr>
-                  ))}
+                    );
+                  })}
                 </tbody>
               </table>
             </div>

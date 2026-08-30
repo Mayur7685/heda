@@ -463,12 +463,10 @@ function TextWorkspace({
   );
 }
 
-// ── Main Workspace Page ──────────────────────────────────────────────────────
-
 export default function Workspace() {
   const { jobId: jobIdStr, taskId: taskIdStr } = useParams<{ jobId: string; taskId: string }>();
   const navigate = useNavigate();
-  const { signer, address } = useWallet();
+  const { signer } = useWallet();
   const market = useAnnotationMarket(signer);
 
   const [job, setJob] = useState<any>(null);
@@ -484,9 +482,8 @@ export default function Workspace() {
   // Per-task upload progress: maps taskId → "pending" | "uploading" | "done" | "error"
   const [uploadProgress, setUploadProgress] = useState<Record<number, string>>({});
   const [uploadCount, setUploadCount] = useState(0);
-  // On-chain claim lock tracking to prevent annotator collisions
-  const [taskClaims, setTaskClaims] = useState<Record<number, { status: "available" | "claimed_me" | "claimed_other" | "submitted"; claimer?: string }>>({});
-  const [claimingTaskId, setClaimingTaskId] = useState<number | null>(null);
+  // V2: track submission count per task (from indexer REST API)
+  const [taskSubCounts, setTaskSubCounts] = useState<Record<number, number>>({});
 
   const jobId = Number(jobIdStr ?? 0);
 
@@ -494,6 +491,28 @@ export default function Workspace() {
     if (!market) return;
     loadJob();
   }, [!!market, jobId]);
+
+  // Fetch submission counts from indexer for slot indicators
+  useEffect(() => {
+    if (!job) return;
+    const count = Number(job.taskCount);
+    Promise.all(
+      Array.from({ length: count }).map(async (_, i) => {
+        try {
+          const res = await fetch(`http://localhost:3001/annotations/task/${jobId}/${i}`);
+          if (res.ok) {
+            const data = await res.json();
+            return [i, data.submissionCount ?? 0] as [number, number];
+          }
+        } catch {}
+        return [i, 0] as [number, number];
+      })
+    ).then((entries) => {
+      const map: Record<number, number> = {};
+      entries.forEach(([i, c]) => { map[i] = c; });
+      setTaskSubCounts(map);
+    });
+  }, [job, jobId]);
 
   async function loadJob() {
     if (!market) return;
@@ -509,52 +528,8 @@ export default function Workspace() {
 
       if (metaResult.status === "fulfilled") setMetadata(metaResult.value);
       if (dataResult.status === "fulfilled") setAllTaskData(dataResult.value);
-
-      // Check on-chain claim status for tasks
-      const count = Number(j.taskCount);
-      const claimsMap: Record<number, { status: "available" | "claimed_me" | "claimed_other" | "submitted"; claimer?: string }> = {};
-      const now = Math.floor(Date.now() / 1000);
-
-      await Promise.all(
-        Array.from({ length: count }).map(async (_, i) => {
-          const sub = await market.getSubmission(jobId, i);
-          if (sub.exists) {
-            claimsMap[i] = { status: "submitted" };
-            return;
-          }
-          const [claimer, expiryNum] = await market.getTaskClaimer(jobId, i);
-          const expiry = Number(expiryNum);
-          if (claimer && claimer !== "0x0000000000000000000000000000000000000000" && now < expiry) {
-            const isMe = address && claimer.toLowerCase() === address.toLowerCase();
-            claimsMap[i] = {
-              status: isMe ? "claimed_me" : "claimed_other",
-              claimer,
-            };
-          } else {
-            claimsMap[i] = { status: "available" };
-          }
-        })
-      );
-      setTaskClaims(claimsMap);
     } catch (e: any) {
       setError(`Failed to load: ${e.message}`);
-    }
-  }
-
-  async function handleClaimTask(tid: number) {
-    if (!market || !signer) return;
-    setClaimingTaskId(tid);
-    setError("");
-    try {
-      await market.claimTask(jobId, tid);
-      setTaskClaims((prev) => ({
-        ...prev,
-        [tid]: { status: "claimed_me", claimer: address ?? "" },
-      }));
-    } catch (e: any) {
-      setError(`Claim failed: ${e.message}`);
-    } finally {
-      setClaimingTaskId(null);
     }
   }
 
@@ -643,7 +618,7 @@ export default function Workspace() {
           </div>
           <h2 style={{ fontSize: 24, fontWeight: 700, marginBottom: 8, color: "#fff" }}>Annotations Submitted!</h2>
           <p style={{ color: "var(--text-2)", fontSize: 14, marginBottom: 28, maxWidth: 460, margin: "0 auto 28px" }}>
-            Your annotations for Job #{jobId} have been uploaded to 0G Storage & submitted onchain. The job creator will review and release your ETH reward.
+            Your annotations for Job #{jobId} have been uploaded to 0G Storage &amp; submitted onchain. The Moondream AI will score your IoU quality and automatically distribute rewards proportionally.
           </p>
 
           <div style={{ display: "flex", gap: 12, justifyContent: "center", flexWrap: "wrap" }}>
@@ -718,71 +693,50 @@ export default function Workspace() {
                 </div>
                 <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
                   {Array.from({ length: totalTasks }).map((_, i) => {
-                    const isDone = draftAnnotations[i] !== undefined;
-                    const isCurrent = i === taskId;
-                    const claimInfo = taskClaims[i];
-                    const isLockedByOther = claimInfo?.status === "claimed_other";
-                    const isClaimedByMe = claimInfo?.status === "claimed_me";
-                    const isSubmitted = claimInfo?.status === "submitted";
+                    const isDone      = draftAnnotations[i] !== undefined;
+                    const isCurrent   = i === taskId;
+                    const slotCount   = taskSubCounts[i] ?? 0;
+                    const maxSlots    = Number(job?.maxAnnotatorsPerTask ?? job?.maxAnnotators ?? 5);
+                    const isFull      = slotCount >= maxSlots;
+                    const iHaveSubmitted = isDone; // after submit, we count as 1 slot
 
                     return (
                       <div key={i}
-                        onClick={() => {
-                          if (isLockedByOther) return;
-                          goToTask(i);
-                        }}
-                        title={isLockedByOther ? `Locked: Claimed by ${claimInfo?.claimer?.slice(0, 6)}…` : `Task ${i + 1}`}
+                        onClick={() => goToTask(i)}
+                        title={isFull ? `Task ${i + 1}: Slots full (${slotCount}/${maxSlots} submitted)` : `Task ${i + 1}`}
                         style={{
                           display: "flex", alignItems: "center", gap: 8, padding: "6px 8px",
                           borderRadius: 4,
-                          cursor: isLockedByOther ? "not-allowed" : "pointer",
-                          opacity: isLockedByOther ? 0.5 : 1,
-                          background: isCurrent ? "var(--primary-bg)" : isLockedByOther ? "rgba(255,165,0,0.05)" : "transparent",
-                          border: isCurrent ? "1px solid rgba(0,228,121,0.3)" : isLockedByOther ? "1px solid rgba(255,165,0,0.2)" : "1px solid transparent",
+                          cursor: isFull && !iHaveSubmitted ? "not-allowed" : "pointer",
+                          opacity: isFull && !iHaveSubmitted ? 0.5 : 1,
+                          background: isCurrent ? "var(--primary-bg)" : "transparent",
+                          border: isCurrent ? "1px solid rgba(0,228,121,0.3)" : "1px solid transparent",
                         }}>
                         <span className="material-symbols-outlined" style={{
                           fontSize: 14,
-                          color: isSubmitted ? "var(--primary)" : isLockedByOther ? "var(--warn)" : isClaimedByMe ? "#60a5fa" : isDone ? "var(--primary)" : "var(--text-3)",
+                          color: isDone ? "var(--primary)" : isFull ? "#ffd700" : "var(--text-3)",
                         }}>
-                          {isSubmitted ? "check_circle" : isLockedByOther ? "lock" : isClaimedByMe ? "lock_open" : isDone ? "check_circle" : "radio_button_unchecked"}
+                          {isDone ? "check_circle" : isFull ? "group" : "radio_button_unchecked"}
                         </span>
-                        <span style={{ fontSize: 12, color: isCurrent ? "var(--primary)" : isLockedByOther ? "var(--warn)" : isDone ? "var(--text)" : "var(--text-3)" }}>
+                        <span style={{ fontSize: 12, color: isCurrent ? "var(--primary)" : isDone ? "var(--text)" : "var(--text-3)" }}>
                           Task {i + 1}
                         </span>
 
-                        {isLockedByOther && (
-                          <span style={{ marginLeft: "auto", fontSize: 9, color: "var(--warn)", fontWeight: 600 }}>
-                            Locked
-                          </span>
-                        )}
-
-                        {isClaimedByMe && !isDone && (
-                          <span style={{ marginLeft: "auto", fontSize: 9, color: "#60a5fa", fontWeight: 600 }}>
-                            Locked (You)
-                          </span>
-                        )}
+                        {/* Slot counter pill — e.g. 2/5 */}
+                        <span style={{
+                          marginLeft: "auto", fontSize: 9, fontWeight: 700,
+                          padding: "1px 5px", borderRadius: 3,
+                          background: isFull ? "rgba(255,215,0,0.12)" : slotCount > 0 ? "rgba(0,228,121,0.1)" : "transparent",
+                          color: isFull ? "#ffd700" : slotCount > 0 ? "var(--primary)" : "var(--text-3)",
+                          border: isFull ? "1px solid rgba(255,215,0,0.3)" : slotCount > 0 ? "1px solid rgba(0,228,121,0.2)" : "none",
+                        }}>
+                          {slotCount}/{maxSlots}
+                        </span>
 
                         {isDone && (
-                          <span style={{ marginLeft: "auto", fontSize: 10, color: "var(--primary)", fontWeight: 700 }}>
-                            {Array.isArray(draftAnnotations[i]) ? `${draftAnnotations[i].length} ann.` : "done"}
+                          <span style={{ fontSize: 10, color: "var(--primary)", fontWeight: 700, marginLeft: 2 }}>
+                            {Array.isArray(draftAnnotations[i]) ? `${draftAnnotations[i].length}ann` : ""}
                           </span>
-                        )}
-
-                        {!isDone && !isLockedByOther && !isClaimedByMe && isCurrent && (
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleClaimTask(i);
-                            }}
-                            disabled={claimingTaskId === i}
-                            style={{
-                              marginLeft: "auto", fontSize: 9, padding: "2px 6px", borderRadius: 3,
-                              border: "1px solid rgba(96,165,250,0.4)", background: "rgba(96,165,250,0.12)",
-                              color: "#60a5fa", cursor: "pointer", fontWeight: 600
-                            }}
-                          >
-                            {claimingTaskId === i ? "…" : "Lock (30m)"}
-                          </button>
                         )}
                       </div>
                     );

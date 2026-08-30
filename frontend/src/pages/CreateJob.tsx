@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useWallet } from "../hooks/useWallet";
 import { useAnnotationMarket } from "../hooks/useAnnotationMarket";
+import { useAnnotationMarketV2 } from "../hooks/useAnnotationMarketV2";
 import { uploadBlob, uploadJson, cache0GData } from "../hooks/useStorage";
 import { GALILEO } from "../config";
 
@@ -54,7 +55,8 @@ function StepIndicator({ current }: { current: Step }) {
 export default function CreateJob() {
   const navigate = useNavigate();
   const { signer, isCorrectChain } = useWallet();
-  const market = useAnnotationMarket(signer);
+  const market    = useAnnotationMarket(signer);
+  const marketV2  = useAnnotationMarketV2(signer);
 
   const [step, setStep] = useState<Step>(1);
   const [files, setFiles] = useState<File[]>([]);
@@ -64,6 +66,7 @@ export default function CreateJob() {
   const [labelInput, setLabelInput] = useState("");
   const [labels, setLabels] = useState<string[]>([]);
   const [rewardPerTask, setRewardPerTask] = useState("0.5");
+  const [maxAnnotators, setMaxAnnotators] = useState(5);   // V2: 1-5 annotators per task
   const [status, setStatus] = useState<"idle" | "uploading" | "posting" | "done" | "error">("idle");
   const [txHash, setTxHash] = useState("");
   const [error, setError] = useState("");
@@ -124,8 +127,14 @@ export default function CreateJob() {
       const metadataRootHash = await uploadJson({ instructions, labels, dataType: dataType === 0 ? "image" : "text", jsonlSchema: dataType === 1 ? jsonlSchema : undefined, fileCount: files.length, dataRootHash });
 
       setStatus("posting");
-      const receipt = await market.createJob(dataRootHash, metadataRootHash, rewardPerTask, files.length, dataType);
-      setTxHash(receipt.hash);
+      // Use V2 if available (multi-annotator IoU pipeline), fall back to V1
+      if (marketV2) {
+        const receipt = await marketV2.createJob(dataRootHash, metadataRootHash, rewardPerTask, files.length, maxAnnotators, dataType);
+        setTxHash(receipt.hash);
+      } else {
+        const receipt = await market!.createJob(dataRootHash, metadataRootHash, rewardPerTask, files.length, dataType);
+        setTxHash(receipt.hash);
+      }
       setStatus("done");
     } catch (e: any) {
       // Friendly message for the most common error
@@ -159,7 +168,7 @@ export default function CreateJob() {
         </div>
         <h2 style={{ fontSize: 24, fontWeight: 700, marginBottom: 8, color: "#fff" }}>Job Successfully Created!</h2>
         <p style={{ color: "var(--text-2)", fontSize: 14, marginBottom: 28, maxWidth: 460, margin: "0 auto 28px" }}>
-          Your bounty ETH is locked on 0G Galileo smart contract. Annotators can now claim tasks and submit annotations.
+          Your bounty ETH is locked on 0G Galileo. Up to {maxAnnotators} annotators per task can now submit annotations — quality is scored automatically by Moondream IoU and rewards are distributed proportionally.
         </p>
         
         <div style={{ display: "flex", gap: 12, justifyContent: "center", flexWrap: "wrap" }}>
@@ -299,6 +308,26 @@ export default function CreateJob() {
                 </div>
               </div>
 
+              {/* V2: Max Annotators per Task */}
+              {marketV2 && (
+                <div>
+                  <label className="label-caps" style={{ display: "block", marginBottom: 8 }}>Max Annotators per Task</label>
+                  <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                    <input type="range" min={1} max={5} step={1} value={maxAnnotators}
+                      onChange={(e) => setMaxAnnotators(Number(e.target.value))}
+                      style={{ flex: 1, accentColor: "var(--primary)" }} />
+                    <span style={{ fontFamily: "'Space Grotesk', monospace", fontWeight: 700, fontSize: 18, color: "var(--primary)", minWidth: 16, textAlign: "center" }}>{maxAnnotators}</span>
+                  </div>
+                  <p className="hint" style={{ marginTop: 4 }}>Up to {maxAnnotators} annotators submit per task. Best quality earns highest share.</p>
+                  <div style={{ marginTop: 8, display: "inline-flex", alignItems: "center", gap: 5,
+                    padding: "4px 10px", borderRadius: 4, fontSize: 11, fontWeight: 600,
+                    background: "rgba(0,228,121,0.08)", border: "1px solid rgba(0,228,121,0.25)", color: "var(--primary)" }}>
+                    <span className="material-symbols-outlined" style={{ fontSize: 13 }}>bolt</span>
+                    Moondream IoU Auto-Eval
+                  </div>
+                </div>
+              )}
+
               {labels.length === 0 && (
                 <div style={{ fontSize: 12, color: "var(--error)", display: "flex", alignItems: "center", gap: 4 }}>
                   <span className="material-symbols-outlined" style={{ fontSize: 14 }}>info</span>
@@ -326,17 +355,21 @@ export default function CreateJob() {
             <p style={{ color: "var(--text-2)", fontSize: 14, marginBottom: 24 }}>Review your job configuration before posting onchain.</p>
 
             <div style={{ display: "flex", flexDirection: "column", gap: 1, background: "var(--border)", borderRadius: 4, overflow: "hidden", marginBottom: 24 }}>
-              {[
+              {([
                 ["Data Type", dataType === 0 ? "Image" : "Text"],
                 ["Files / Tasks", `${files.length} tasks`],
                 ["Instructions", instructions || "—"],
                 ["Labels", labels.length > 0 ? labels.join(", ") : "—"],
                 ["Reward per Task", `${rewardPerTask} 0G`],
                 ["Total Locked", `${totalCost} 0G`],
-              ].map(([k, v]) => (
+                ...(marketV2 ? [
+                  ["Max Annotators/Task", `${maxAnnotators} (open submission)`],
+                  ["Evaluation Method", "⚡ Moondream IoU Auto-Eval"],
+                ] : []),
+              ] as [string, string][]).map(([k, v]) => (
                 <div key={k} style={{ display: "flex", gap: 16, background: "var(--surface-low)", padding: "12px 16px" }}>
-                  <span className="label-caps" style={{ minWidth: 140 }}>{k}</span>
-                  <span style={{ color: "var(--text)", fontSize: 14 }}>{v}</span>
+                  <span className="label-caps" style={{ minWidth: 160 }}>{k}</span>
+                  <span style={{ color: k === "Evaluation Method" ? "var(--primary)" : "var(--text)", fontSize: 14, fontWeight: k === "Evaluation Method" ? 600 : 400 }}>{v}</span>
                 </div>
               ))}
             </div>

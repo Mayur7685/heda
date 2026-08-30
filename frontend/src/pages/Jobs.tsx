@@ -103,7 +103,7 @@ export default function Jobs() {
             <span style={{ color: "var(--text)" }}>Get paid instantly.</span>
           </h1>
           <p style={{ color: "var(--text-2)", fontSize: 14, maxWidth: 520 }}>
-            Browse {openCount} open jobs across image and text datasets. Contribute high-quality labels to decentralized AI models.
+            Browse {openCount} open jobs across image and text datasets. Up to 5 annotators per task can submit — rewards are distributed proportionally by Moondream IoU quality.
           </p>
         </div>
         {/* Decorative grid */}
@@ -214,7 +214,7 @@ export default function Jobs() {
                 <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
                   <span className="label-caps">Progress</span>
                   <span style={{ fontFamily: "'Space Grotesk', monospace", fontSize: 12, color: "var(--text)" }}>
-                    {job.approvedCount} / {job.taskCount} tasks
+                    {job.approvedCount} / {job.taskCount} rewarded
                   </span>
                 </div>
                 <div className="progress-bar">
@@ -237,21 +237,14 @@ export default function Jobs() {
               {job.active ? (
                 <div style={{ display: "flex", gap: 8 }}>
                   <button className="btn-secondary" style={{ flex: 1, justifyContent: "center", borderColor: "var(--primary)", color: "var(--primary)" }}
-                    onClick={async () => {
-                      if (!market) { navigate(`/jobs/${job.jobId}/0`); return; }
-                      // Find first available (unclaimed or expired) task
-                      for (let i = 0; i < job.taskCount; i++) {
-                        const available = await market.isTaskAvailable(job.jobId, i).catch(() => true);
-                        if (available) { navigate(`/jobs/${job.jobId}/${i}`); return; }
-                      }
-                      alert('All tasks are currently claimed. Try again in 30 minutes.');
-                    }}>
-                    Accept Work
+                    onClick={() => navigate(`/jobs/${job.jobId}/0`)}>
+                    <span className="material-symbols-outlined" style={{ fontSize: 16 }}>edit_note</span>
+                    Start Annotating
                   </button>
                   {signer && (
                     <button
                       className="btn-ghost"
-                      title="Archive job & refund unspent bounty"
+                      title="Go to creator dashboard"
                       onClick={() => navigate("/dashboard")}
                       style={{ border: "1px solid var(--border)", padding: "0 10px", borderRadius: 4, display: "flex", alignItems: "center", gap: 4, fontSize: 11, color: "var(--text-3)" }}
                     >
