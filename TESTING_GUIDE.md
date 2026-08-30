@@ -16,13 +16,13 @@ npm run dev
 ```
 *App will run at `http://localhost:5173`*
 
-### Terminal 2 — Node.js & SQLite Relayer Indexer (Port 3001)
+### Terminal 2 — Node.js, SQLite Relayer Indexer & Annotation Indexer (Port 3001)
 ```bash
 cd backend/relayer
 npm install
 npm start
 ```
-*Indexer API will run at `http://localhost:3001`*
+*Relayer + Event Indexer + Annotation Indexer will run at `http://localhost:3001`*
 
 ### Terminal 3 — Local Moondream 2 VLM Server (Port 2020)
 ```bash
@@ -50,7 +50,7 @@ You can also run these direct terminal commands to verify each subsystem:
 cd contracts
 forge test
 ```
-*Expected Output: `Ran 2 test suites: 17 passed, 0 failed`*
+*Expected Output: `Ran 3 test suites: 33 passed, 0 failed` (AnnotationMarket V1: 15, V2: 18)*
 
 ### 2. Event Indexer Status & Onchain Database Queries
 ```bash
@@ -60,7 +60,13 @@ curl http://localhost:3001/indexer/datasets
 ```
 *Expected Output: JSON object containing indexed block status and active jobs*
 
-### 3. Local Moondream 2 VLM Bounding Box Detection Test
+### 3. Annotation Indexer — Quality Leaderboard
+```bash
+curl http://localhost:3001/annotations/leaderboard
+```
+*Expected Output: `{ "leaderboard": [...] }` with top annotators by avg IoU score*
+
+### 4. Local Moondream 2 VLM Bounding Box Detection Test
 ```bash
 curl -X POST http://localhost:2020/v1/detect \
   -H "Content-Type: application/json" \
@@ -68,7 +74,26 @@ curl -X POST http://localhost:2020/v1/detect \
 ```
 *Expected Output: JSON containing detected bounding box coordinates `[x_min, y_min, x_max, y_max]`*
 
-### 4. AI Microservice Swagger & Health Check
+### 5. IoU Annotation Score Endpoint
+```bash
+curl -X POST http://localhost:8000/annotation/score \
+  -H "Content-Type: application/json" \
+  -d '{
+    "image_data": "<base64_image>",
+    "labels": ["person"],
+    "submitted_boxes": [{"label": "person", "x_min": 0.1, "y_min": 0.1, "x_max": 0.5, "y_max": 0.9}]
+  }'
+```
+*Expected Output: `{ "iou_score": 0.82, "mean_iou": 0.82, "ground_truth_count": 1 }`*
+
+### 6. IoU Python Unit Tests
+```bash
+cd backend/ai-service
+python3 -m pytest test_iou.py -v
+```
+*Expected Output: `15 passed, 0 failed`*
+
+### 7. AI Microservice Health Check
 ```bash
 curl http://localhost:8000/
 ```
@@ -79,9 +104,9 @@ curl http://localhost:8000/
 ## 🎯 Full End-to-End User Test Scenario
 
 1. **Step 1: Wallet Setup & Faucet Funds**
-2. **Step 2: Create an Image Annotation Bounty Job**
-3. **Step 3: Annotate Tasks & Run Moondream 2 Zero-Shot Auto-Labeling**
-4. **Step 4: Review, Approve Work & Release Bounty Rewards**
+2. **Step 2: Create a Multi-Annotator Bounty Job (V2)**
+3. **Step 3: Annotate Tasks as Multiple Wallets & Auto-Label with Moondream**
+4. **Step 4: IoU Quality Scoring & Auto Reward Distribution**
 5. **Step 5: Package & Download 0G Storage Dataset (COCO Format)**
 6. **Step 6: Fine-Tune PyTorch YOLOv8 Model on 0G Dataset**
 7. **Step 7: Register Model Weights & Run Live PyTorch Inference Test**
@@ -101,7 +126,7 @@ curl http://localhost:8000/
 
 ---
 
-## 📝 Step 2: Create an Image Annotation Job (`CreateJob.tsx`)
+## 📝 Step 2: Create a Multi-Annotator Bounty Job (V2)
 
 1. Navigate to **Create Job** (`http://localhost:5173/create`).
 2. **Step 1 (Upload)**: Select 3–5 sample image files (`.png`, `.jpg`, `.webp`).
@@ -109,40 +134,65 @@ curl http://localhost:8000/
    - Enter **Instructions**: *"Draw tight bounding boxes around all hardhats and worker helmets."*
    - Add **Class Labels**: Type `hardhat` and press `Enter`.
    - Set **Reward per Task**: `0.01 0G`.
-4. **Step 3 (Review & Confirm)**: Click **Create Job & Lock Escrow**.
-5. **MetaMask Prompt**: Sign the transaction.
-6. **Expected Result**: Success card appears displaying transaction hash link and **"View on Creator Dashboard"** button.
+   - Set **Max Annotators per Task**: drag the slider to `3` (means up to 3 wallets can submit per task).
+   - You should see the **⚡ Moondream IoU Auto-Eval** badge indicating V2 mode.
+4. **Step 3 (Review & Confirm)**: Verify the review table shows:
+   - `Max Annotators/Task: 3 (open submission)`
+   - `Evaluation Method: ⚡ Moondream IoU Auto-Eval`
+5. Click **Post Job (lock X 0G)**. Sign the MetaMask transaction.
+6. **Expected Result**: Success card appears — "Up to 3 annotators per task can now submit annotations".
 
 ---
 
-## 🎨 Step 3: Annotate Tasks & Auto-Labeling (`Workspace.tsx` & `RapidCVPipeline.tsx`)
+## 🎨 Step 3: Multi-Wallet Annotation & Auto-Labeling
 
-1. Open **Jobs Marketplace** (`http://localhost:5173/jobs`) or **Rapid CV Pipeline** (`http://localhost:5173/pipeline`).
-2. Click **Start Annotating** on Job `#0`.
-3. In the workspace tool sidebar, click **Moondream AI Auto-Label (Local VLM)**.
-4. **Expected Terminal Output (`moondream_server.py`)**:
-   ```
-   [VLM DETECT] Finding object: 'hardhat'
-   ✔ Local Moondream 2 VLM detected 2 objects locally (0.42s)
-   ```
-5. Bounding boxes automatically render over the canvas in green.
-6. Click **Review & Submit All Tasks**. Confirm the MetaMask signature transaction.
+1. Open **Jobs Marketplace** (`http://localhost:5173/jobs`).
+2. Click **Start Annotating** on your job — no claiming/locking required! Slots are open.
+3. In the workspace sidebar, notice each task shows a **slot counter** (e.g. `0/3`) indicating how many annotators have submitted.
+4. Draw bounding boxes (or use **Moondream AI Auto-Label**) and click **Save & Next**.
+5. After all tasks, click **Submit All — 1 signature**. Sign the MetaMask tx.
+6. **Repeat with a second wallet** — switch wallets in MetaMask, navigate to the same job, and submit different annotations.
+7. After submission, slot counter updates to e.g. `2/3`.
 
 ---
 
-## 📊 Step 4: Creator Approval & Reward Disbursement (`Dashboard.tsx`)
+## 📊 Step 4: IoU Quality Scoring & Auto Reward Distribution
 
-1. Switch wallet account to the **Job Creator** address.
-2. Navigate to **Creator Dashboard** (`http://localhost:5173/dashboard`).
-3. Under **Jobs Created**, expand Job `#0`.
-4. Review submitted task annotations. Click **Approve Submission**.
-5. **Expected Result**: Onchain transaction executes `AnnotationMarket.approveWork()`, disbursing `0.01 0G` reward directly to the worker's address.
+### Automatic (Backend Relayer)
+The annotation indexer (`annotation-indexer.js`) polls for `WorkSubmitted` events every 10 seconds. Once a task's slots fill (or after 24 hours), it:
+1. Fetches the raw image from 0G Storage.
+2. Calls `POST http://localhost:8000/annotation/score` for each submission.
+3. Computes proportional BPS reward shares based on IoU quality.
+4. Calls `AnnotationMarketV2.distributeRewards()` on-chain automatically.
+
+### Manual Override (Creator)
+1. Navigate to **Creator Dashboard** (`http://localhost:5173/dashboard`).
+2. Select your job from the left panel.
+3. You will see the **IoU Score column** for each submission showing color-coded scores:
+   - 🟢 Green: ≥70% — high quality
+   - 🟡 Yellow: 30–69% — medium quality
+   - 🔴 Red: <30% — low quality
+4. Click **⚡ Evaluate All (Moondream)** to trigger immediate on-chain evaluation.
+5. Or click the **⚡ Eval** button next to a specific task row.
+6. Once evaluated, tasks show **Auto-Rewarded** badge with the reward share percentage.
+
+### Verify Reward Distribution
+```bash
+# Check task submissions and IoU scores via indexer API
+curl http://localhost:3001/annotations/task/0/0
+
+# Check annotator stats
+curl http://localhost:3001/annotations/annotator/0xYOUR_WALLET_ADDRESS
+
+# View leaderboard
+curl http://localhost:3001/annotations/leaderboard
+```
 
 ---
 
-## 📦 Step 5: Dataset Publishing & ZIP Downloading (`DatasetDetail.tsx`)
+## 📦 Step 5: Dataset Publishing & ZIP Downloading
 
-1. On **Creator Dashboard**, click **Publish to Dataset Marketplace**.
+1. On **Creator Dashboard**, click **Publish to Dataset Marketplace** (available once tasks are rewarded).
 2. Set dataset license price (e.g. `0 0G` for free or `0.05 0G` paid).
 3. Navigate to **Dataset Marketplace** (`http://localhost:5173/datasets`).
 4. Click on your dataset card and click **Download Dataset (.ZIP)**.
@@ -156,14 +206,15 @@ curl http://localhost:8000/
 
 | Contract Name | Deployed Galileo Address | Explorer Link |
 | :--- | :--- | :--- |
-| **`AnnotationMarket`** | `0x0577d4422B9065E2C8B7A29794DD176601Cf2c19` | [View on 0G Explorer](https://chainscan-galileo.0g.ai/address/0x0577d4422B9065E2C8B7A29794DD176601Cf2c19) |
-| **`DatasetRegistry`** | `0x27F3343C6e3e28Df23E14D0A1eB3c6E6BEff349c` | [View on 0G Explorer](https://chainscan-galileo.0g.ai/address/0x27F3343C6e3e28Df23E14D0A1eB3c6E6BEff349c) |
-| **`ModelRegistry`** | `0x93d4b1Ea040dA189B32D42AC6814585cE674FB8D` | [View on 0G Explorer](https://chainscan-galileo.0g.ai/address/0x93d4b1Ea040dA189B32D42AC6814585cE674FB8D) |
-| **`PipelineSubscription`** | `0x07231896B7dF2F51E6a56A6118850b43522E8f44` | [View on 0G Explorer](https://chainscan-galileo.0g.ai/address/0x07231896B7dF2F51E6a56A6118850b43522E8f44) |
+| **`AnnotationMarket`** (V1) | `0x4B791da8eD9C4d3b1812b51F63359c1f3AeB8C0A` | [View on 0G Explorer](https://chainscan-galileo.0g.ai/address/0x4B791da8eD9C4d3b1812b51F63359c1f3AeB8C0A) |
+| **`AnnotationMarketV2`** ⭐ | `0x401fBd48959DC36cab4ddd5898952dCcCdf004f2` | [View on 0G Explorer](https://chainscan-galileo.0g.ai/address/0x401fBd48959DC36cab4ddd5898952dCcCdf004f2) |
+| **`DatasetRegistry`** | `0x4AC6935DE58CeB54f2152a984ae5C597be9eFA5d` | [View on 0G Explorer](https://chainscan-galileo.0g.ai/address/0x4AC6935DE58CeB54f2152a984ae5C597be9eFA5d) |
+| **`ModelRegistry`** | `0x86758906B8f2b3AFffe10aAC7fD1257647F9166e` | [View on 0G Explorer](https://chainscan-galileo.0g.ai/address/0x86758906B8f2b3AFffe10aAC7fD1257647F9166e) |
+| **`PipelineSubscription`** | `0xdEF5D5C9DA844C56dd3D59481B5d1265E7101403` | [View on 0G Explorer](https://chainscan-galileo.0g.ai/address/0xdEF5D5C9DA844C56dd3D59481B5d1265E7101403) |
 
 ---
 
-## 🤖 Step 6: Fine-Tune PyTorch YOLO Model (`TrainingModal.tsx` & `RapidCVPipeline.tsx`)
+## 🤖 Step 6: Fine-Tune PyTorch YOLO Model
 
 1. On the Dataset detail page or **Rapid CV Studio** (`http://localhost:5173/rapid-cv`), click **Start YOLO Fine-Tuning**.
 2. **MetaMask Onchain Transaction Signature Prompt**:
@@ -175,11 +226,11 @@ curl http://localhost:8000/
    - **Live Event Stream**: Streaming badges for `[HARDWARE]` (⚡ Apple Metal MPS), `[0G DATA]`, `[YOLO SETUP]`, and `[EPOCH]`.
 4. **Publish Model to Universe**:
    - When training completes, click **Publish Model to Model Universe**.
-   - Model weights `.pt` are uploaded to 0G Storage and registered onchain with `sourceDatasetName` metadata.
+   - Model weights `.pt` are uploaded to 0G Storage and registered onchain.
 
 ---
 
-## ⚡ Step 7: Live Model Testing & Weights Downloading (`Models.tsx`)
+## ⚡ Step 7: Live Model Testing & Weights Downloading
 
 1. Navigate to **Model Universe** (`http://localhost:5173/models`).
 2. Every model card displays:
@@ -194,8 +245,10 @@ curl http://localhost:8000/
 
 ## 🟢 Verification Checklist
 
-- [x] **Smart Contracts**: 17 / 17 unit tests passed (`cd contracts && forge test`).
-- [x] **Relayer Indexer**: SQLite synced on 0G Galileo Testnet (`cd backend/relayer && npm start`).
+- [x] **Smart Contracts (V1 + V2)**: 33 / 33 unit tests passed (`cd contracts && forge test`).
+- [x] **Relayer + Event Indexer**: SQLite synced on 0G Galileo Testnet (`cd backend/relayer && npm start`).
+- [x] **Annotation Indexer**: Multi-annotator IoU pipeline running (`annotation-indexer.js` auto-started by relayer).
+- [x] **IoU Python Tests**: 15 / 15 passed (`cd backend/ai-service && python3 -m pytest test_iou.py -v`).
 - [x] **Moondream 2 VLM**: Serving local GPU detection on port `2020` (`cd backend/ai-service && python3 moondream_server.py`).
 - [x] **AI Microservice**: Serving PyTorch training & inference on port `8000` (`cd backend/ai-service && python3 main.py`).
 - [x] **Frontend**: Compiled clean with 0 errors (`cd frontend && npm run build`).
