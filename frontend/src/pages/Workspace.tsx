@@ -3,6 +3,7 @@ import { useParams, useNavigate } from "react-router-dom";
 import { Stage, Layer, Image as KonvaImage, Rect, Line, Circle, Text, Transformer } from "react-konva";
 import { useWallet } from "../hooks/useWallet";
 import { useAnnotationMarket } from "../hooks/useAnnotationMarket";
+import { useAnnotationMarketV2 } from "../hooks/useAnnotationMarketV2";
 import { uploadJson, fetchFrom0GStorage } from "../hooks/useStorage";
 import { GALILEO } from "../config";
 
@@ -468,6 +469,7 @@ export default function Workspace() {
   const navigate = useNavigate();
   const { signer } = useWallet();
   const market = useAnnotationMarket(signer);
+  const marketV2 = useAnnotationMarketV2(signer);
 
   const [job, setJob] = useState<any>(null);
   const [metadata, setMetadata] = useState<any>(null);
@@ -488,9 +490,9 @@ export default function Workspace() {
   const jobId = Number(jobIdStr ?? 0);
 
   useEffect(() => {
-    if (!market) return;
+    if (!market && !marketV2) return;
     loadJob();
-  }, [!!market, jobId]);
+  }, [!!market, !!marketV2, jobId]);
 
   // Fetch submission counts from indexer for slot indicators
   useEffect(() => {
@@ -515,9 +517,22 @@ export default function Workspace() {
   }, [job, jobId]);
 
   async function loadJob() {
-    if (!market) return;
     try {
-      const j = await market.getJob(jobId);
+      let j: any = null;
+      if (marketV2) {
+        try {
+          const v2j = await marketV2.getJob(jobId);
+          if (v2j && v2j.creator !== "0x0000000000000000000000000000000000000000") {
+            j = { ...v2j, isV2: true };
+          }
+        } catch {}
+      }
+
+      if (!j && market) {
+        j = await market.getJob(jobId);
+      }
+
+      if (!j) throw new Error("Job not found");
       setJob(j);
 
       // Resilient 0G storage fetching with retries and multiple indexer fallback
@@ -579,11 +594,22 @@ export default function Workspace() {
         }
       }
 
-      // One batch transaction — one MetaMask signature
       setStep("submitting");
-      const taskIds = uploads.map((u) => u.taskId);
-      const rootHashes = uploads.map((u) => u.rootHash);
-      const receipt = await market.submitBatch(jobId, taskIds, rootHashes);
+      let lastTxHash = "";
+
+      if (job?.isV2 || marketV2) {
+        // V2 Submission Flow
+        for (const u of uploads) {
+          const receipt = await marketV2!.submitWork(jobId, u.taskId, u.rootHash);
+          lastTxHash = receipt.hash;
+        }
+      } else if (market) {
+        // V1 Batch Submission Flow
+        const taskIds = uploads.map((u) => u.taskId);
+        const rootHashes = uploads.map((u) => u.rootHash);
+        const receipt = await market.submitBatch(jobId, taskIds, rootHashes);
+        lastTxHash = receipt.hash;
+      }
 
       // Clear all drafts
       annotatedIds.forEach((tid) => {
@@ -591,7 +617,7 @@ export default function Workspace() {
         localStorage.removeItem(`draft-text-${jobId}-${tid}`);
       });
       setDraftAnnotations({});
-      setTxHash(receipt.hash);
+      setTxHash(lastTxHash);
       setStep("done");
     } catch (e: any) {
       setError(e.message);

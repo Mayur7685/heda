@@ -45,22 +45,69 @@ export default function Dashboard() {
   const loaded = useRef(false);
 
   useEffect(() => {
-    if (!market || !address || loaded.current) return;
+    if ((!market && !marketV2) || !address || loaded.current) return;
     loaded.current = true;
     loadMyJobs();
-  }, [!!market, address]);
+  }, [!!market, !!marketV2, address]);
 
   async function loadMyJobs() {
-    if (!market || !address) return;
+    if (!address) return;
     setLoading(true);
     try {
-      const events = await market.listJobs();
-      const mine = events.filter((e) => e.creator.toLowerCase() === address.toLowerCase());
-      const withState = await Promise.all(mine.map(async (e) => {
-        const j = await market.getJob(e.jobId);
-        return { jobId: e.jobId, dataRootHash: e.dataRootHash, rewardPerTask: e.rewardPerTask, taskCount: Number(j.taskCount), approvedCount: Number(j.approvedCount), active: j.active, dataType: Number(j.dataType) };
-      }));
-      setMyJobs(withState);
+      const [v1Events, v2Events] = await Promise.all([
+        market ? market.listJobs().catch(() => []) : [],
+        marketV2 ? marketV2.listJobs().catch(() => []) : [],
+      ]);
+
+      const mineV2 = v2Events.filter((e) => e.creator.toLowerCase() === address.toLowerCase());
+      const mineV1 = v1Events.filter((e) => e.creator.toLowerCase() === address.toLowerCase());
+
+      const withStateV2 = marketV2
+        ? await Promise.all(
+            mineV2.map(async (e) => {
+              try {
+                const j = await marketV2.getJob(e.jobId);
+                return {
+                  jobId: e.jobId,
+                  dataRootHash: e.dataRootHash,
+                  rewardPerTask: e.rewardPerTask,
+                  taskCount: Number(j.taskCount),
+                  approvedCount: Number(j.approvedTaskCount ?? 0),
+                  active: j.active,
+                  dataType: Number(j.dataType),
+                  isV2: true,
+                };
+              } catch {
+                return null;
+              }
+            })
+          )
+        : [];
+
+      const withStateV1 = market
+        ? await Promise.all(
+            mineV1.map(async (e) => {
+              try {
+                const j = await market.getJob(e.jobId);
+                return {
+                  jobId: e.jobId,
+                  dataRootHash: e.dataRootHash,
+                  rewardPerTask: e.rewardPerTask,
+                  taskCount: Number(j.taskCount),
+                  approvedCount: Number(j.approvedCount),
+                  active: j.active,
+                  dataType: Number(j.dataType),
+                  isV2: false,
+                };
+              } catch {
+                return null;
+              }
+            })
+          )
+        : [];
+
+      const allMine = [...withStateV2.filter(Boolean), ...withStateV1.filter(Boolean)] as JobRow[];
+      setMyJobs(allMine);
 
       if (registry) {
         try {
@@ -69,33 +116,54 @@ export default function Dashboard() {
           setPublishedJobIds(pubSet);
         } catch {}
       }
-    } finally { setLoading(false); }
+    } finally {
+      setLoading(false);
+    }
   }
 
   async function loadSubs(job: JobRow) {
-    if (!market) return;
     setSelected(job);
     setSubs([]);
     setAnnotationCache({});
     setHealthLabels([]);
     const rows: SubRow[] = [];
-    for (let i = 0; i < job.taskCount; i++) {
-      const sub = await market.getSubmission(job.jobId, i);
-      if (sub.exists) rows.push({ taskId: i, annotator: sub.annotator, annotationRootHash: sub.annotationRootHash, approved: sub.approved });
-    }
-    setSubs(rows);
 
-    // V2: fetch quality data from indexer REST API
-    if (rows.length > 0) {
+    if ((job as any).isV2 || marketV2) {
+      // For V2 jobs, fetch task annotations from indexer REST API & V2 contract
       const taskData: Record<number, any> = {};
-      await Promise.all(rows.map(async (sub) => {
+      for (let i = 0; i < job.taskCount; i++) {
         try {
-          const res = await fetch(`http://localhost:3001/annotations/task/${job.jobId}/${sub.taskId}`);
-          if (res.ok) taskData[sub.taskId] = await res.json();
+          const res = await fetch(`http://localhost:3001/annotations/task/${job.jobId}/${i}`);
+          if (res.ok) {
+            const data = await res.json();
+            taskData[i] = data;
+            if (Array.isArray(data.submissions)) {
+              for (const sub of data.submissions) {
+                rows.push({
+                  taskId: i,
+                  annotator: sub.annotator,
+                  annotationRootHash: sub.annotation_root_hash || sub.annotationRootHash || "",
+                  approved: sub.status === "rewarded",
+                });
+              }
+            }
+          }
         } catch {}
-      }));
+      }
       setV2TaskData(taskData);
     }
+
+    if (rows.length === 0 && market) {
+      // Fallback for V1 jobs
+      for (let i = 0; i < job.taskCount; i++) {
+        try {
+          const sub = await market.getSubmission(job.jobId, i);
+          if (sub.exists) rows.push({ taskId: i, annotator: sub.annotator, annotationRootHash: sub.annotationRootHash, approved: sub.approved });
+        } catch {}
+      }
+    }
+
+    setSubs(rows);
 
     // Fetch metadata to get labels for health check
     try {

@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useWallet } from "../hooks/useWallet";
 import { useAnnotationMarket } from "../hooks/useAnnotationMarket";
+import { useAnnotationMarketV2 } from "../hooks/useAnnotationMarketV2";
 import { fetchFrom0GStorage } from "../hooks/useStorage";
 
 type JobRow = {
@@ -14,6 +15,7 @@ type JobRow = {
   dataType: number;
   active: boolean;
   txHash: string;
+  isV2?: boolean;
   // fetched from 0G Storage
   name?: string;
   instructions?: string;
@@ -27,51 +29,110 @@ export default function Jobs() {
   const navigate = useNavigate();
   const { signer, isCorrectChain } = useWallet();
   const market = useAnnotationMarket(signer);
+  const marketV2 = useAnnotationMarketV2(signer);
   const [jobs, setJobs] = useState<JobRow[]>([]);
   const [filter, setFilter] = useState<Filter>("open");
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    if (!market) return;
+    if (!market && !marketV2) return;
     loadJobs();
-  }, [!!market]);
+  }, [!!market, !!marketV2]);
 
   async function loadJobs() {
-    if (!market) return;
     setLoading(true);
     try {
-      const events = await market.listJobs();
-      const withState = await Promise.all(
-        events.map(async (e) => {
-          const j = await market.getJob(e.jobId);
-          const base: JobRow = { ...e, approvedCount: Number(j.approvedCount), active: j.active };
+      const [v1Events, v2Events] = await Promise.all([
+        market ? market.listJobs().catch(() => []) : [],
+        marketV2 ? marketV2.listJobs().catch(() => []) : [],
+      ]);
 
-          // Fetch metadata & raw data files in parallel from 0G Storage
-          try {
-            const [metaResult, dataResult] = await Promise.allSettled([
-              fetchFrom0GStorage(j.metadataURI, 4),
-              fetchFrom0GStorage(j.dataRootHash, 4),
-            ]);
+      const allRows: JobRow[] = [];
 
-            if (metaResult.status === "fulfilled" && metaResult.value) {
-              const meta = metaResult.value;
-              base.name = meta.name;
-              base.instructions = meta.instructions;
-              base.labels = meta.labels;
-            }
+      // Process V2 Jobs
+      if (marketV2 && v2Events.length > 0) {
+        const v2Rows = await Promise.all(
+          v2Events.map(async (e: any) => {
+            try {
+              const j = await marketV2.getJob(e.jobId);
+              const base: JobRow = {
+                jobId: e.jobId,
+                creator: e.creator,
+                dataRootHash: e.dataRootHash,
+                rewardPerTask: e.rewardPerTask,
+                taskCount: Number(j.taskCount),
+                approvedCount: Number(j.approvedTaskCount ?? 0),
+                dataType: Number(j.dataType),
+                active: j.active,
+                txHash: e.txHash,
+                isV2: true,
+              };
 
-            if (Number(j.dataType) === 0 && dataResult.status === "fulfilled" && dataResult.value) {
-              const files = dataResult.value;
-              if (Array.isArray(files) && files[0]?.data && files[0]?.type) {
-                base.previewImage = `data:${files[0].type};base64,${files[0].data}`;
+              const [metaResult, dataResult] = await Promise.allSettled([
+                fetchFrom0GStorage(j.metadataURI, 4),
+                fetchFrom0GStorage(j.dataRootHash, 4),
+              ]);
+
+              if (metaResult.status === "fulfilled" && metaResult.value) {
+                const meta = metaResult.value;
+                base.name = meta.name;
+                base.instructions = meta.instructions;
+                base.labels = meta.labels;
               }
-            }
-          } catch { /* fetch failed — show fallback */ }
 
-          return base;
-        })
-      );
-      setJobs(withState.reverse());
+              if (Number(j.dataType) === 0 && dataResult.status === "fulfilled" && dataResult.value) {
+                const files = dataResult.value;
+                if (Array.isArray(files) && files[0]?.data && files[0]?.type) {
+                  base.previewImage = `data:${files[0].type};base64,${files[0].data}`;
+                }
+              }
+
+              return base;
+            } catch {
+              return null;
+            }
+          })
+        );
+        allRows.push(...(v2Rows.filter(Boolean) as JobRow[]));
+      }
+
+      // Process V1 Jobs
+      if (market && v1Events.length > 0) {
+        const v1Rows = await Promise.all(
+          v1Events.map(async (e: any) => {
+            try {
+              const j = await market.getJob(e.jobId);
+              const base: JobRow = { ...e, approvedCount: Number(j.approvedCount), active: j.active, isV2: false };
+
+              const [metaResult, dataResult] = await Promise.allSettled([
+                fetchFrom0GStorage(j.metadataURI, 4),
+                fetchFrom0GStorage(j.dataRootHash, 4),
+              ]);
+
+              if (metaResult.status === "fulfilled" && metaResult.value) {
+                const meta = metaResult.value;
+                base.name = meta.name;
+                base.instructions = meta.instructions;
+                base.labels = meta.labels;
+              }
+
+              if (Number(j.dataType) === 0 && dataResult.status === "fulfilled" && dataResult.value) {
+                const files = dataResult.value;
+                if (Array.isArray(files) && files[0]?.data && files[0]?.type) {
+                  base.previewImage = `data:${files[0].type};base64,${files[0].data}`;
+                }
+              }
+
+              return base;
+            } catch {
+              return null;
+            }
+          })
+        );
+        allRows.push(...(v1Rows.filter(Boolean) as JobRow[]));
+      }
+
+      setJobs(allRows.reverse());
     } finally {
       setLoading(false);
     }
