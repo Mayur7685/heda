@@ -3,7 +3,7 @@ import { useWallet } from "../hooks/useWallet";
 import { useAnnotationMarketV2 } from "../hooks/useAnnotationMarketV2";
 import { useDatasetRegistry } from "../hooks/useDatasetRegistry";
 import { uploadJson, uploadBlob, fetchFrom0GStorage } from "../hooks/useStorage";
-import { GALILEO } from "../config";
+import { GALILEO, RELAYER_API_URL } from "../config";
 import DatasetHealthCard from "../components/DatasetHealthCard";
 import DatasetCreationModal from "../components/DatasetCreationModal";
 
@@ -109,7 +109,7 @@ export default function Dashboard() {
         try {
           const [onchainSubs, indexerRes] = await Promise.all([
             marketV2 ? marketV2.getTaskSubmissions(job.jobId, i).catch(() => []) : [],
-            fetch(`http://localhost:3001/annotations/task/${job.jobId}/${i}`).then((r) => r.ok ? r.json() : null).catch(() => null),
+            fetch(`${RELAYER_API_URL}/annotations/task/${job.jobId}/${i}`).then((r) => r.ok ? r.json() : null).catch(() => null),
           ]);
 
           if (indexerRes) {
@@ -192,7 +192,7 @@ export default function Dashboard() {
     const taskIds = Array.from(new Set(Array.from(selectedSubs).map(k => Number(k.split(":")[0]))));
     try {
       for (const tid of taskIds) {
-        fetch("http://localhost:3001/annotations/evaluate", {
+        fetch(`${RELAYER_API_URL}/annotations/evaluate`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ jobId: selected.jobId, taskId: tid }),
@@ -251,8 +251,8 @@ export default function Dashboard() {
       const [annData, files, gtRes, taskAnnoRes] = await Promise.all([
         fetchFrom0GStorage(sub.annotationRootHash, 5).catch(() => null),
         fetchFrom0GStorage(selected.dataRootHash, 5).catch(() => null),
-        fetch(`http://localhost:3001/annotations/ground-truth/${selected.jobId}/${sub.taskId}`).then(r => r.ok ? r.json() : null).catch(() => null),
-        fetch(`http://localhost:3001/annotations/task/${selected.jobId}/${sub.taskId}`).then(r => r.ok ? r.json() : null).catch(() => null),
+        fetch(`${RELAYER_API_URL}/annotations/ground-truth/${selected.jobId}/${sub.taskId}`).then(r => r.ok ? r.json() : null).catch(() => null),
+        fetch(`${RELAYER_API_URL}/annotations/task/${selected.jobId}/${sub.taskId}`).then(r => r.ok ? r.json() : null).catch(() => null),
       ]);
 
       const boxes: any[] = Array.isArray(annData?.annotation) ? annData.annotation : [];
@@ -743,7 +743,7 @@ export default function Dashboard() {
                                   }));
                                   try {
                                     // Trigger backend indexer evaluation immediately via HTTP REST API
-                                    fetch("http://localhost:3001/annotations/evaluate", {
+                                    fetch(`${RELAYER_API_URL}/annotations/evaluate`, {
                                       method: "POST",
                                       headers: { "Content-Type": "application/json" },
                                       body: JSON.stringify({ jobId: selected!.jobId, taskId: sub.taskId }),

@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { ethers } from "ethers";
 import { useWallet } from "../hooks/useWallet";
-import { GALILEO } from "../config";
+import { GALILEO, RELAYER_API_URL } from "../config";
 
 interface AnnotatorStats {
   address: string;
@@ -31,7 +31,7 @@ export default function Leaderboard() {
     setLoading(true);
     try {
       // Fetch live V2 indexer leaderboard API
-      const res = await fetch("http://localhost:3001/annotations/leaderboard");
+      const res = await fetch(`${RELAYER_API_URL}/annotations/leaderboard`);
       if (res.ok) {
         const data = await res.json();
         if (Array.isArray(data?.leaderboard) && data.leaderboard.length > 0) {

@@ -4,7 +4,7 @@ import { Stage, Layer, Image as KonvaImage, Rect, Line, Circle, Text, Transforme
 import { useWallet } from "../hooks/useWallet";
 import { useAnnotationMarketV2 } from "../hooks/useAnnotationMarketV2";
 import { uploadJson, fetchFrom0GStorage } from "../hooks/useStorage";
-import { GALILEO } from "../config";
+import { GALILEO, RELAYER_API_URL } from "../config";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -517,7 +517,7 @@ export default function Workspace() {
   // Fetch tasks already submitted by current wallet address
   useEffect(() => {
     if (!userWalletAddress || !job) return;
-    fetch(`http://localhost:3001/annotations/annotator/${userWalletAddress}`)
+    fetch(`${RELAYER_API_URL}/annotations/annotator/${userWalletAddress}`)
       .then(r => r.ok ? r.json() : null)
       .then(data => {
         if (Array.isArray(data?.submissions)) {
@@ -538,7 +538,7 @@ export default function Workspace() {
     Promise.all(
       Array.from({ length: count }).map(async (_, i) => {
         try {
-          const res = await fetch(`http://localhost:3001/annotations/task/${jobId}/${i}`);
+          const res = await fetch(`${RELAYER_API_URL}/annotations/task/${jobId}/${i}`);
           if (res.ok) {
             const data = await res.json();
             return [i, data.submissionCount ?? 0] as [number, number];

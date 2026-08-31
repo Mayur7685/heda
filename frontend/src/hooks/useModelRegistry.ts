@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import { ethers } from "ethers";
-import { GALILEO } from "../config";
+import { GALILEO, RELAYER_API_URL } from "../config";
 import ABI from "../abis/ModelRegistry.json";
 
 export const ModelTypeNames = ["YOLOv8", "CLIP", "QwenFineTune", "SAM", "Other"] as const;
@@ -60,7 +60,7 @@ export function useModelRegistry(signer: ethers.Signer | null) {
 
       async listModels() {
         try {
-          const res = await fetch("http://localhost:3001/indexer/models");
+          const res = await fetch(`${RELAYER_API_URL}/indexer/models`);
           if (res.ok) {
             const indexed = await res.json();
             if (Array.isArray(indexed) && indexed.length > 0) return indexed;

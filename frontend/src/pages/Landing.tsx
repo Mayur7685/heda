@@ -4,8 +4,7 @@ import { useWallet } from "../hooks/useWallet";
 import { useAnnotationMarketV2 } from "../hooks/useAnnotationMarketV2";
 import { useDatasetRegistry } from "../hooks/useDatasetRegistry";
 import { useModelRegistry } from "../hooks/useModelRegistry";
-
-const RELAYER_URL = import.meta.env.VITE_RELAYER_URL || "http://localhost:3001";
+import { RELAYER_API_URL } from "../config";
 
 export default function Landing() {
   const navigate = useNavigate();
@@ -49,7 +48,7 @@ export default function Landing() {
     }
 
     // 4. Fetch unique verified annotators count from relayer
-    fetch(`${RELAYER_URL}/annotations/leaderboard`)
+    fetch(`${RELAYER_API_URL}/annotations/leaderboard`)
       .then((res) => res.json())
       .then((data) => {
         if (data?.leaderboard && Array.isArray(data.leaderboard)) {

@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { useWallet } from "../hooks/useWallet";
 import { useModelRegistry, ModelTypeNames } from "../hooks/useModelRegistry";
 import { fetchFrom0GStorage, uploadJson } from "../hooks/useStorage";
-import { GALILEO } from "../config";
+import { GALILEO, RELAYER_API_URL } from "../config";
 import InferenceModal from "../components/InferenceModal";
 
 type ModelCardRow = {
@@ -125,7 +125,7 @@ export default function Models() {
 
       // 1. Try local 0G Relayer proxy first
       try {
-        const proxyRes = await fetch(`http://localhost:3001/file?root=${cleanHash}`).catch(() => null);
+        const proxyRes = await fetch(`${RELAYER_API_URL}/file?root=${cleanHash}`).catch(() => null);
         if (proxyRes?.ok) {
           const text = await proxyRes.text();
           let b64Str = text;

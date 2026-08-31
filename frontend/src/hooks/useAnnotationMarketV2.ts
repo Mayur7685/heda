@@ -10,7 +10,7 @@
  */
 import { useMemo }   from 'react';
 import { ethers }    from 'ethers';
-import { GALILEO }   from '../config';
+import { GALILEO, RELAYER_API_URL } from '../config';
 
 // ── Minimal ABI (all functions needed by frontend) ────────────────────────────
 const V2_ABI = [
@@ -230,7 +230,7 @@ export function useAnnotationMarketV2(signer: ethers.Signer | null) {
       /** Fetch task submission count from annotation indexer REST API */
       async getTaskStatus(jobId: number, taskId: number) {
         try {
-          const res = await fetch(`http://localhost:3001/annotations/task/${jobId}/${taskId}`);
+          const res = await fetch(`${RELAYER_API_URL}/annotations/task/${jobId}/${taskId}`);
           if (res.ok) return await res.json();
         } catch {}
         // Fallback to on-chain
@@ -241,7 +241,7 @@ export function useAnnotationMarketV2(signer: ethers.Signer | null) {
       /** Fetch annotator quality stats from REST API */
       async getAnnotatorStats(address: string) {
         try {
-          const res = await fetch(`http://localhost:3001/annotations/annotator/${address}`);
+          const res = await fetch(`${RELAYER_API_URL}/annotations/annotator/${address}`);
           if (res.ok) return await res.json();
         } catch {}
         return null;
@@ -250,7 +250,7 @@ export function useAnnotationMarketV2(signer: ethers.Signer | null) {
       /** Fetch leaderboard from REST API */
       async getLeaderboard() {
         try {
-          const res = await fetch('http://localhost:3001/annotations/leaderboard');
+          const res = await fetch(`${RELAYER_API_URL}/annotations/leaderboard`);
           if (res.ok) return await res.json();
         } catch {}
         return { leaderboard: [] };
@@ -259,7 +259,7 @@ export function useAnnotationMarketV2(signer: ethers.Signer | null) {
 
       /** POST manual evaluate trigger to relayer REST API */
       async requestEvaluation(jobId: number, taskId: number) {
-        const res = await fetch('http://localhost:3001/annotations/evaluate', {
+        const res = await fetch(`${RELAYER_API_URL}/annotations/evaluate`, {
           method:  'POST',
           headers: { 'Content-Type': 'application/json' },
           body:    JSON.stringify({ jobId, taskId }),

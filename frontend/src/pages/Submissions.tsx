@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { ethers } from "ethers";
 import { useWallet } from "../hooks/useWallet";
 import { useAnnotationMarketV2 } from "../hooks/useAnnotationMarketV2";
-import { GALILEO } from "../config";
+import { GALILEO, RELAYER_API_URL } from "../config";
 
 // status: "approved" | "pending" | "rejected" | "closed"
 type Sub = {
@@ -51,7 +51,7 @@ export default function Submissions() {
     try {
       // 1. Fetch live V2 indexer submissions & onchain events
       const [indexerRes, onchainEvents] = await Promise.all([
-        fetch(`http://localhost:3001/annotations/annotator/${address}`).then(r => r.ok ? r.json() : null).catch(() => null),
+        fetch(`${RELAYER_API_URL}/annotations/annotator/${address}`).then(r => r.ok ? r.json() : null).catch(() => null),
         marketV2 ? marketV2.listMySubmissions(address).catch(() => []) : [],
       ]);
 

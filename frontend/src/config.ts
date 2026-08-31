@@ -23,6 +23,8 @@ export const CONTRACTS = {
   SUBSCRIPTION:     "0x3EE57E207D6A826f05b57101dcbA002fC1fCE6D1" as `0x${string}`,
 };
 
+export const RELAYER_API_URL = import.meta.env.VITE_UPLOAD_API || import.meta.env.VITE_RELAYER_URL || "http://localhost:3001";
+export const AI_SERVICE_API_URL = import.meta.env.VITE_AI_SERVICE_API || "http://localhost:8000";
 export const COMPUTE_ROUTER = "https://router-api-testnet.integratenetwork.work/v1";
 
 export const SUPPORTED_FINETUNE_MODELS = [

@@ -35,15 +35,15 @@ export default function FineTune() {
     const events = await registry.listDatasets();
     const licensed = await Promise.all(
       events
-        .filter((d) => d.dataType === 1) // text only
-        .map(async (d) => ({
+        .filter((d: any) => d.dataType === 1) // text only
+        .map(async (d: any) => ({
           datasetId: d.datasetId,
           rootHash: d.rootHash,
           label: `Dataset #${d.datasetId} — ${d.rootHash.slice(0, 10)}… (${d.dataType === 1 ? "Text" : "Image"})`,
           hasLicense: await registry.hasLicense(d.datasetId, address),
         }))
     );
-    setTextDatasets(licensed.filter((d) => d.hasLicense));
+    setTextDatasets(licensed.filter((d: any) => d.hasLicense));
   }
 
   async function submitJob() {

@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import { ethers } from "ethers";
-import { GALILEO } from "../config";
+import { GALILEO, RELAYER_API_URL } from "../config";
 import ABI from "../abis/DatasetRegistry.json";
 
 export function useDatasetRegistry(signer: ethers.Signer | null) {
@@ -26,12 +26,32 @@ export function useDatasetRegistry(signer: ethers.Signer | null) {
         sourceJobId: number
       ) {
         const tx = await contract.publish(
-          rootHash, metadataURI, ethers.parseEther(priceEth), dataType, sourceJobId
+          rootHash, metadataURI, ethers.parseEther(priceEth || "0"), dataType, sourceJobId
+        );
+        return tx.wait();
+      },
+
+      registerDataset: async (
+        rootHash: string,
+        metadataURI: string,
+        priceEth: string,
+        dataType: number,
+        sourceJobId: number = 0
+      ) => {
+        const tx = await contract.publish(
+          rootHash, metadataURI, ethers.parseEther(priceEth || "0"), dataType, sourceJobId
         );
         return tx.wait();
       },
 
       async purchase(datasetId: number, priceEth: string) {
+        const tx = await contract.purchase(datasetId, {
+          value: ethers.parseEther(priceEth),
+        });
+        return tx.wait();
+      },
+
+      purchaseAccess: async (datasetId: number, priceEth: string) => {
         const tx = await contract.purchase(datasetId, {
           value: ethers.parseEther(priceEth),
         });
@@ -46,7 +66,7 @@ export function useDatasetRegistry(signer: ethers.Signer | null) {
 
       async listDatasets() {
         try {
-          const res = await fetch("http://localhost:3001/indexer/datasets");
+          const res = await fetch(`${RELAYER_API_URL}/indexer/datasets`);
           if (res.ok) {
             const indexed = await res.json();
             if (Array.isArray(indexed) && indexed.length > 0) return indexed;
