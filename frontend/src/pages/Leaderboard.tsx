@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { ethers } from "ethers";
 import { useWallet } from "../hooks/useWallet";
 import { GALILEO } from "../config";
 
@@ -7,6 +8,8 @@ interface AnnotatorStats {
   tasksApproved: number;
   tasksSubmitted: number;
   totalEarned0G: string;
+  totalEarnedRaw: number;
+  avgIou: number;
   approvalRate: number;
   rank: number;
   level: string;
@@ -18,7 +21,7 @@ export default function Leaderboard() {
   const [annotators, setAnnotators] = useState<AnnotatorStats[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
-  const [sortBy, setSortBy] = useState<"earned" | "approved">("earned");
+  const [sortBy, setSortBy] = useState<"earned" | "approved" | "quality">("earned");
 
   useEffect(() => {
     loadLeaderboard();
@@ -37,6 +40,11 @@ export default function Leaderboard() {
             const approved = (item.total_evaluated || 0) - (item.total_rejected || 0);
             const rate = item.total_evaluated > 0 ? Math.round((approved / item.total_evaluated) * 100) : 100;
 
+            const weiVal = BigInt(item.total_earned_wei || "0");
+            const ethStr = ethers.formatEther(weiVal);
+            const ethNum = parseFloat(ethStr);
+            const formattedEarned = ethNum > 0 ? (ethNum < 0.0001 ? "<0.0001" : ethNum.toFixed(4)) : "0.0000";
+
             let level = "Verified Annotator";
             let badgeColor = "#60a5fa";
             if (avgIou >= 0.85 || approved >= 20) {
@@ -54,7 +62,9 @@ export default function Leaderboard() {
               address: item.address,
               tasksApproved: approved,
               tasksSubmitted: item.total_submissions,
-              totalEarned0G: (avgIou * 100).toFixed(1) + "% Avg IoU",
+              totalEarned0G: formattedEarned,
+              totalEarnedRaw: ethNum,
+              avgIou,
               approvalRate: rate,
               rank: idx + 1,
               level,
@@ -79,7 +89,8 @@ export default function Leaderboard() {
     .filter((a) => a.address.toLowerCase().includes(search.toLowerCase()))
     .sort((a, b) => {
       if (sortBy === "approved") return b.tasksApproved - a.tasksApproved;
-      return parseFloat(b.totalEarned0G) - parseFloat(a.totalEarned0G);
+      if (sortBy === "quality") return b.avgIou - a.avgIou;
+      return b.totalEarnedRaw - a.totalEarnedRaw;
     });
 
   const top3 = annotators.slice(0, 3);
@@ -138,17 +149,23 @@ export default function Leaderboard() {
                     {a.level}
                   </div>
 
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, paddingTop: 16, borderTop: "1px solid var(--border)", marginTop: "auto" }}>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8, paddingTop: 16, borderTop: "1px solid var(--border)", marginTop: "auto" }}>
                     <div>
-                      <div style={{ fontSize: 10, color: "var(--text-3)", textTransform: "uppercase" }}>Total Earned</div>
-                      <div style={{ fontSize: 18, fontWeight: 800, color: "var(--primary)", fontFamily: "'Space Grotesk', monospace" }}>
-                        {a.totalEarned0G} <span style={{ fontSize: 11 }}>0G</span>
+                      <div style={{ fontSize: 9.5, color: "var(--text-3)", textTransform: "uppercase" }}>Total Earned</div>
+                      <div style={{ fontSize: 16, fontWeight: 800, color: "var(--primary)", fontFamily: "'Space Grotesk', monospace" }}>
+                        {a.totalEarned0G} <span style={{ fontSize: 10 }}>0G</span>
                       </div>
                     </div>
                     <div>
-                      <div style={{ fontSize: 10, color: "var(--text-3)", textTransform: "uppercase" }}>Approved</div>
-                      <div style={{ fontSize: 18, fontWeight: 800, color: "var(--text)", fontFamily: "'Space Grotesk', monospace" }}>
-                        {a.tasksApproved} <span style={{ fontSize: 11 }}>tasks</span>
+                      <div style={{ fontSize: 9.5, color: "var(--text-3)", textTransform: "uppercase" }}>Avg Quality</div>
+                      <div style={{ fontSize: 16, fontWeight: 800, color: "#60a5fa", fontFamily: "'Space Grotesk', monospace" }}>
+                        {(a.avgIou * 100).toFixed(1)}%
+                      </div>
+                    </div>
+                    <div>
+                      <div style={{ fontSize: 9.5, color: "var(--text-3)", textTransform: "uppercase" }}>Approved</div>
+                      <div style={{ fontSize: 16, fontWeight: 800, color: "var(--text)", fontFamily: "'Space Grotesk', monospace" }}>
+                        {a.tasksApproved} <span style={{ fontSize: 10 }}>tasks</span>
                       </div>
                     </div>
                   </div>
@@ -166,6 +183,12 @@ export default function Leaderboard() {
               onClick={() => setSortBy("earned")}
             >
               Top Earners (0G ETH)
+            </button>
+            <button
+              className={`filter-pill ${sortBy === "quality" ? "active" : ""}`}
+              onClick={() => setSortBy("quality")}
+            >
+              Highest Quality (Avg IoU)
             </button>
             <button
               className={`filter-pill ${sortBy === "approved" ? "active" : ""}`}
@@ -208,6 +231,7 @@ export default function Leaderboard() {
                   <th style={{ width: 60 }}>Rank</th>
                   <th>Annotator</th>
                   <th>Tier Level</th>
+                  <th style={{ textAlign: "right" }}>Avg Quality</th>
                   <th style={{ textAlign: "right" }}>Approved Tasks</th>
                   <th style={{ textAlign: "right" }}>Approval Rate</th>
                   <th style={{ textAlign: "right" }}>Total Earned</th>
@@ -240,6 +264,9 @@ export default function Leaderboard() {
                         <span style={{ fontSize: 11, fontWeight: 700, color: a.badgeColor, background: `${a.badgeColor}15`, padding: "2px 8px", borderRadius: 4, border: `1px solid ${a.badgeColor}33` }}>
                           {a.level}
                         </span>
+                      </td>
+                      <td style={{ textAlign: "right", fontFamily: "'Space Grotesk', monospace", fontWeight: 700, color: "#60a5fa" }}>
+                        {(a.avgIou * 100).toFixed(1)}% IoU
                       </td>
                       <td style={{ textAlign: "right", fontFamily: "'Space Grotesk', monospace", fontWeight: 600 }}>
                         {a.tasksApproved} / {a.tasksSubmitted}
