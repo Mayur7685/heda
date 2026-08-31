@@ -611,7 +611,7 @@ export default function Dashboard() {
                     </th>
                     <th>Task #</th>
                     <th>Annotator</th>
-                    <th>0G Storage Root</th>
+                    <th>Transaction</th>
                     {/* V2: IoU quality score column */}
                     <th style={{ textAlign: "center" }}>
                       <span title="Moondream IoU quality score (auto-evaluated)" style={{ display: "inline-flex", alignItems: "center", gap: 3, cursor: "help" }}>
@@ -637,6 +637,7 @@ export default function Dashboard() {
                     const iouScore: number | null = v2Sub?.iou_score ?? null;
                     const rewardBps: number = v2Sub?.reward_share_bps ?? 0;
                     const subStatus: string = v2Sub?.status ?? "";
+                    const txHash: string = v2Sub?.tx_hash || "";
 
                     return (
                     <tr key={`${sub.taskId}-${sub.annotator}-${idx}`} style={{ background: selectedSubs.has(subKey) ? "rgba(0,228,121,0.04)" : "transparent" }}>
@@ -651,17 +652,22 @@ export default function Dashboard() {
                       <td style={{ fontFamily: "'Space Grotesk', monospace" }}>#{sub.taskId + 1}</td>
                       <td><span className="mono-tag">{sub.annotator.slice(0, 6)}…{sub.annotator.slice(-4)}</span></td>
                       <td>
-                        {sub.annotationRootHash ? (
+                        {txHash ? (
                           <a
-                            href={`${GALILEO.storageExplorer}/file/${sub.annotationRootHash}`}
+                            href={`${GALILEO.explorer}/tx/${txHash}`}
                             target="_blank"
                             rel="noreferrer"
                             className="mono-tag"
-                            style={{ color: "var(--primary)", textDecoration: "none" }}
-                            title="View annotation file on 0G Storage Explorer"
+                            style={{ color: "var(--primary)", textDecoration: "none", display: "inline-flex", alignItems: "center", gap: 3 }}
+                            title={`View on 0G Chain Explorer: ${txHash}`}
                           >
-                            {sub.annotationRootHash.slice(0, 8)}…{sub.annotationRootHash.slice(-4)} ↗
+                            {txHash.slice(0, 6)}…{txHash.slice(-4)}
+                            <span className="material-symbols-outlined" style={{ fontSize: 12 }}>open_in_new</span>
                           </a>
+                        ) : sub.annotationRootHash ? (
+                          <span className="mono-tag" title={`Root: ${sub.annotationRootHash}`} style={{ color: "var(--text-3)" }}>
+                            {sub.annotationRootHash.slice(0, 6)}…{sub.annotationRootHash.slice(-4)}
+                          </span>
                         ) : (
                           <span style={{ fontSize: 11, color: "var(--text-3)" }}>—</span>
                         )}

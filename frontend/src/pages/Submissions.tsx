@@ -197,8 +197,7 @@ export default function Submissions() {
                 <th>IoU Quality</th>
                 <th>Reward Share</th>
                 <th>Status</th>
-                <th>0G Storage File</th>
-                <th>On-Chain Tx</th>
+                <th>Transaction</th>
               </tr>
             </thead>
             <tbody>
@@ -218,32 +217,17 @@ export default function Submissions() {
                       <span style={badge.style}>{badge.label}</span>
                     </td>
                     <td>
-                      {s.annotationRootHash ? (
-                        <a
-                          href={`${GALILEO.storageExplorer}/file/${s.annotationRootHash}`}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="mono-tag"
-                          style={{ color: "var(--primary)", textDecoration: "none" }}
-                          title="View on 0G Storage Explorer"
-                        >
-                          {s.annotationRootHash.slice(0, 8)}…{s.annotationRootHash.slice(-4)} ↗
-                        </a>
-                      ) : (
-                        <span style={{ color: "var(--text-3)", fontSize: 12, fontStyle: "italic" }}>Awaiting Conf.</span>
-                      )}
-                    </td>
-                    <td>
                       {s.txHash ? (
                         <a
                           href={`${GALILEO.explorer}/tx/${s.txHash}`}
                           target="_blank"
                           rel="noreferrer"
                           className="mono-tag"
-                          style={{ color: "#60a5fa", textDecoration: "none" }}
-                          title="View on 0G Chain Explorer"
+                          style={{ color: "var(--primary)", textDecoration: "none", display: "inline-flex", alignItems: "center", gap: 4 }}
+                          title={`View on 0G Chain Explorer: ${s.txHash}`}
                         >
-                          {s.txHash.slice(0, 6)}…{s.txHash.slice(-4)} ↗
+                          {s.txHash.slice(0, 6)}…{s.txHash.slice(-4)}
+                          <span className="material-symbols-outlined" style={{ fontSize: 12 }}>open_in_new</span>
                         </a>
                       ) : (
                         <span style={{ color: "var(--text-3)", fontSize: 12 }}>—</span>

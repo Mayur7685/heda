@@ -67,7 +67,6 @@ export default function CreateJob() {
   const [maxAnnotators, setMaxAnnotators] = useState(5);   // V2: 1-5 annotators per task
   const [status, setStatus] = useState<"idle" | "uploading" | "posting" | "done" | "error">("idle");
   const [txHash, setTxHash] = useState("");
-  const [uploadedDataRootHash, setUploadedDataRootHash] = useState("");
   const [error, setError] = useState("");
   // Balance check state
   const [balanceWarn, setBalanceWarn] = useState<string | null>(null);
@@ -126,7 +125,6 @@ export default function CreateJob() {
       );
       const dataRootHash = await uploadBlob(new Blob([JSON.stringify(fileContents)], { type: "application/json" }));
       cache0GData(dataRootHash, fileContents);
-      setUploadedDataRootHash(dataRootHash);
       const metadataRootHash = await uploadJson({ instructions, labels, dataType: dataType === 0 ? "image" : "text", jsonlSchema: dataType === 1 ? jsonlSchema : undefined, fileCount: files.length, dataRootHash });
 
       setStatus("posting");
@@ -173,12 +171,6 @@ export default function CreateJob() {
             <a href={`${GALILEO.explorer}/tx/${txHash}`} target="_blank" rel="noreferrer" className="btn-secondary" style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
               <span className="material-symbols-outlined" style={{ fontSize: 16 }}>open_in_new</span>
               View Transaction (Chainscan) ↗
-            </a>
-          )}
-          {uploadedDataRootHash && (
-            <a href={`${GALILEO.storageExplorer}/file/${uploadedDataRootHash}`} target="_blank" rel="noreferrer" className="btn-secondary" style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-              <span className="material-symbols-outlined" style={{ fontSize: 16 }}>folder_open</span>
-              View 0G Dataset File (Storagescan) ↗
             </a>
           )}
           <button className="btn-secondary" onClick={() => navigate("/jobs")}>
