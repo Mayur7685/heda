@@ -25,7 +25,6 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 // ── Config ────────────────────────────────────────────────────────────────────
 const GALILEO_RPC       = process.env.GALILEO_RPC       || 'https://evmrpc-testnet.0g.ai';
 const STORAGE_INDEXER   = process.env.STORAGE_INDEXER   || 'https://indexer-storage-testnet-turbo.0g.ai';
-const AI_SERVICE_URL    = process.env.AI_SERVICE_URL    || 'http://localhost:8000';
 const MARKET_V2_ADDRESS = process.env.VITE_MARKET_V2_ADDRESS || process.env.MARKET_V2_ADDRESS || '0xCBbb84EB5740630B4654Fbf963a503d86E67b939';
 const RELAYER_PRIVKEY   = process.env.PRIVATE_KEY        || '0x3d20b42d0ec55312d082c53a9fb1635a374051c976f8bd76f016b4781b438653';
 
@@ -199,22 +198,9 @@ async function fetchMoondreamCloudDetect(imageBase64, className) {
 }
 
 async function callAnnotationScore(imageBase64, submittedBoxes, moondreamClasses) {
-  // 1. Try local Python AI microservice first
-  for (let attempt = 0; attempt < 2; attempt++) {
-    try {
-      const res = await fetch(`${AI_SERVICE_URL}/annotation/score`, {
-        method:  'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ imageBase64, submittedBoxes, moondreamClasses }),
-        signal: AbortSignal.timeout(10000),
-      });
-      if (res.ok) return await res.json();
-    } catch {}
-  }
-
-  // 2. Direct Moondream Cloud API fallback if Python AI service is offline
+  // Direct Moondream Cloud API call from Relayer Node.js
   if (imageBase64 && Array.isArray(moondreamClasses) && moondreamClasses.length > 0) {
-    console.log(`[AnnotationIndexer] Python AI service offline — calling Moondream Cloud API directly from Relayer Node (${moondreamClasses.length} class(es))...`);
+    console.log(`[AnnotationIndexer] Calling Moondream Cloud API directly from Relayer (${moondreamClasses.length} class(es))...`);
     const groundTruthBoxes = [];
     for (const cls of moondreamClasses) {
       // Guardrail: 600ms delay between classes to strictly adhere to Moondream 2 req/sec rate limit
