@@ -217,17 +217,38 @@ app.post('/annotations/evaluate', async (req, res) => {
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
-});
-
 // Health check
+app.get('/', (_, res) => res.json({
+  ok: true,
+  service: 'Heda 0G Relayer + Event Indexer + Annotation V2',
+  status: 'running'
+}));
+
 app.get('/health', (_, res) => res.json({
   ok: true,
   service: 'Heda 0G Relayer + Event Indexer + Annotation V2'
 }));
 
-const PORT = process.env.PORT || 3001;
-app.listen(PORT, () => {
-  console.log(`🚀 Heda 0G Relayer & Indexer listening on :${PORT}`);
-  startIndexer();
-  startAnnotationIndexer(db);   // Phase 3: annotation IoU indexer
+// Process-level crash prevention
+process.on('uncaughtException', (err) => {
+  console.error('💥 [Relayer] Uncaught Exception:', err);
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('💥 [Relayer] Unhandled Rejection at:', promise, 'reason:', reason);
+});
+
+const PORT = Number(process.env.PORT) || 3001;
+app.listen(PORT, '0.0.0.0', () => {
+  console.log(`🚀 Heda 0G Relayer & Indexer listening on 0.0.0.0:${PORT}`);
+  try {
+    startIndexer();
+  } catch (e) {
+    console.error('⚠️ [Relayer] startIndexer error:', e.message);
+  }
+  try {
+    startAnnotationIndexer(db);
+  } catch (e) {
+    console.error('⚠️ [Relayer] startAnnotationIndexer error:', e.message);
+  }
 });
