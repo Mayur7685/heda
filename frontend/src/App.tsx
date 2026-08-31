@@ -151,6 +151,7 @@ function AppContent() {
         <Routes>
           <Route path="/" element={<Landing />} />
           <Route path="/pipeline" element={<RapidCVPipeline />} />
+          <Route path="/rapid-cv" element={<RapidCVPipeline />} />
           <Route path="/jobs" element={<Jobs />} />
           <Route path="/jobs/:jobId/:taskId" element={<Workspace />} />
           <Route path="/create" element={<CreateJob />} />

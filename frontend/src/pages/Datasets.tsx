@@ -37,14 +37,30 @@ export default function Datasets() {
             format: undefined,
             taskCount: undefined,
           };
+          // Pre-check localStorage custom dataset info by rootHash
+          try {
+            const stored = localStorage.getItem("hedaprotocol_custom_datasets");
+            if (stored) {
+              const list = JSON.parse(stored);
+              const match = list.find((x: any) => x.rootHash === d.rootHash || Number(x.datasetId) === Number(d.datasetId));
+              if (match) {
+                base.name = match.name || match.title;
+                base.format = match.format;
+                base.taskCount = match.taskCount;
+                base.labels = match.labels;
+                if (match.previewImage) base.previewImage = match.previewImage;
+              }
+            }
+          } catch {}
+
           if (d.metadataURI) {
             try {
               const meta = await fetchFrom0GStorage(d.metadataURI, 3);
               if (meta) {
-                base.name = meta.name;
-                base.format = meta.format;
-                base.taskCount = meta.taskCount;
-                base.labels = meta.labels;
+                base.name = meta.name || meta.title || meta.dataset_name || base.name;
+                base.format = meta.format || base.format;
+                base.taskCount = meta.taskCount || base.taskCount;
+                base.labels = meta.labels || base.labels;
                 if (meta.previewImage) base.previewImage = meta.previewImage;
               }
             } catch { /* fallback */ }
@@ -55,6 +71,9 @@ export default function Datasets() {
             try {
               const rawData = await fetchFrom0GStorage(d.rootHash, 3);
               if (rawData && typeof rawData === "object") {
+                if (!base.name && (rawData.title || rawData.name || rawData.dataset_name)) {
+                  base.name = rawData.title || rawData.name || rawData.dataset_name;
+                }
                 let b64 = rawData.images?.[0]?.base64;
                 const dataRoot = rawData.info?.data_root_hash ?? base.dataRootHash;
                 if (!b64 && dataRoot) {

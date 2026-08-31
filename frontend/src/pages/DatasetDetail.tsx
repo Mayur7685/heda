@@ -92,10 +92,38 @@ export default function DatasetDetail() {
     }
 
     let meta: any = null;
+    // Check localStorage cache first for instant metadata hydration by rootHash or datasetId
+    try {
+      const stored = localStorage.getItem("hedaprotocol_custom_datasets");
+      if (stored) {
+        const list = JSON.parse(stored);
+        const match = list.find((x: any) => (d && x.rootHash === d.rootHash) || String(x.datasetId) === String(datasetId));
+        if (match) {
+          meta = {
+            name: match.name || match.title || `Dataset #${datasetId}`,
+            title: match.title || match.name || `Dataset #${datasetId}`,
+            format: match.format || "YOLO Annotation",
+            taskCount: match.taskCount || 1,
+            labels: match.labels || ["object"],
+            dataRootHash: match.dataRootHash,
+          };
+          setMetadata(meta);
+        }
+      }
+    } catch {}
+
     if (d && d.metadataURI) {
       try {
-        meta = await fetchFrom0GStorage(d.metadataURI, 3);
-        if (meta) setMetadata(meta);
+        const fetchedMeta = await fetchFrom0GStorage(d.metadataURI, 3);
+        if (fetchedMeta) {
+          const datasetTitle = fetchedMeta.name || fetchedMeta.title || fetchedMeta.dataset_name || meta?.name;
+          meta = {
+            ...fetchedMeta,
+            name: datasetTitle,
+            title: datasetTitle,
+          };
+          setMetadata(meta);
+        }
       } catch {}
     }
 
@@ -104,6 +132,18 @@ export default function DatasetDetail() {
       try {
         const rawData = await fetchFrom0GStorage(d.rootHash, 3);
         if (rawData && typeof rawData === "object") {
+          const datasetTitle = rawData.title || rawData.name || rawData.dataset_name || rawData.info?.name || meta?.name;
+          if (datasetTitle) {
+            setMetadata((prev: any) => ({
+              ...(prev || {}),
+              name: datasetTitle,
+              title: datasetTitle,
+              labels: rawData.labels || prev?.labels,
+              format: rawData.format || prev?.format || "YOLO Annotation",
+              taskCount: rawData.totalImages || rawData.images?.length || prev?.taskCount,
+            }));
+          }
+
           const cocoImages = rawData.images ?? [];
           const cocoAnns = rawData.annotations ?? [];
           const dataRoot = rawData.info?.data_root_hash ?? meta?.dataRootHash;
