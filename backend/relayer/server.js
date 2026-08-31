@@ -202,21 +202,6 @@ app.get('/annotations/leaderboard', (req, res) => {
   }
 });
 
-// POST /annotations/evaluate
-// Manual creator override — trigger early evaluation for a task.
-// Body: { jobId: number, taskId: number }
-app.post('/annotations/evaluate', async (req, res) => {
-  try {
-    const { jobId, taskId } = req.body;
-    if (jobId === undefined || taskId === undefined) {
-      return res.status(400).json({ error: 'Missing jobId or taskId' });
-    }
-
-    triggerTaskEvaluation(Number(jobId), Number(taskId));
-    res.json({ ok: true, message: `Evaluation triggered for task ${jobId}:${taskId}` });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
 // Health check
 app.get('/', (_, res) => res.json({
   ok: true,
