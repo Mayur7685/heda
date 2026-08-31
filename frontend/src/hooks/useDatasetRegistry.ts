@@ -9,10 +9,12 @@ export function useDatasetRegistry(signer: ethers.Signer | null) {
     if (!rawAddr || (rawAddr as string) === "0x0000000000000000000000000000000000000000") return null;
     const addr = ethers.getAddress((rawAddr as string).toLowerCase());
 
+    const runner = signer || new ethers.JsonRpcProvider(GALILEO.rpc);
+
     const contract = new ethers.Contract(
       addr,
       ABI,
-      signer
+      runner
     );
 
     return {

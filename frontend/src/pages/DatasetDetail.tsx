@@ -91,10 +91,11 @@ export default function DatasetDetail() {
       } catch {}
     }
 
+    let meta: any = null;
     if (d && d.metadataURI) {
       try {
-        const meta = await fetchFrom0GStorage(d.metadataURI, 3);
-        setMetadata(meta);
+        meta = await fetchFrom0GStorage(d.metadataURI, 3);
+        if (meta) setMetadata(meta);
       } catch {}
     }
 
@@ -105,7 +106,7 @@ export default function DatasetDetail() {
         if (rawData && typeof rawData === "object") {
           const cocoImages = rawData.images ?? [];
           const cocoAnns = rawData.annotations ?? [];
-          const dataRoot = rawData.info?.data_root_hash ?? metadata?.dataRootHash;
+          const dataRoot = rawData.info?.data_root_hash ?? meta?.dataRootHash;
 
           let sourceFiles: any[] = [];
           if (dataRoot) {
