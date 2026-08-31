@@ -2944,7 +2944,7 @@ export default function RapidCVPipeline() {
                 disabled={renewBusy}
                 style={{ width: "100%", justifyContent: "center", padding: "10px 0", fontSize: 13, fontWeight: 700 }}
               >
-                <span className="material-symbols-outlined" style={{ fontSize: 18 }}>
+                <span className={`material-symbols-outlined ${renewBusy ? "spin" : ""}`} style={{ fontSize: 18, display: "inline-block" }}>
                   {renewBusy ? "progress_activity" : "shopping_cart"}
                 </span>
                 {renewBusy ? "Confirming onchain transaction…" : "Purchase 3 Credits (0.001 0G)"}

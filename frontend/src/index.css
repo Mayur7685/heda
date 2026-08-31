@@ -394,12 +394,13 @@ a:hover { text-decoration: underline; }
 
 /* ── Animations ── */
 @keyframes spin {
-  from { transform: rotate(0deg); }
-  to   { transform: rotate(360deg); }
+  0%   { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
 }
 .spin {
-  display: inline-block;
-  animation: spin 0.9s linear infinite;
+  display: inline-block !important;
+  animation: spin 0.9s linear infinite !important;
+  transform-origin: center center !important;
 }
 @keyframes pulse-fade {
   0%, 100% { opacity: 1; }
