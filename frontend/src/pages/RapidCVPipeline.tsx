@@ -209,6 +209,12 @@ export default function RapidCVPipeline() {
   const modelRegistry = useModelRegistry(signer);
   const subContract = usePipelineSubscription(signer);
 
+  // ── On-Chain Credit Management Modal & Wallet Menu State ──
+  const [showCreditModal, setShowCreditModal] = useState(false);
+  const [renewBusy, setRenewBusy] = useState(false);
+  const [renewTxHash, setRenewTxHash] = useState("");
+  const [showWalletMenu, setShowWalletMenu] = useState(false);
+
   // ── Active Stage & Step-by-step Sequential Navigation Lock ──
   const [stage, setStage] = useState<string>("chat");
   const [unlockedStageIdx, setUnlockedStageIdx] = useState<number>(0);
@@ -765,18 +771,24 @@ export default function RapidCVPipeline() {
       alert("Please connect your Web3 wallet first!");
       return;
     }
+    setRenewBusy(true);
+    setRenewTxHash("");
     try {
       setTrainLogs((prev) => [...prev, "Initiating 0G Subscription Renewal (0.001 0G ETH) onchain..."]);
-      await subContract.subscribe("0.001");
+      const tx = await subContract.subscribe("0.001");
+      if (tx?.hash) {
+        setRenewTxHash(tx.hash);
+      }
       const updated = await subContract.getRemainingQuota(address);
       if (updated) {
         setQuota({ remainingQuota: updated.remainingQuota, active: updated.active });
         const quotaKey = `hedaprotocol_quota_${address}`;
         localStorage.setItem(quotaKey, JSON.stringify({ remainingQuota: updated.remainingQuota, active: updated.active }));
       }
-      alert("Subscription renewed successfully! You have 3 fresh model fine-tuning credits.");
     } catch (err: any) {
       alert(`Subscription renewal error: ${err.message}`);
+    } finally {
+      setRenewBusy(false);
     }
   }
 
@@ -1102,13 +1114,112 @@ export default function RapidCVPipeline() {
         </div>
 
         {/* Bottom Sidebar Tools & Profile */}
-        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 14 }}>
-          <button className="btn-ghost btn-icon" title="Onchain Quota" style={{ padding: 6, color: "var(--primary)" }}>
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 14, position: "relative" }}>
+          <button
+            className="btn-ghost btn-icon"
+            onClick={() => setShowCreditModal(true)}
+            title={`Onchain Credits: ${quota.remainingQuota}/3 (Click to manage & purchase)`}
+            style={{
+              padding: 6,
+              color: quota.remainingQuota > 0 ? "var(--primary)" : "#ef4444",
+              background: quota.remainingQuota > 0 ? "rgba(0, 228, 121, 0.1)" : "rgba(239, 68, 68, 0.1)",
+              borderRadius: 8,
+              position: "relative",
+            }}
+          >
             <span className="material-symbols-outlined" style={{ fontSize: 18 }}>confirmation_number</span>
+            <span
+              style={{
+                position: "absolute",
+                top: -2,
+                right: -2,
+                width: 14,
+                height: 14,
+                borderRadius: "50%",
+                background: quota.remainingQuota > 0 ? "var(--primary)" : "#ef4444",
+                color: "#000",
+                fontSize: 9,
+                fontWeight: 900,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              {quota.remainingQuota}
+            </span>
           </button>
-          <div style={{ width: 28, height: 28, borderRadius: "50%", background: "var(--primary)", display: "flex", alignItems: "center", justifyContent: "center", color: "#000", fontWeight: 900, fontSize: 12 }}>
-            M
+
+          {/* Dynamic Wallet Avatar */}
+          <div
+            onClick={() => setShowWalletMenu((prev) => !prev)}
+            title={address ? `Connected: ${address}\nClick for options` : "Connect Wallet"}
+            style={{
+              width: 30,
+              height: 30,
+              borderRadius: "50%",
+              background: address ? "linear-gradient(135deg, var(--primary) 0%, #00b35c 100%)" : "var(--surface-high)",
+              border: "1.5px solid rgba(0, 228, 121, 0.5)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              color: "#000",
+              fontWeight: 900,
+              fontSize: 11,
+              cursor: "pointer",
+              boxShadow: address ? "0 0 10px rgba(0, 228, 121, 0.3)" : "none",
+              transition: "transform 0.15s ease",
+            }}
+          >
+            {address ? address.slice(2, 4).toUpperCase() : "?"}
           </div>
+
+          {/* Wallet Mini Dropdown */}
+          {showWalletMenu && (
+            <div
+              style={{
+                position: "absolute",
+                bottom: 0,
+                left: 45,
+                width: 220,
+                background: "var(--surface)",
+                border: "1px solid var(--border)",
+                borderRadius: 10,
+                boxShadow: "0 12px 32px rgba(0,0,0,0.85)",
+                padding: 12,
+                zIndex: 300,
+                display: "flex",
+                flexDirection: "column",
+                gap: 8,
+              }}
+            >
+              <div style={{ fontSize: 11, color: "var(--text-3)", textTransform: "uppercase", fontWeight: 700 }}>
+                Wallet Account
+              </div>
+              <div style={{ fontSize: 12, color: "#fff", fontFamily: "'Space Grotesk', monospace", wordBreak: "break-all" }}>
+                {address ? `${address.slice(0, 8)}…${address.slice(-6)}` : "Not connected"}
+              </div>
+              <button
+                className="btn-secondary btn-sm"
+                onClick={() => {
+                  if (address) navigator.clipboard.writeText(address);
+                  setShowWalletMenu(false);
+                }}
+                style={{ fontSize: 11, justifyContent: "center", padding: "4px 8px" }}
+              >
+                Copy Address
+              </button>
+              <button
+                className="btn-primary btn-sm"
+                onClick={() => {
+                  setShowWalletMenu(false);
+                  setShowCreditModal(true);
+                }}
+                style={{ fontSize: 11, justifyContent: "center", padding: "4px 8px" }}
+              >
+                Buy / View Credits
+              </button>
+            </div>
+          )}
         </div>
       </div>
 
@@ -1161,14 +1272,15 @@ export default function RapidCVPipeline() {
 
             <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
               <div
-                onClick={() => quota.remainingQuota <= 0 && handleRenewSubscription()}
-                title={quota.remainingQuota <= 0 ? "Click to renew subscription (0.001 0G ETH)" : "Active training credits"}
+                onClick={() => setShowCreditModal(true)}
+                title="Click to view usage stats & buy credits"
                 style={{
                   fontSize: 11, background: quota.remainingQuota <= 0 ? "rgba(239, 68, 68, 0.1)" : "#121824",
                   border: quota.remainingQuota <= 0 ? "1px solid #ef4444" : "1px solid var(--primary)",
                   padding: "5px 12px", borderRadius: 16, display: "flex", alignItems: "center", gap: 6,
                   color: quota.remainingQuota <= 0 ? "#ef4444" : "var(--primary)", fontWeight: 800,
-                  cursor: quota.remainingQuota <= 0 ? "pointer" : "default",
+                  cursor: "pointer",
+                  transition: "all 0.2s ease",
                 }}
               >
                 <span className="material-symbols-outlined" style={{ fontSize: 14, color: quota.remainingQuota <= 0 ? "#ef4444" : "var(--primary)" }}>
@@ -2677,6 +2789,180 @@ export default function RapidCVPipeline() {
                 <span className="material-symbols-outlined" style={{ fontSize: 16 }}>rocket_launch</span>
                 Publish Model to 0G →
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Credit Management & Purchase Modal ── */}
+      {showCreditModal && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            zIndex: 1000,
+            background: "rgba(0, 0, 0, 0.85)",
+            backdropFilter: "blur(8px)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: 24,
+          }}
+        >
+          <div
+            style={{
+              background: "var(--surface)",
+              border: "1px solid var(--border)",
+              borderRadius: 16,
+              maxWidth: 520,
+              width: "100%",
+              boxShadow: "0 24px 64px rgba(0, 0, 0, 0.85), 0 0 32px rgba(0, 228, 121, 0.1)",
+              padding: 28,
+              position: "relative",
+              overflow: "hidden",
+            }}
+          >
+            {/* Header */}
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 20 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <div
+                  style={{
+                    width: 40,
+                    height: 40,
+                    borderRadius: 10,
+                    background: "rgba(0, 228, 121, 0.1)",
+                    border: "1px solid rgba(0, 228, 121, 0.3)",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    color: "var(--primary)",
+                  }}
+                >
+                  <span className="material-symbols-outlined" style={{ fontSize: 22 }}>confirmation_number</span>
+                </div>
+                <div>
+                  <h3 style={{ fontSize: 18, fontWeight: 700, margin: "0 0 2px", color: "var(--text)" }}>
+                    Training Credits & Quota
+                  </h3>
+                  <span style={{ fontSize: 11, color: "var(--text-3)", textTransform: "uppercase", letterSpacing: "0.08em" }}>
+                    0G Onchain Subscription
+                  </span>
+                </div>
+              </div>
+              <button className="btn-ghost" onClick={() => setShowCreditModal(false)} style={{ padding: 4 }}>
+                <span className="material-symbols-outlined">close</span>
+              </button>
+            </div>
+
+            {/* Quota Usage Visual Meter / Graph */}
+            <div style={{ background: "var(--surface-low)", border: "1px solid var(--border)", borderRadius: 12, padding: 18, marginBottom: 20 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 12 }}>
+                <span style={{ fontSize: 12, fontWeight: 700, color: "var(--text-2)" }}>Credit Balance</span>
+                <div style={{ display: "flex", alignItems: "baseline", gap: 4 }}>
+                  <span style={{ fontSize: 28, fontWeight: 900, fontFamily: "'Space Grotesk', monospace", color: quota.remainingQuota > 0 ? "var(--primary)" : "var(--error)" }}>
+                    {quota.remainingQuota}
+                  </span>
+                  <span style={{ fontSize: 14, color: "var(--text-3)", fontWeight: 700 }}>/ 3 Credits</span>
+                </div>
+              </div>
+
+              {/* 3-Segment Visual Bar Graph */}
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 6, height: 10, marginBottom: 16 }}>
+                {[1, 2, 3].map((slot) => {
+                  const isFilled = slot <= quota.remainingQuota;
+                  return (
+                    <div
+                      key={slot}
+                      style={{
+                        borderRadius: 4,
+                        background: isFilled
+                          ? "linear-gradient(90deg, #00e479 0%, #00b35c 100%)"
+                          : "rgba(255, 255, 255, 0.08)",
+                        boxShadow: isFilled ? "0 0 8px rgba(0, 228, 121, 0.4)" : "none",
+                        transition: "all 0.3s ease",
+                      }}
+                    />
+                  );
+                })}
+              </div>
+
+              {/* Stats Grid */}
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10, borderTop: "1px solid var(--border)", paddingTop: 14 }}>
+                <div>
+                  <div style={{ fontSize: 10, color: "var(--text-3)", textTransform: "uppercase" }}>Available</div>
+                  <div style={{ fontSize: 15, fontWeight: 800, color: "var(--primary)", fontFamily: "'Space Grotesk', monospace" }}>
+                    {quota.remainingQuota} Sessions
+                  </div>
+                </div>
+                <div>
+                  <div style={{ fontSize: 10, color: "var(--text-3)", textTransform: "uppercase" }}>Consumed</div>
+                  <div style={{ fontSize: 15, fontWeight: 800, color: "var(--text-2)", fontFamily: "'Space Grotesk', monospace" }}>
+                    {Math.max(0, 3 - quota.remainingQuota)} Sessions
+                  </div>
+                </div>
+                <div>
+                  <div style={{ fontSize: 10, color: "var(--text-3)", textTransform: "uppercase" }}>License Status</div>
+                  <div style={{ fontSize: 13, fontWeight: 800, color: quota.remainingQuota > 0 ? "var(--primary)" : "var(--error)" }}>
+                    {quota.remainingQuota > 0 ? "Active ✓" : "Depleted"}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Purchase / Renew Option Card */}
+            <div style={{ background: "rgba(0, 228, 121, 0.04)", border: "1.5px solid rgba(0, 228, 121, 0.25)", borderRadius: 12, padding: 18, marginBottom: 20 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+                <div>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: "#fff" }}>3-Credit Training Pack</div>
+                  <div style={{ fontSize: 12, color: "var(--text-3)" }}>Fine-tune 3 custom YOLO models on 0G Edge</div>
+                </div>
+                <div style={{ textAlign: "right" }}>
+                  <div style={{ fontSize: 16, fontWeight: 800, color: "var(--primary)", fontFamily: "'Space Grotesk', monospace" }}>
+                    0.001 0G
+                  </div>
+                  <div style={{ fontSize: 10, color: "var(--text-3)" }}>Galileo Testnet</div>
+                </div>
+              </div>
+
+              {renewTxHash && (
+                <div style={{ marginBottom: 12, padding: "6px 10px", borderRadius: 6, background: "rgba(0, 228, 121, 0.1)", border: "1px solid var(--primary)", fontSize: 11 }}>
+                  <span>✓ Purchased! </span>
+                  <a
+                    href={`https://chainscan-galileo.0g.ai/tx/${renewTxHash}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    style={{ color: "var(--primary)", textDecoration: "underline" }}
+                  >
+                    View Tx on Chainscan ↗
+                  </a>
+                </div>
+              )}
+
+              <button
+                className="btn-primary"
+                onClick={handleRenewSubscription}
+                disabled={renewBusy}
+                style={{ width: "100%", justifyContent: "center", padding: "10px 0", fontSize: 13, fontWeight: 700 }}
+              >
+                <span className="material-symbols-outlined" style={{ fontSize: 18 }}>
+                  {renewBusy ? "progress_activity" : "shopping_cart"}
+                </span>
+                {renewBusy ? "Confirming onchain transaction…" : "Purchase 3 Credits (0.001 0G)"}
+              </button>
+            </div>
+
+            {/* Smart Contract Provenance Footer */}
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 11, color: "var(--text-3)", borderTop: "1px solid var(--border)", paddingTop: 14 }}>
+              <span>Contract: <code>0x313B…7260</code></span>
+              <a
+                href="https://chainscan-galileo.0g.ai/address/0x313BC8CA6b0aa5258b612715a3fda3e70C007260"
+                target="_blank"
+                rel="noreferrer"
+                style={{ color: "var(--primary)", display: "flex", alignItems: "center", gap: 3, textDecoration: "none" }}
+              >
+                <span>PipelineSubscription</span>
+                <span className="material-symbols-outlined" style={{ fontSize: 12 }}>open_in_new</span>
+              </a>
             </div>
           </div>
         </div>
