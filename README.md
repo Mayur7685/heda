@@ -8,30 +8,31 @@
 
 ## 🌟 Key Subsystems & Features
 
-1. **Multi-Annotator Bounty Market (`AnnotationMarketV2.sol`)**:
-   - Data scientists create image annotation jobs with ETH bounties locked in onchain escrow.
+1. **Autonomous RapidCV Studio (`/rapid-cv` / `/pipeline`)**:
+   - **8-Stage AI Engineering Pipeline**: Concept $\rightarrow$ Zero-Shot Prompting $\rightarrow$ Auto-Labeling $\rightarrow$ Multi-Class Review & Edit $\rightarrow$ Augmentations & 0G Storage Pinning $\rightarrow$ GPU YOLO Fine-Tuning $\rightarrow$ Interactive Sandbox Testing $\rightarrow$ 0G Edge Deploy & Code Export.
+   - **Dynamic Golden-Angle Class Color System**: Computes non-overlapping $137.5^\circ$ Golden Ratio hue distributions for any arbitrary user classes with zero hardcoding.
+   - **Interactive Test Sandbox**: Live testing with customizable Confidence Thresholds, NMS IoU suppression, Hardware selection (0G Private Compute / ONNX Edge / CPU), and raw JSON predictions inspector.
+
+2. **Multi-Annotator Bounty Market (`AnnotationMarketV2.sol`)**:
+   - Data scientists create image annotation jobs with 0G ETH bounties locked in onchain escrow.
    - **Up to 5 annotators per task** can submit annotations — no claim/lock required (fully open submission).
-   - Moondream VLM computes **IoU quality scores** for each submission vs. ground-truth auto-detection.
+   - Moondream VLM + Consensus algorithms compute **IoU quality scores** for each submission vs. ground-truth auto-detection.
    - Rewards are **auto-distributed proportionally** by IoU score via the backend relayer (BPS shares).
    - Creator can trigger early manual evaluation per-task or for all pending tasks at once.
 
-2. **0G Storage Verified Datasets (`DatasetRegistry.sol`)**:
-   - Published datasets are serialized into standard COCO / JSONL format and posted directly to 0G Storage Merkle Trees.
+3. **0G Storage Verified Datasets (`DatasetRegistry.sol`)**:
+   - Published datasets are serialized into standard COCO / YOLO formats and posted directly to 0G Storage Merkle Trees.
    - Commercial data buyers can purchase dataset licenses onchain with automated royalty disbursement.
 
-3. **Autonomous PyTorch YOLOv8 Model Training (`backend/ai-service`)**:
-   - Fine-tunes vision models on user-annotated 0G datasets.
+4. **Autonomous PyTorch YOLO Model Training (`backend/ai-service`)**:
+   - Fine-tunes vision models (YOLOv8, YOLOv11, RT-DETR) on user-annotated 0G datasets.
    - Decodes base64 images, formats YOLO normalized bounding boxes `[class_id, x_center, y_center, w, h]`, runs PyTorch training on GPU (Apple Silicon MPS / CUDA), and streams real-time loss & mAP@50 metrics.
-
-4. **Moondream 2 VLM Zero-Shot Auto-Labeling + IoU Scoring**:
-   - Local VLM server running on port `2020` loads Moondream 2 onto Mac GPU / CUDA for sub-second detection.
-   - Also powers the annotation quality scoring pipeline: computes `POST /annotation/score` comparing user boxes to Moondream ground truth via **mean-best-match IoU**.
 
 5. **Decentralized AI Model Registry (`ModelRegistry.sol`)**:
    - Fine-tuned PyTorch model weights (`.pt` / `.onnx`) are uploaded to 0G Storage and registered onchain.
-   - Includes live interactive model testing modal (`InferenceModal.tsx`).
+   - Includes live interactive model testing modal and developer integration SDK snippets (Python, cURL, JavaScript, React).
 
-6. **RapidCV Pipeline Subscription (`PipelineSubscription.sol`)**:
+6. **Pipeline Subscription (`PipelineSubscription.sol`)**:
    - Onchain credit-gated fine-tuning pipeline with MetaMask signature required before training.
 
 ---
@@ -40,11 +41,10 @@
 
 | Contract Name | Deployed Galileo Address | Explorer Link |
 | :--- | :--- | :--- |
-| **`AnnotationMarket`** (V1) | `0x4B791da8eD9C4d3b1812b51F63359c1f3AeB8C0A` | [View on 0G Explorer](https://chainscan-galileo.0g.ai/address/0x4B791da8eD9C4d3b1812b51F63359c1f3AeB8C0A) |
-| **`AnnotationMarketV2`** ⭐ | `0xDF69C008eEBDC1EC147B5A795eA0CAbdB3d778B5` | [View on 0G Explorer](https://chainscan-galileo.0g.ai/address/0xDF69C008eEBDC1EC147B5A795eA0CAbdB3d778B5) |
-| **`DatasetRegistry`** | `0x4AC6935DE58CeB54f2152a984ae5C597be9eFA5d` | [View on 0G Explorer](https://chainscan-galileo.0g.ai/address/0x4AC6935DE58CeB54f2152a984ae5C597be9eFA5d) |
-| **`ModelRegistry`** | `0x86758906B8f2b3AFffe10aAC7fD1257647F9166e` | [View on 0G Explorer](https://chainscan-galileo.0g.ai/address/0x86758906B8f2b3AFffe10aAC7fD1257647F9166e) |
-| **`PipelineSubscription`** | `0xdEF5D5C9DA844C56dd3D59481B5d1265E7101403` | [View on 0G Explorer](https://chainscan-galileo.0g.ai/address/0xdEF5D5C9DA844C56dd3D59481B5d1265E7101403) |
+| **`AnnotationMarketV2`** ⭐ | `0xCBbb84EB5740630B4654Fbf963a503d86E67b939` | [View on 0G Explorer](https://chainscan-galileo.0g.ai/address/0xCBbb84EB5740630B4654Fbf963a503d86E67b939) |
+| **`DatasetRegistry`** | `0x63988395140a19662B3C1dC13B0B64286B0c7cc5` | [View on 0G Explorer](https://chainscan-galileo.0g.ai/address/0x63988395140a19662B3C1dC13B0B64286B0c7cc5) |
+| **`ModelRegistry`** | `0xffc1A5A9a1bE52027142686079d8A78D9dBF4987` | [View on 0G Explorer](https://chainscan-galileo.0g.ai/address/0xffc1A5A9a1bE52027142686079d8A78D9dBF4987) |
+| **`PipelineSubscription`** | `0x313BC8CA6b0aa5258b612715a3fda3e70C007260` | [View on 0G Explorer](https://chainscan-galileo.0g.ai/address/0x313BC8CA6b0aa5258b612715a3fda3e70C007260) |
 
 ---
 
