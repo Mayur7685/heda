@@ -24,7 +24,7 @@ export default function Landing() {
   const [vlmTab, setVlmTab] = useState<string>("Object Detection");
   const [vlmFilter, setVlmFilter] = useState<"All" | "Open" | "Closed">("All");
   const [activeWorkflowRule, setActiveWorkflowRule] = useState<number>(0);
-  const [isPlayingHeroVideo, setIsPlayingHeroVideo] = useState<boolean>(false);
+  const [selectedEdgeDevice, setSelectedEdgeDevice] = useState<"esp32" | "rpi" | "jetson">("esp32");
 
   useEffect(() => {
     // 1. Fetch total bounty jobs onchain
@@ -70,14 +70,21 @@ export default function Landing() {
       }} />
 
       {/* ── 1. HERO SECTION (WITH PLATFORM VIDEO MONTAGE SHOWCASE) ── */}
-      <section style={{ position: "relative", zIndex: 1, paddingTop: 64, paddingBottom: 64, textAlign: "center", paddingLeft: 24, paddingRight: 24 }}>
-        <div style={{ maxWidth: 1060, margin: "0 auto" }}>
+      <section style={{
+        position: "relative", zIndex: 1,
+        minHeight: "calc(100vh - 64px)",
+        display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center",
+        paddingTop: "clamp(28px, 4vh, 56px)", paddingBottom: "clamp(28px, 4vh, 56px)",
+        textAlign: "center", paddingLeft: 24, paddingRight: 24,
+        boxSizing: "border-box",
+      }}>
+        <div style={{ maxWidth: 1060, margin: "0 auto", width: "100%" }}>
           {/* Status Badge */}
           <div style={{
             display: "inline-flex", alignItems: "center", gap: 8,
             padding: "6px 16px", borderRadius: 20,
             background: "rgba(0,228,121,0.08)", border: "1px solid rgba(0,228,121,0.3)",
-            fontSize: 12, fontWeight: 700, color: "var(--primary, #00e479)", marginBottom: 24,
+            fontSize: 12, fontWeight: 700, color: "var(--primary, #00e479)", marginBottom: "clamp(12px, 2vh, 20px)",
             backdropFilter: "blur(8px)", boxShadow: "0 0 16px rgba(0, 228, 121, 0.15)",
           }}>
             <span style={{ width: 8, height: 8, borderRadius: "50%", background: "var(--primary, #00e479)", boxShadow: "0 0 10px #00e479" }} />
@@ -86,8 +93,8 @@ export default function Landing() {
 
           {/* Hero Title */}
           <h1 style={{
-            fontSize: "clamp(38px, 5.8vw, 68px)", fontWeight: 800,
-            lineHeight: 1.1, letterSpacing: "-0.03em", color: "#ffffff", marginBottom: 22,
+            fontSize: "clamp(34px, 5.2vw, 64px)", fontWeight: 800,
+            lineHeight: 1.12, letterSpacing: "-0.03em", color: "#ffffff", marginBottom: "clamp(12px, 1.8vh, 18px)",
           }}>
             Decentralized Data Engine for <br />
             Computer Vision & AI
@@ -95,18 +102,18 @@ export default function Landing() {
 
           {/* Subtitle */}
           <p style={{
-            fontSize: "clamp(15px, 2vw, 18.5px)", color: "var(--text-2, #b9cbb9)",
-            maxWidth: 780, margin: "0 auto 34px", lineHeight: 1.65, fontWeight: 400,
+            fontSize: "clamp(14px, 1.8vw, 17.5px)", color: "var(--text-2, #b9cbb9)",
+            maxWidth: 760, margin: "0 auto clamp(20px, 2.5vh, 28px)", lineHeight: 1.6, fontWeight: 400,
           }}>
-            Connect physical IoT cameras, annotate datasets with AI assist, reach decentralized multi-annotator consensus, and fine-tune PyTorch YOLO models—100% onchain on 0G Storage.
+            Connect physical IoT cameras, annotate datasets with AI assist, reach decentralized multi-annotator consensus, and fine-tune PyTorch YOLO models, 100% onchain on 0G Storage.
           </p>
 
           {/* Action CTAs */}
-          <div style={{ display: "flex", gap: 14, justifyContent: "center", flexWrap: "wrap", marginBottom: 50 }}>
+          <div style={{ display: "flex", gap: 12, justifyContent: "center", flexWrap: "wrap", marginBottom: "clamp(24px, 3.5vh, 40px)" }}>
             <button
               className="btn-primary"
               onClick={() => navigate("/jobs")}
-              style={{ padding: "13px 30px", fontSize: 15, fontWeight: 700, borderRadius: 8, display: "inline-flex", alignItems: "center", gap: 8, boxShadow: "0 0 24px rgba(0,228,121,0.3)" }}
+              style={{ padding: "12px 28px", fontSize: 14.5, fontWeight: 700, borderRadius: 8, display: "inline-flex", alignItems: "center", gap: 8, boxShadow: "0 0 24px rgba(0,228,121,0.3)" }}
             >
               Start Labeling Free
               <span className="material-symbols-outlined" style={{ fontSize: 18 }}>arrow_forward</span>
@@ -114,7 +121,7 @@ export default function Landing() {
             <button
               className="btn-secondary"
               onClick={() => navigate("/pipeline")}
-              style={{ padding: "13px 26px", fontSize: 15, fontWeight: 700, borderRadius: 8, display: "inline-flex", alignItems: "center", gap: 8 }}
+              style={{ padding: "12px 24px", fontSize: 14.5, fontWeight: 700, borderRadius: 8, display: "inline-flex", alignItems: "center", gap: 8 }}
             >
               <span className="material-symbols-outlined" style={{ fontSize: 18, color: "var(--primary, #00e479)" }}>bolt</span>
               RapidCV Studio
@@ -122,89 +129,35 @@ export default function Landing() {
             <button
               className="btn-secondary"
               onClick={() => navigate("/datasets")}
-              style={{ padding: "13px 24px", fontSize: 15, fontWeight: 600, borderRadius: 8, display: "inline-flex", alignItems: "center", gap: 8 }}
+              style={{ padding: "12px 22px", fontSize: 14.5, fontWeight: 600, borderRadius: 8, display: "inline-flex", alignItems: "center", gap: 8 }}
             >
               <span className="material-symbols-outlined" style={{ fontSize: 18 }}>grid_view</span>
               Explore Datasets
             </button>
           </div>
 
-          {/* Hero Video Montage Showcase Container */}
+          {/* Hero Video Showcase Container (Clean Rounded Video GIF-Style) */}
           <div style={{
-            position: "relative", maxWidth: 980, margin: "0 auto", borderRadius: 16, overflow: "hidden",
-            border: "1px solid rgba(0, 228, 121, 0.35)", background: "#050806",
-            boxShadow: "0 25px 80px rgba(0,228,121,0.22), 0 0 1px 1px var(--border)",
+            position: "relative", maxWidth: 1040, margin: "0 auto", borderRadius: 18, overflow: "hidden",
+            border: "1px solid rgba(255, 255, 255, 0.12)", background: "#0c130e",
+            boxShadow: "0 28px 80px rgba(0, 0, 0, 0.8), 0 0 30px rgba(0, 228, 121, 0.15)",
           }}>
-            {/* Top Video Header Bar */}
-            <div style={{
-              height: 42, background: "#0c130e", borderBottom: "1px solid var(--border)",
-              display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 18px",
-            }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <span style={{ width: 10, height: 10, borderRadius: "50%", background: "#ff5f56" }} />
-                <span style={{ width: 10, height: 10, borderRadius: "50%", background: "#ffbd2e" }} />
-                <span style={{ width: 10, height: 10, borderRadius: "50%", background: "#27c93f" }} />
-                <span style={{ marginLeft: 12, fontSize: 12, fontFamily: "'Space Grotesk', monospace", color: "var(--text-3, #849584)" }}>
-                  0G Heda // Platform Overview Video Montage
-                </span>
-              </div>
-              <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                <span style={{ fontSize: 11, background: "rgba(0, 228, 121, 0.12)", color: "var(--primary, #00e479)", padding: "3px 10px", borderRadius: 12, fontWeight: 700, display: "flex", alignItems: "center", gap: 4 }}>
-                  <span className="material-symbols-outlined" style={{ fontSize: 14 }}>movie</span>
-                  4K 60FPS
-                </span>
-                <span style={{ fontSize: 11, color: "var(--text-3)", fontFamily: "'Space Grotesk', monospace" }}>
-                  02:45
-                </span>
-              </div>
-            </div>
-
-            {/* Video Player Canvas / Montage Placeholder */}
-            <div
-              onClick={() => setIsPlayingHeroVideo(!isPlayingHeroVideo)}
+            <video
+              autoPlay
+              loop
+              muted
+              playsInline
               style={{
-                position: "relative", height: 460, background: "#000",
-                display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer",
-                backgroundImage: "url('https://images.unsplash.com/photo-1518770660439-4636190af475?auto=format&fit=crop&w=1600&q=80')",
-                backgroundSize: "cover", backgroundPosition: "center",
+                width: "100%",
+                height: "auto",
+                aspectRatio: "16 / 9",
+                objectFit: "cover",
+                display: "block",
               }}
             >
-              {/* Dark Gradient Overlay */}
-              <div style={{ position: "absolute", inset: 0, background: "radial-gradient(ellipse at center, rgba(0,0,0,0.4) 0%, rgba(8,12,9,0.85) 100%)" }} />
-
-              {/* Glassmorphic Play Button & Title */}
-              <div style={{ position: "relative", zIndex: 2, display: "flex", flexDirection: "column", alignItems: "center", gap: 16 }}>
-                <div style={{
-                  width: 76, height: 76, borderRadius: "50%",
-                  background: "rgba(0, 228, 121, 0.2)", border: "2px solid var(--primary, #00e479)",
-                  display: "flex", alignItems: "center", justifyContent: "center", color: "#fff",
-                  boxShadow: "0 0 32px rgba(0,228,121,0.5)", backdropFilter: "blur(10px)",
-                  transition: "transform 0.2s ease",
-                }}>
-                  <span className="material-symbols-outlined" style={{ fontSize: 40, marginLeft: 4, color: "var(--primary, #00e479)" }}>
-                    play_arrow
-                  </span>
-                </div>
-                <div>
-                  <div style={{ fontSize: 18, fontWeight: 800, color: "#fff", letterSpacing: "-0.01em" }}>
-                    Watch Platform Video Montage
-                  </div>
-                  <div style={{ fontSize: 13, color: "var(--text-2, #b9cbb9)", marginTop: 4 }}>
-                    End-to-end dataset creation, VLM consensus & PyTorch YOLO model training
-                  </div>
-                </div>
-              </div>
-
-              {/* Video Bottom Progress Bar Overlay */}
-              <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, padding: "14px 20px", background: "linear-gradient(180deg, transparent 0%, rgba(0,0,0,0.9) 100%)", display: "flex", alignItems: "center", gap: 14, zIndex: 2 }}>
-                <span className="material-symbols-outlined" style={{ fontSize: 20, color: "var(--primary)" }}>play_circle</span>
-                <div style={{ flex: 1, height: 4, background: "rgba(255,255,255,0.2)", borderRadius: 2, overflow: "hidden" }}>
-                  <div style={{ width: "35%", height: "100%", background: "var(--primary, #00e479)", borderRadius: 2 }} />
-                </div>
-                <span style={{ fontSize: 11, fontFamily: "'Space Grotesk', monospace", color: "var(--text-3)" }}>00:58 / 02:45</span>
-                <span className="material-symbols-outlined" style={{ fontSize: 18, color: "var(--text-3)" }}>fullscreen</span>
-              </div>
-            </div>
+              <source src="/heda-hero.mp4" type="video/mp4" />
+              <source src="/heda-hero.webm" type="video/webm" />
+            </video>
           </div>
         </div>
       </section>
@@ -233,14 +186,28 @@ export default function Landing() {
               { title: "Medical Slide Diagnostics", tag: "cell · anomaly · tissue", img: "/medical_diagnostics.png" },
               { title: "Smart Agriculture", tag: "crop · weed · ripeness", img: "/smart_agriculture.png" },
               { title: "Logistics Warehouse Fleet", tag: "forklift · pallet · box", img: "/logistics_warehouse.png" },
-              // Loop duplicate
+            ].concat([
               { title: "Industrial PPE Safety", tag: "hardhat · vest · gloves", img: "/ppe_safety.png" },
               { title: "Autonomous Urban Mobility", tag: "car · pedestrian · bicycle", img: "/urban_mobility.png" },
               { title: "Smart Retail & Stock", tag: "shelf · product · barcode", img: "/smart_retail.png" },
               { title: "Medical Slide Diagnostics", tag: "cell · anomaly · tissue", img: "/medical_diagnostics.png" },
               { title: "Smart Agriculture", tag: "crop · weed · ripeness", img: "/smart_agriculture.png" },
               { title: "Logistics Warehouse Fleet", tag: "forklift · pallet · box", img: "/logistics_warehouse.png" },
-            ].map((item, i) => (
+            ]).concat([
+              { title: "Industrial PPE Safety", tag: "hardhat · vest · gloves", img: "/ppe_safety.png" },
+              { title: "Autonomous Urban Mobility", tag: "car · pedestrian · bicycle", img: "/urban_mobility.png" },
+              { title: "Smart Retail & Stock", tag: "shelf · product · barcode", img: "/smart_retail.png" },
+              { title: "Medical Slide Diagnostics", tag: "cell · anomaly · tissue", img: "/medical_diagnostics.png" },
+              { title: "Smart Agriculture", tag: "crop · weed · ripeness", img: "/smart_agriculture.png" },
+              { title: "Logistics Warehouse Fleet", tag: "forklift · pallet · box", img: "/logistics_warehouse.png" },
+            ]).concat([
+              { title: "Industrial PPE Safety", tag: "hardhat · vest · gloves", img: "/ppe_safety.png" },
+              { title: "Autonomous Urban Mobility", tag: "car · pedestrian · bicycle", img: "/urban_mobility.png" },
+              { title: "Smart Retail & Stock", tag: "shelf · product · barcode", img: "/smart_retail.png" },
+              { title: "Medical Slide Diagnostics", tag: "cell · anomaly · tissue", img: "/medical_diagnostics.png" },
+              { title: "Smart Agriculture", tag: "crop · weed · ripeness", img: "/smart_agriculture.png" },
+              { title: "Logistics Warehouse Fleet", tag: "forklift · pallet · box", img: "/logistics_warehouse.png" },
+            ]).map((item, i) => (
               <div
                 key={i}
                 onClick={() => navigate("/datasets")}
@@ -268,14 +235,28 @@ export default function Landing() {
               { title: "Manufacturing Surface Flaws", tag: "scratch · dent · welding", img: "/manufacturing_flaws.png" },
               { title: "Sports Analytics & Pose", tag: "player · ball · trajectory", img: "/sports_analytics.png" },
               { title: "Office Asset Localization", tag: "laptop · monitor · chair", img: "/office_assets.png" },
-              // Loop duplicate
+            ].concat([
               { title: "Robotics Precision Grasping", tag: "gripper · arm · object", img: "/robotics_grasping.png" },
               { title: "Aerial Drone Infrastructure", tag: "solar_panel · crack · roof", img: "/drone_inspection.png" },
               { title: "Smart City Traffic Cameras", tag: "speeding · lane · license_plate", img: "/traffic_camera.png" },
               { title: "Manufacturing Surface Flaws", tag: "scratch · dent · welding", img: "/manufacturing_flaws.png" },
               { title: "Sports Analytics & Pose", tag: "player · ball · trajectory", img: "/sports_analytics.png" },
               { title: "Office Asset Localization", tag: "laptop · monitor · chair", img: "/office_assets.png" },
-            ].map((item, i) => (
+            ]).concat([
+              { title: "Robotics Precision Grasping", tag: "gripper · arm · object", img: "/robotics_grasping.png" },
+              { title: "Aerial Drone Infrastructure", tag: "solar_panel · crack · roof", img: "/drone_inspection.png" },
+              { title: "Smart City Traffic Cameras", tag: "speeding · lane · license_plate", img: "/traffic_camera.png" },
+              { title: "Manufacturing Surface Flaws", tag: "scratch · dent · welding", img: "/manufacturing_flaws.png" },
+              { title: "Sports Analytics & Pose", tag: "player · ball · trajectory", img: "/sports_analytics.png" },
+              { title: "Office Asset Localization", tag: "laptop · monitor · chair", img: "/office_assets.png" },
+            ]).concat([
+              { title: "Robotics Precision Grasping", tag: "gripper · arm · object", img: "/robotics_grasping.png" },
+              { title: "Aerial Drone Infrastructure", tag: "solar_panel · crack · roof", img: "/drone_inspection.png" },
+              { title: "Smart City Traffic Cameras", tag: "speeding · lane · license_plate", img: "/traffic_camera.png" },
+              { title: "Manufacturing Surface Flaws", tag: "scratch · dent · welding", img: "/manufacturing_flaws.png" },
+              { title: "Sports Analytics & Pose", tag: "player · ball · trajectory", img: "/sports_analytics.png" },
+              { title: "Office Asset Localization", tag: "laptop · monitor · chair", img: "/office_assets.png" },
+            ]).map((item, i) => (
               <div
                 key={i}
                 onClick={() => navigate("/datasets")}
@@ -330,7 +311,7 @@ export default function Landing() {
               <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
                 <span className="material-symbols-outlined" style={{ fontSize: 18, color: "var(--text-3)" }}>arrow_back</span>
                 <span style={{ fontSize: 13, fontWeight: 700, color: "#fff" }}>
-                  Job #1 — Safety Inspection
+                  Job #1: Safety Inspection
                 </span>
                 <div style={{ display: "flex", alignItems: "center", gap: 6, background: "rgba(255,255,255,0.05)", padding: "3px 8px", borderRadius: 4, fontSize: 11, fontFamily: "'Space Grotesk', monospace" }}>
                   <span className="material-symbols-outlined" style={{ fontSize: 14, color: "var(--text-3)" }}>chevron_left</span>
@@ -588,8 +569,170 @@ export default function Landing() {
         </div>
       </section>
 
-      {/* ── 5. LIVE FEATURE 3: RAPIDCV STUDIO (8-STAGE PIPELINE) ── */}
+      {/* ── 5. LIVE FEATURE 3: DATASETS & MODELS FOR EVERY INDUSTRY ── */}
       <section style={{ padding: "80px 24px", background: "var(--surface, #121a14)", borderBottom: "1px solid var(--border)", position: "relative" }}>
+        <div style={{ maxWidth: 1200, margin: "0 auto" }}>
+          {/* Top Header Tag & LIVE Badge matching all other sections */}
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 28 }}>
+            <span style={{ color: "var(--primary, #00e479)", fontSize: 12, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.12em" }}>
+              DECENTRALIZED VISION ECOSYSTEM
+            </span>
+            <span style={{ fontSize: 11, background: "rgba(0, 228, 121, 0.12)", color: "var(--primary)", border: "1px solid var(--primary)", padding: "4px 10px", borderRadius: 20, fontWeight: 700, display: "flex", alignItems: "center", gap: 5 }}>
+              <span style={{ width: 6, height: 6, borderRadius: "50%", background: "var(--primary)" }} />
+              LIVE ON GALILEO
+            </span>
+          </div>
+
+          <h2 style={{ fontSize: "clamp(26px, 3.8vw, 44px)", fontWeight: 800, margin: "0 0 10px", letterSpacing: "-0.02em", color: "#fff" }}>
+            Datasets and Models for Every Industry
+          </h2>
+          <p style={{ color: "var(--text-2, #b9cbb9)", fontSize: 15, maxWidth: 660, margin: "0 0 36px", lineHeight: 1.6 }}>
+            Our goal is to democratize the power of computer vision on 0G for developers, researchers, and enterprise teams worldwide.
+          </p>
+
+          <div style={{ display: "grid", gridTemplateColumns: "1.1fr 1fr", gap: 48, alignItems: "center" }}>
+            
+            {/* Left Column: 3D Isometric Layered Vision Card Stack */}
+            <div style={{ position: "relative", minHeight: 480, display: "flex", alignItems: "center", justifyContent: "center", perspective: "1000px" }}>
+              
+              {/* Layer Card 1: Logistics & Warehouse (Top-Left Staggered) */}
+              <div style={{
+                position: "absolute", width: "84%", maxWidth: 360, height: 220, borderRadius: 14,
+                overflow: "hidden", border: "1px solid rgba(255, 255, 255, 0.12)", background: "#0c130e",
+                boxShadow: "0 24px 48px rgba(0, 0, 0, 0.7)",
+                transform: "rotate(-8deg) translate(-40px, -70px) scale(0.92)",
+                transition: "transform 0.3s ease, box-shadow 0.3s ease",
+                zIndex: 1,
+              }}>
+                <img src="/logistics_warehouse.png" alt="Logistics Warehouse Detection" style={{ width: "100%", height: "100%", objectFit: "cover", filter: "brightness(0.9)" }} />
+                <div style={{ position: "absolute", inset: 0, background: "linear-gradient(180deg, transparent 35%, rgba(0,0,0,0.85) 100%)" }} />
+
+                <div style={{ position: "absolute", bottom: 12, left: 14, right: 14, display: "flex", justifyContent: "space-between", alignItems: "flex-end" }}>
+                  <div>
+                    <span style={{ fontSize: 9.5, textTransform: "uppercase", background: "rgba(255,255,255,0.12)", color: "var(--text-2)", padding: "2px 6px", borderRadius: 4, fontWeight: 700 }}>
+                      Instance Segmentation
+                    </span>
+                    <div style={{ fontSize: 14, fontWeight: 800, color: "#fff", marginTop: 4 }}>Package Detection</div>
+                  </div>
+                  <span style={{ fontSize: 10, color: "var(--text-3)", fontFamily: "'Space Grotesk', monospace" }}>8 models • 9.7k images</span>
+                </div>
+              </div>
+
+              {/* Layer Card 2: Robotics Grasping & Smart Manufacturing (Center Hero) */}
+              <div style={{
+                position: "absolute", width: "88%", maxWidth: 380, height: 235, borderRadius: 14,
+                overflow: "hidden", border: "1px solid rgba(0, 228, 121, 0.4)", background: "#0e1711",
+                boxShadow: "0 28px 60px rgba(0, 0, 0, 0.8), 0 0 20px rgba(0, 228, 121, 0.15)",
+                transform: "rotate(4deg) translate(25px, 0px) scale(1)",
+                zIndex: 2,
+              }}>
+                <img src="/robotics_grasping.png" alt="Robotics Grasping Detection" style={{ width: "100%", height: "100%", objectFit: "cover", filter: "brightness(0.95)" }} />
+                <div style={{ position: "absolute", inset: 0, background: "linear-gradient(180deg, transparent 35%, rgba(0,0,0,0.85) 100%)" }} />
+
+                <div style={{ position: "absolute", bottom: 12, left: 14, right: 14, display: "flex", justifyContent: "space-between", alignItems: "flex-end" }}>
+                  <div>
+                    <span style={{ fontSize: 9.5, textTransform: "uppercase", background: "rgba(0,228,121,0.2)", color: "var(--primary)", padding: "2px 6px", borderRadius: 4, fontWeight: 700 }}>
+                      Object Detection
+                    </span>
+                    <div style={{ fontSize: 14.5, fontWeight: 800, color: "#fff", marginTop: 4 }}>Solar Panel & Robotics</div>
+                  </div>
+                  <span style={{ fontSize: 10, color: "var(--primary)", fontFamily: "'Space Grotesk', monospace", fontWeight: 700 }}>14 models • 12.4k images</span>
+                </div>
+              </div>
+
+              {/* Layer Card 3: Medical Diagnostics & Micro-Inspection (Bottom Staggered) */}
+              <div style={{
+                position: "absolute", width: "84%", maxWidth: 360, height: 215, borderRadius: 14,
+                overflow: "hidden", border: "1px solid rgba(255, 255, 255, 0.12)", background: "#0b120d",
+                boxShadow: "0 24px 50px rgba(0, 0, 0, 0.7)",
+                transform: "rotate(-3deg) translate(-25px, 95px) scale(0.94)",
+                zIndex: 3,
+              }}>
+                <img src="/medical_diagnostics.png" alt="Medicine Vial Diagnostics" style={{ width: "100%", height: "100%", objectFit: "cover", filter: "brightness(0.9)" }} />
+                <div style={{ position: "absolute", inset: 0, background: "linear-gradient(180deg, transparent 35%, rgba(0,0,0,0.85) 100%)" }} />
+
+                <div style={{ position: "absolute", bottom: 12, left: 14, right: 14, display: "flex", justifyContent: "space-between", alignItems: "flex-end" }}>
+                  <div>
+                    <span style={{ fontSize: 9.5, textTransform: "uppercase", background: "rgba(255,255,255,0.12)", color: "var(--text-2)", padding: "2px 6px", borderRadius: 4, fontWeight: 700 }}>
+                      Object Detection
+                    </span>
+                    <div style={{ fontSize: 14, fontWeight: 800, color: "#fff", marginTop: 4 }}>Medicine Vial Detection</div>
+                  </div>
+                  <span style={{ fontSize: 10, color: "var(--text-3)", fontFamily: "'Space Grotesk', monospace" }}>2 models • 5k images</span>
+                </div>
+              </div>
+
+            </div>
+
+            {/* Right Column: 3 Value Proposition Pillars + CTAs */}
+            <div>
+              {/* 3 Value Pillars */}
+              <div style={{ display: "flex", flexDirection: "column", gap: 22, marginBottom: 32 }}>
+                
+                <div style={{ display: "flex", gap: 16, alignItems: "flex-start" }}>
+                  <div style={{ width: 40, height: 40, borderRadius: 10, background: "rgba(0, 228, 121, 0.1)", border: "1px solid rgba(0, 228, 121, 0.25)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, color: "var(--primary)" }}>
+                    <span className="material-symbols-outlined" style={{ fontSize: 22 }}>psychology</span>
+                  </div>
+                  <div>
+                    <h4 style={{ fontSize: 15, fontWeight: 700, color: "#fff", margin: "0 0 4px" }}>
+                      Advancing Computer Vision Accessibility
+                    </h4>
+                    <p style={{ fontSize: 13.5, color: "var(--text-2)", lineHeight: 1.5, margin: 0 }}>
+                      Making state-of-the-art vision models accessible to software developers and machine learning engineers without specialized hardware setups.
+                    </p>
+                  </div>
+                </div>
+
+                <div style={{ display: "flex", gap: 16, alignItems: "flex-start" }}>
+                  <div style={{ width: 40, height: 40, borderRadius: 10, background: "rgba(0, 191, 255, 0.1)", border: "1px solid rgba(0, 191, 255, 0.25)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, color: "#00bfff" }}>
+                    <span className="material-symbols-outlined" style={{ fontSize: 22 }}>menu_book</span>
+                  </div>
+                  <div>
+                    <h4 style={{ fontSize: 15, fontWeight: 700, color: "#fff", margin: "0 0 4px" }}>
+                      Decentralized Research & Benchmarking Datasets
+                    </h4>
+                    <p style={{ fontSize: 13.5, color: "var(--text-2)", lineHeight: 1.5, margin: 0 }}>
+                      Making verified, high-density datasets permanently available on 0G Storage for open-source research, commercial training, and evaluation.
+                    </p>
+                  </div>
+                </div>
+
+                <div style={{ display: "flex", gap: 16, alignItems: "flex-start" }}>
+                  <div style={{ width: 40, height: 40, borderRadius: 10, background: "rgba(168, 85, 247, 0.1)", border: "1px solid rgba(168, 85, 247, 0.25)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, color: "#a855f7" }}>
+                    <span className="material-symbols-outlined" style={{ fontSize: 22 }}>rocket_launch</span>
+                  </div>
+                  <div>
+                    <h4 style={{ fontSize: 15, fontWeight: 700, color: "#fff", margin: "0 0 4px" }}>
+                      Seamless Few-Line Production Deployment
+                    </h4>
+                    <p style={{ fontSize: 13.5, color: "var(--text-2)", lineHeight: 1.5, margin: 0 }}>
+                      Making it easy to deploy fine-tuned models directly into production with a few lines of code via 0G Private Compute and Edge ONNX runtimes.
+                    </p>
+                  </div>
+                </div>
+
+              </div>
+
+              {/* Navigation CTA Buttons */}
+              <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+                <button className="btn-primary" onClick={() => navigate("/datasets")} style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <span className="material-symbols-outlined" style={{ fontSize: 18 }}>dataset</span>
+                  Explore Datasets
+                </button>
+                <button className="btn-secondary" onClick={() => navigate("/models")} style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <span className="material-symbols-outlined" style={{ fontSize: 18 }}>deployed_code</span>
+                  Explore Models
+                </button>
+              </div>
+
+            </div>
+
+          </div>
+        </div>
+      </section>
+
+      {/* ── 6. LIVE FEATURE 4: RAPIDCV STUDIO (8-STAGE PIPELINE) ── */}
+      <section style={{ padding: "80px 24px", background: "#080c09", borderBottom: "1px solid var(--border)", position: "relative" }}>
         <div style={{ maxWidth: 1200, margin: "0 auto" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 28 }}>
             <span style={{ color: "var(--primary, #00e479)", fontSize: 12, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.12em" }}>
@@ -611,7 +754,7 @@ export default function Landing() {
           {/* 8 Stages Timeline Bar Mockup */}
           <div style={{
             display: "flex", alignItems: "center", justifyContent: "space-between",
-            background: "#080c09", border: "1px solid var(--border)", borderRadius: 14,
+            background: "var(--surface-low, #121a14)", border: "1px solid var(--border)", borderRadius: 14,
             padding: "16px 24px", marginBottom: 32, overflowX: "auto", gap: 12,
           }}>
             {[
@@ -662,21 +805,21 @@ export default function Landing() {
             </div>
 
             {/* Metrics Output Card */}
-            <div style={{ background: "#080c09", border: "1px solid var(--border)", borderRadius: 14, padding: 22, boxShadow: "0 20px 48px rgba(0,0,0,0.7)" }}>
+            <div style={{ background: "var(--surface-low, #121a14)", border: "1px solid var(--border)", borderRadius: 14, padding: 22, boxShadow: "0 20px 48px rgba(0,0,0,0.7)" }}>
               <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12, marginBottom: 18 }}>
-                <div style={{ background: "var(--surface-low)", padding: 12, borderRadius: 8, border: "1px solid var(--border)" }}>
+                <div style={{ background: "rgba(0,0,0,0.4)", padding: 12, borderRadius: 8, border: "1px solid var(--border)" }}>
                   <div style={{ fontSize: 10, color: "var(--text-3)", textTransform: "uppercase" }}>mAP@50</div>
                   <div style={{ fontSize: 20, fontWeight: 800, color: "var(--primary)", fontFamily: "'Space Grotesk', monospace" }}>94.2%</div>
                 </div>
-                <div style={{ background: "var(--surface-low)", padding: 12, borderRadius: 8, border: "1px solid var(--border)" }}>
+                <div style={{ background: "rgba(0,0,0,0.4)", padding: 12, borderRadius: 8, border: "1px solid var(--border)" }}>
                   <div style={{ fontSize: 10, color: "var(--text-3)", textTransform: "uppercase" }}>Precision</div>
                   <div style={{ fontSize: 20, fontWeight: 800, color: "#60a5fa", fontFamily: "'Space Grotesk', monospace" }}>91.5%</div>
                 </div>
-                <div style={{ background: "var(--surface-low)", padding: 12, borderRadius: 8, border: "1px solid var(--border)" }}>
+                <div style={{ background: "rgba(0,0,0,0.4)", padding: 12, borderRadius: 8, border: "1px solid var(--border)" }}>
                   <div style={{ fontSize: 10, color: "var(--text-3)", textTransform: "uppercase" }}>Box Loss</div>
                   <div style={{ fontSize: 20, fontWeight: 800, color: "#ffd700", fontFamily: "'Space Grotesk', monospace" }}>0.042</div>
                 </div>
-                <div style={{ background: "var(--surface-low)", padding: 12, borderRadius: 8, border: "1px solid var(--border)" }}>
+                <div style={{ background: "rgba(0,0,0,0.4)", padding: 12, borderRadius: 8, border: "1px solid var(--border)" }}>
                   <div style={{ fontSize: 10, color: "var(--text-3)", textTransform: "uppercase" }}>Epochs</div>
                   <div style={{ fontSize: 20, fontWeight: 800, color: "#a78bfa", fontFamily: "'Space Grotesk', monospace" }}>30/30</div>
                 </div>
@@ -689,8 +832,8 @@ export default function Landing() {
         </div>
       </section>
 
-      {/* ── 6. COMING SOON: UNIFIED 0G VLM LEADERBOARD ── */}
-      <section style={{ padding: "80px 24px", background: "#080c09", borderBottom: "1px solid var(--border)", position: "relative" }}>
+      {/* ── 7. COMING SOON: UNIFIED 0G VLM LEADERBOARD ── */}
+      <section style={{ padding: "80px 24px", background: "var(--surface, #121a14)", borderBottom: "1px solid var(--border)", position: "relative" }}>
         <div style={{ maxWidth: 1200, margin: "0 auto" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 32 }}>
             <span style={{ color: "var(--primary, #00e479)", fontSize: 12, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.12em" }}>
@@ -771,7 +914,7 @@ export default function Landing() {
               </span>
               <span style={{ display: "flex", alignItems: "center", gap: 5, color: "#84cc16", fontWeight: 600 }}>
                 <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#84cc16" }} />
-                40–74%
+                40-74%
               </span>
               <span style={{ display: "flex", alignItems: "center", gap: 5, color: "#ef4444", fontWeight: 600 }}>
                 <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#ef4444" }} />
@@ -885,8 +1028,8 @@ export default function Landing() {
         </div>
       </section>
 
-      {/* ── 7. COMING SOON: ACTIONABLE VISION WORKFLOWS (EVENT TRIGGERS) ── */}
-      <section style={{ padding: "80px 24px", background: "var(--surface, #121a14)", borderBottom: "1px solid var(--border)", position: "relative" }}>
+      {/* ── 8. COMING SOON: ACTIONABLE VISION WORKFLOWS (EVENT TRIGGERS) ── */}
+      <section style={{ padding: "80px 24px", background: "#080c09", borderBottom: "1px solid var(--border)", position: "relative" }}>
         <div style={{ maxWidth: 1200, margin: "0 auto" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 32 }}>
             <span style={{ color: "var(--primary, #00e479)", fontSize: 12, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.12em" }}>
@@ -918,7 +1061,7 @@ export default function Landing() {
                   style={{
                     padding: 20, borderRadius: 12, cursor: "pointer", border: "1px solid",
                     borderColor: activeWorkflowRule === idx ? "var(--primary)" : "var(--border)",
-                    background: activeWorkflowRule === idx ? "rgba(0, 228, 121, 0.08)" : "#080c09",
+                    background: activeWorkflowRule === idx ? "rgba(0, 228, 121, 0.08)" : "var(--surface, #121a14)",
                     transition: "all 0.2s ease",
                   }}
                 >
@@ -936,7 +1079,7 @@ export default function Landing() {
             </div>
 
             {/* Visual Workflow Canvas Simulation */}
-            <div style={{ background: "#080c09", border: "1px solid var(--border)", borderRadius: 16, padding: 26, boxShadow: "0 20px 48px rgba(0,0,0,0.6)" }}>
+            <div style={{ background: "var(--surface, #121a14)", border: "1px solid var(--border)", borderRadius: 16, padding: 26, boxShadow: "0 20px 48px rgba(0,0,0,0.6)" }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20, borderBottom: "1px solid var(--border)", paddingBottom: 12 }}>
                 <span style={{ fontSize: 12, fontWeight: 800, color: "#fff", textTransform: "uppercase" }}>
                   Active Execution Rule #{activeWorkflowRule + 1}
@@ -968,10 +1111,10 @@ export default function Landing() {
         </div>
       </section>
 
-      {/* ── 8. COMING SOON: PHYSICAL DEVICE & EDGE IOT PIPELINE (ESP32 / RPi) ── */}
-      <section style={{ padding: "80px 24px", background: "#080c09", borderBottom: "1px solid var(--border)", position: "relative" }}>
+      {/* ── 9. COMING SOON: PHYSICAL DEVICE & EDGE IOT PIPELINE (ESP32 / RPi / JETSON) ── */}
+      <section style={{ padding: "80px 24px", background: "var(--surface, #121a14)", borderBottom: "1px solid var(--border)", position: "relative" }}>
         <div style={{ maxWidth: 1200, margin: "0 auto" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 32 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
             <span style={{ color: "var(--primary, #00e479)", fontSize: 12, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.12em" }}>
               EDGE HARDWARE INTEGRATION
             </span>
@@ -980,53 +1123,187 @@ export default function Landing() {
             </span>
           </div>
 
-          <div style={{ display: "grid", gridTemplateColumns: "1.1fr 1fr", gap: 36, alignItems: "center" }}>
-            {/* Left: Device REST API Payload Mockup */}
-            <div style={{ background: "var(--surface, #121a14)", border: "1px solid rgba(0, 228, 121, 0.3)", borderRadius: 16, padding: 22, boxShadow: "0 20px 48px rgba(0,0,0,0.6)" }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14, borderBottom: "1px solid var(--border)", paddingBottom: 10 }}>
-                <span style={{ fontSize: 11, fontFamily: "'Space Grotesk', monospace", color: "var(--primary, #00e479)", fontWeight: 700 }}>
-                  POST /api/device/push • ESP32-CAM (WiFi)
+          <h2 style={{ fontSize: "clamp(26px, 3.8vw, 44px)", fontWeight: 800, margin: "0 0 10px", letterSpacing: "-0.02em", color: "#fff" }}>
+            Physical Device & IoT Vision Pipeline
+          </h2>
+          <p style={{ color: "var(--text-2, #b9cbb9)", fontSize: 15, maxWidth: 680, margin: "0 0 28px", lineHeight: 1.6 }}>
+            Turn low-cost $5 ESP32-CAMs, Raspberry Pis, and factory cameras into autonomous data collectors. Devices push raw frames directly to Heda for instant VLM labeling, 0G Storage pinning, and onchain bounty review.
+          </p>
+
+          {/* Minimal 1-Row Closed-Loop Flow Timeline Bar */}
+          <div style={{
+            display: "flex", alignItems: "center", justifyContent: "space-between",
+            background: "#080c09", border: "1px solid var(--border)", borderRadius: 12,
+            padding: "14px 20px", marginBottom: 32, overflowX: "auto", gap: 10,
+          }}>
+            {[
+              { step: "01", label: "Collect Data", icon: "sensors" },
+              { step: "02", label: "Create Job", icon: "add_task" },
+              { step: "03", label: "Annotate", icon: "draw" },
+              { step: "04", label: "Moondream Eval", icon: "auto_awesome" },
+              { step: "05", label: "Model Train", icon: "memory" },
+              { step: "06", label: "OTA Update", icon: "cloud_download" },
+              { step: "07", label: "Deploy to Node", icon: "rocket_launch", highlight: true },
+            ].map((st, i) => (
+              <div key={i} style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+                <div style={{
+                  width: 28, height: 28, borderRadius: "50%",
+                  background: st.highlight ? "var(--primary, #00e479)" : "rgba(255,255,255,0.06)",
+                  color: st.highlight ? "#000" : "var(--text-2)",
+                  display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 800,
+                  fontFamily: "'Space Grotesk', monospace",
+                  boxShadow: st.highlight ? "0 0 10px rgba(0,228,121,0.3)" : "none",
+                }}>
+                  {st.step}
+                </div>
+                <span style={{ fontSize: 12, fontWeight: st.highlight ? 700 : 500, color: st.highlight ? "var(--primary)" : "var(--text-2)" }}>
+                  {st.label}
                 </span>
-                <span style={{ fontSize: 10, background: "rgba(0, 228, 121, 0.12)", color: "var(--primary)", padding: "2px 8px", borderRadius: 4, fontWeight: 700 }}>
+                {i < 6 && <span style={{ color: "rgba(255,255,255,0.2)", marginLeft: 6 }}>→</span>}
+              </div>
+            ))}
+          </div>
+
+          <div style={{ display: "grid", gridTemplateColumns: "1.1fr 1fr", gap: 32, alignItems: "center" }}>
+            
+            {/* Left Column: Minimal Hardware Telemetry Terminal */}
+            <div style={{
+              background: "#080c09", border: "1px solid rgba(0, 228, 121, 0.25)", borderRadius: 14,
+              overflow: "hidden", boxShadow: "0 16px 40px rgba(0,0,0,0.6)",
+            }}>
+              {/* Device Selector Sub-Header */}
+              <div style={{
+                display: "flex", justifyContent: "space-between", alignItems: "center",
+                padding: "12px 16px", borderBottom: "1px solid var(--border)", background: "#050806", gap: 8, flexWrap: "wrap",
+              }}>
+                <div style={{ display: "flex", gap: 6 }}>
+                  {[
+                    { id: "esp32", label: "ESP32-CAM ($5)" },
+                    { id: "rpi", label: "Raspberry Pi 5" },
+                    { id: "jetson", label: "NVIDIA Jetson" },
+                  ].map((dev) => {
+                    const isActive = selectedEdgeDevice === dev.id;
+                    return (
+                      <button
+                        key={dev.id}
+                        onClick={() => setSelectedEdgeDevice(dev.id as any)}
+                        style={{
+                          background: isActive ? "rgba(0, 228, 121, 0.15)" : "transparent",
+                          color: isActive ? "var(--primary)" : "var(--text-3)",
+                          border: isActive ? "1px solid var(--primary)" : "1px solid rgba(255,255,255,0.08)",
+                          padding: "4px 10px",
+                          borderRadius: 6,
+                          fontSize: 11.5,
+                          fontWeight: isActive ? 700 : 500,
+                          cursor: "pointer",
+                          transition: "all 0.15s ease",
+                        }}
+                      >
+                        {dev.label}
+                      </button>
+                    );
+                  })}
+                </div>
+                <span style={{ fontSize: 10.5, background: "rgba(0, 228, 121, 0.12)", color: "var(--primary)", padding: "3px 8px", borderRadius: 4, fontWeight: 700, fontFamily: "'Space Grotesk', monospace" }}>
                   200 OK • 0G PINNED
                 </span>
               </div>
-              <div style={{ fontFamily: "'Space Grotesk', monospace", fontSize: 12, color: "var(--text-2)", lineHeight: 1.6, overflowX: "auto" }}>
+
+              {/* JSON Ingestion Payload */}
+              <div style={{ padding: "16px 20px", fontFamily: "'Space Grotesk', monospace", fontSize: 12, color: "var(--text-2)", lineHeight: 1.65, overflowX: "auto", background: "#080c09" }}>
+                <div><span style={{ color: "var(--text-3)" }}>// POST /api/device/push • Continuous Loop Ingestion</span></div>
                 <div>{"{"}</div>
-                <div style={{ paddingLeft: 18 }}><span style={{ color: "#60a5fa" }}>"device_id"</span>: <span style={{ color: "#ffd700" }}>"esp32-cam-001"</span>,</div>
-                <div style={{ paddingLeft: 18 }}><span style={{ color: "#60a5fa" }}>"location"</span>: <span style={{ color: "#ffd700" }}>"factory-floor-zoneA"</span>,</div>
-                <div style={{ paddingLeft: 18 }}><span style={{ color: "#60a5fa" }}>"storage_root_hash"</span>: <span style={{ color: "var(--primary)" }}>"0x9a90f6e1b7..."</span>,</div>
-                <div style={{ paddingLeft: 18 }}><span style={{ color: "#60a5fa" }}>"auto_labels"</span>: [{"{"} <span style={{ color: "#60a5fa" }}>"class"</span>: <span style={{ color: "#ffd700" }}>"hardhat"</span>, <span style={{ color: "#60a5fa" }}>"confidence"</span>: <span style={{ color: "var(--primary)" }}>0.984</span> {"}"}],</div>
-                <div style={{ paddingLeft: 18 }}><span style={{ color: "#60a5fa" }}>"bounty_job_created"</span>: <span style={{ color: "#ffd700" }}>true</span>,</div>
-                <div style={{ paddingLeft: 18 }}><span style={{ color: "#60a5fa" }}>"onchain_job_id"</span>: <span style={{ color: "var(--primary)" }}>3</span></div>
+                <div style={{ paddingLeft: 16 }}><span style={{ color: "#60a5fa" }}>"device_id"</span>: <span style={{ color: "#ffd700" }}>"{selectedEdgeDevice === "esp32" ? "esp32-cam-001" : selectedEdgeDevice === "rpi" ? "rpi5-edge-02" : "jetson-orin-01"}"</span>,</div>
+                <div style={{ paddingLeft: 16 }}><span style={{ color: "#60a5fa" }}>"hardware_profile"</span>: <span style={{ color: "#ffd700" }}>"{selectedEdgeDevice === "esp32" ? "ESP32-S3 + OV2640" : selectedEdgeDevice === "rpi" ? "BCM2712 + Hailo-8 NPU" : "NVIDIA Orin 20 TOPS"}"</span>,</div>
+                <div style={{ paddingLeft: 16 }}><span style={{ color: "#60a5fa" }}>"storage_root_hash"</span>: <span style={{ color: "var(--primary)" }}>"{selectedEdgeDevice === "esp32" ? "0x9a90f6e1b7..." : selectedEdgeDevice === "rpi" ? "0xc831d04ea9..." : "0x3f721bc089..."}"</span>,</div>
+                <div style={{ paddingLeft: 16 }}><span style={{ color: "#60a5fa" }}>"vlm_zero_shot"</span>: [{"{"} <span style={{ color: "#60a5fa" }}>"class"</span>: <span style={{ color: "#ffd700" }}>"{selectedEdgeDevice === "esp32" ? "hardhat" : selectedEdgeDevice === "rpi" ? "surface_scratch" : "drone"}"</span>, <span style={{ color: "#60a5fa" }}>"confidence"</span>: <span style={{ color: "var(--primary)" }}>{selectedEdgeDevice === "esp32" ? "0.984" : selectedEdgeDevice === "rpi" ? "0.961" : "0.992"}</span> {"}"}],</div>
+                <div style={{ paddingLeft: 16 }}><span style={{ color: "#60a5fa" }}>"ota_target_node"</span>: <span style={{ color: "var(--primary)" }}>"{selectedEdgeDevice === "esp32" ? "esp32-cam-001" : selectedEdgeDevice === "rpi" ? "rpi5-edge-02" : "jetson-orin-01"}"</span>,</div>
+                <div style={{ paddingLeft: 16 }}><span style={{ color: "#60a5fa" }}>"onchain_job_id"</span>: <span style={{ color: "var(--primary)" }}>{selectedEdgeDevice === "esp32" ? "3" : selectedEdgeDevice === "rpi" ? "4" : "5"}</span></div>
                 <div>{"}"}</div>
               </div>
             </div>
 
-            {/* Right: Architecture Points */}
+            {/* Right Column: 4 Architecture Feature Pillars + CTA */}
             <div>
-              <h3 style={{ fontSize: 24, fontWeight: 800, color: "#fff", margin: "0 0 14px" }}>
-                Physical Device & IoT Vision Pipeline
-              </h3>
-              <p style={{ color: "var(--text-2)", fontSize: 14.5, lineHeight: 1.6, marginBottom: 16 }}>
-                Turn low-cost $5 ESP32-CAMs, Raspberry Pis, and factory cameras into autonomous data collectors. Devices push raw frames directly to Heda for instant VLM labeling, 0G Storage pinning, and onchain bounty review.
-              </p>
-              <ul style={{ color: "var(--text-2)", fontSize: 14, lineHeight: 1.8, paddingLeft: 18, margin: "0 0 24px" }}>
-                <li><b>24/7 Field Data Ingestion:</b> Microcontrollers capture frames on motion triggers without manual uploads.</li>
-                <li><b>Moondream Edge Auto-Label:</b> Zero-shot VLM annotates bounding boxes automatically in real time.</li>
-                <li><b>0G Storage Merkle Verification:</b> Raw camera captures permanently pinned with cryptographic root hashes.</li>
-                <li><b>Deploy Back to Edge:</b> Export optimized ONNX/TensorRT weights back to Raspberry Pi or Jetson Nano.</li>
-              </ul>
-              <button className="btn-secondary" onClick={() => navigate("/pipeline")}>
-                Explore RapidCV Pipeline →
-              </button>
+              <div style={{ display: "flex", flexDirection: "column", gap: 16, marginBottom: 24 }}>
+                
+                <div style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
+                  <div style={{ width: 34, height: 34, borderRadius: 8, background: "rgba(0, 228, 121, 0.1)", border: "1px solid rgba(0, 228, 121, 0.25)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, color: "var(--primary)" }}>
+                    <span className="material-symbols-outlined" style={{ fontSize: 18 }}>sensors</span>
+                  </div>
+                  <div>
+                    <h4 style={{ fontSize: 14, fontWeight: 700, color: "#fff", margin: "0 0 2px" }}>
+                      24/7 Autonomous Field Sensor Ingestion
+                    </h4>
+                    <p style={{ fontSize: 12.5, color: "var(--text-2)", lineHeight: 1.5, margin: 0 }}>
+                      Microcontrollers capture frames on optical triggers without manual uploads.
+                    </p>
+                  </div>
+                </div>
+
+                <div style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
+                  <div style={{ width: 34, height: 34, borderRadius: 8, background: "rgba(96, 165, 250, 0.1)", border: "1px solid rgba(96, 165, 250, 0.25)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, color: "#60a5fa" }}>
+                    <span className="material-symbols-outlined" style={{ fontSize: 18 }}>auto_awesome</span>
+                  </div>
+                  <div>
+                    <h4 style={{ fontSize: 14, fontWeight: 700, color: "#fff", margin: "0 0 2px" }}>
+                      Moondream Cloud & Edge Auto-Labeling
+                    </h4>
+                    <p style={{ fontSize: 12.5, color: "var(--text-2)", lineHeight: 1.5, margin: 0 }}>
+                      Zero-shot VLM auto-detects bounding boxes and labels target classes instantly.
+                    </p>
+                  </div>
+                </div>
+
+                <div style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
+                  <div style={{ width: 34, height: 34, borderRadius: 8, background: "rgba(255, 215, 0, 0.1)", border: "1px solid rgba(255, 215, 0, 0.25)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, color: "#ffd700" }}>
+                    <span className="material-symbols-outlined" style={{ fontSize: 18 }}>fingerprint</span>
+                  </div>
+                  <div>
+                    <h4 style={{ fontSize: 14, fontWeight: 700, color: "#fff", margin: "0 0 2px" }}>
+                      0G Storage Cryptographic Merkle Proofs
+                    </h4>
+                    <p style={{ fontSize: 12.5, color: "var(--text-2)", lineHeight: 1.5, margin: 0 }}>
+                      Raw camera captures are permanently pinned with cryptographic root hashes.
+                    </p>
+                  </div>
+                </div>
+
+                <div style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
+                  <div style={{ width: 34, height: 34, borderRadius: 8, background: "rgba(167, 139, 250, 0.1)", border: "1px solid rgba(167, 139, 250, 0.25)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, color: "#a78bfa" }}>
+                    <span className="material-symbols-outlined" style={{ fontSize: 18 }}>memory</span>
+                  </div>
+                  <div>
+                    <h4 style={{ fontSize: 14, fontWeight: 700, color: "#fff", margin: "0 0 2px" }}>
+                      Deploy Optimized Weights Back to Edge
+                    </h4>
+                    <p style={{ fontSize: 12.5, color: "var(--text-2)", lineHeight: 1.5, margin: 0 }}>
+                      Export lightweight ONNX/TensorRT binaries back to original nodes over-the-air.
+                    </p>
+                  </div>
+                </div>
+
+              </div>
+
+              <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+                <button className="btn-primary" onClick={() => navigate("/pipeline")} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, padding: "8px 16px" }}>
+                  <span className="material-symbols-outlined" style={{ fontSize: 16 }}>play_circle</span>
+                  Explore RapidCV Pipeline →
+                </button>
+                <button className="btn-secondary" onClick={() => navigate("/models")} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, padding: "8px 16px" }}>
+                  <span className="material-symbols-outlined" style={{ fontSize: 16 }}>deployed_code</span>
+                  Explore Models
+                </button>
+              </div>
+
             </div>
+
           </div>
         </div>
       </section>
 
-      {/* ── 9. HOW IT WORKS: 5-COLUMN LOOP SECTION ── */}
-      <section style={{ padding: "80px 24px", background: "var(--surface, #121a14)", borderBottom: "1px solid var(--border)", position: "relative" }}>
+      {/* ── 10. HOW IT WORKS: 5-COLUMN LOOP SECTION ── */}
+      <section style={{ padding: "80px 24px", background: "#080c09", borderBottom: "1px solid var(--border)", position: "relative" }}>
         <div style={{ maxWidth: 1200, margin: "0 auto" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 28 }}>
             <span style={{ color: "var(--primary, #00e479)", fontSize: 12, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.12em" }}>
@@ -1047,7 +1324,7 @@ export default function Landing() {
           {/* 5-Column Grid */}
           <div style={{
             display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(210px, 1fr))",
-            border: "1px solid var(--border)", borderRadius: 14, overflow: "hidden", background: "#080c09",
+            border: "1px solid var(--border)", borderRadius: 14, overflow: "hidden", background: "var(--surface, #121a14)",
           }}>
             {[
               { num: "01 / 05", title: "Capture", desc: "Live video or event-driven frames stream from ESP32/RPi cameras into the on-device pipeline.", icon: "videocam" },
@@ -1060,7 +1337,7 @@ export default function Landing() {
                 padding: "26px 20px 22px",
                 borderRight: idx < 4 ? "1px solid var(--border)" : "none",
                 display: "flex", flexDirection: "column", justifyContent: "space-between",
-                background: "#080c09",
+                background: "var(--surface, #121a14)",
               }}>
                 <div>
                   <span style={{ fontSize: 11, color: "var(--primary, #00e479)", fontFamily: "'Space Grotesk', monospace", fontWeight: 700, letterSpacing: "0.06em" }}>
@@ -1084,8 +1361,8 @@ export default function Landing() {
         </div>
       </section>
 
-      {/* ── 10. USE CASES SECTION: 6-CARD GRID ── */}
-      <section style={{ padding: "80px 24px", background: "#080c09", borderBottom: "1px solid var(--border)", position: "relative" }}>
+      {/* ── 11. USE CASES SECTION: 6-CARD GRID ── */}
+      <section style={{ padding: "80px 24px", background: "var(--surface, #121a14)", borderBottom: "1px solid var(--border)", position: "relative" }}>
         <div style={{ maxWidth: 1200, margin: "0 auto" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 28 }}>
             <span style={{ color: "var(--primary, #00e479)", fontSize: 12, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.12em" }}>
@@ -1151,8 +1428,8 @@ export default function Landing() {
         </div>
       </section>
 
-      {/* ── 11. NUMBERS & LIVE ONCHAIN STATS ── */}
-      <section style={{ padding: "54px 24px", borderTop: "1px solid var(--border)", borderBottom: "1px solid var(--border)", background: "var(--surface, #121a14)" }}>
+      {/* ── 12. NUMBERS & LIVE ONCHAIN STATS ── */}
+      <section style={{ padding: "54px 24px", borderTop: "1px solid var(--border)", borderBottom: "1px solid var(--border)", background: "#080c09" }}>
         <div style={{ maxWidth: 1200, margin: "0 auto", display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 24, textAlign: "center" }}>
           <div>
             <div style={{ fontSize: 38, fontWeight: 800, color: "var(--primary, #00e479)", fontFamily: "'Space Grotesk', monospace" }}>{stats.totalJobs}</div>
@@ -1173,11 +1450,11 @@ export default function Landing() {
         </div>
       </section>
 
-      {/* ── 12. CALL TO ACTION BANNER ── */}
-      <section style={{ padding: "90px 24px", textAlign: "center", background: "#080c09" }}>
+      {/* ── 13. CALL TO ACTION BANNER ── */}
+      <section style={{ padding: "90px 24px", textAlign: "center", background: "var(--surface, #121a14)" }}>
         <div style={{
           maxWidth: 920, margin: "0 auto", padding: "54px 32px", borderRadius: 16,
-          background: "var(--surface, #121a14)",
+          background: "#080c09",
           border: "1px solid var(--border)",
         }}>
           <h2 style={{ fontSize: "clamp(28px, 4vw, 42px)", fontWeight: 800, marginBottom: 14, letterSpacing: "-0.02em", color: "#fff" }}>
