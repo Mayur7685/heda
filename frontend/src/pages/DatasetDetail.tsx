@@ -37,10 +37,17 @@ export default function DatasetDetail() {
           registry.getDataset(Number(datasetId)).catch(() => null),
           registry.listDatasets().catch(() => []),
         ]);
-        if (fetchedDataset && fetchedDataset.publisher && fetchedDataset.publisher !== "0x0000000000000000000000000000000000000000") {
-          const match = Array.isArray(allDatasets) ? allDatasets.find((item: any) => Number(item.datasetId) === Number(datasetId)) : null;
+        const match = Array.isArray(allDatasets) ? allDatasets.find((item: any) => Number(item.datasetId) === Number(datasetId)) : null;
+        const rawPublisher = fetchedDataset?.publisher ?? match?.publisher ?? fetchedDataset?.[0];
+
+        if (rawPublisher && rawPublisher !== "0x0000000000000000000000000000000000000000") {
           d = {
-            ...fetchedDataset,
+            publisher: rawPublisher,
+            rootHash: fetchedDataset?.rootHash ?? match?.rootHash ?? fetchedDataset?.[1],
+            metadataURI: fetchedDataset?.metadataURI ?? match?.metadataURI ?? fetchedDataset?.[2],
+            price: fetchedDataset?.price ?? (match?.price ? ethers.parseEther(String(match.price)) : 0n),
+            dataType: Number(fetchedDataset?.dataType ?? match?.dataType ?? fetchedDataset?.[4] ?? 0),
+            sourceJobId: Number(fetchedDataset?.sourceJobId ?? match?.sourceJobId ?? fetchedDataset?.[5] ?? 0),
             txHash: match?.txHash || "",
           };
           setDataset(d);
@@ -92,52 +99,54 @@ export default function DatasetDetail() {
     }
 
     // Fetch real uploaded dataset content from 0G Storage Indexer / Cache
-    try {
-      const rawData = await fetchFrom0GStorage(d.rootHash, 3);
-      if (rawData && typeof rawData === "object") {
-        const cocoImages = rawData.images ?? [];
-        const cocoAnns = rawData.annotations ?? [];
-        const dataRoot = rawData.info?.data_root_hash ?? metadata?.dataRootHash;
+    if (d && d.rootHash) {
+      try {
+        const rawData = await fetchFrom0GStorage(d.rootHash, 3);
+        if (rawData && typeof rawData === "object") {
+          const cocoImages = rawData.images ?? [];
+          const cocoAnns = rawData.annotations ?? [];
+          const dataRoot = rawData.info?.data_root_hash ?? metadata?.dataRootHash;
 
-        let sourceFiles: any[] = [];
-        if (dataRoot) {
-          sourceFiles = await fetchFrom0GStorage(dataRoot, 3).catch(() => []);
-        }
+          let sourceFiles: any[] = [];
+          if (dataRoot) {
+            sourceFiles = await fetchFrom0GStorage(dataRoot, 3).catch(() => []);
+          }
 
-        const parsedSamples: any[] = [];
-        (cocoImages.length > 0 ? cocoImages.slice(0, 10) : sourceFiles.slice(0, 10)).forEach((imgObj: any, idx: number) => {
-          let imgUrl = imgObj.base64;
-          if (!imgUrl && sourceFiles[imgObj.id ?? idx]) {
-            const fileObj = sourceFiles[imgObj.id ?? idx];
-            if (fileObj?.data) {
+          const parsedSamples: any[] = [];
+          (cocoImages.length > 0 ? cocoImages.slice(0, 10) : sourceFiles.slice(0, 10)).forEach((imgObj: any, idx: number) => {
+            let imgUrl = imgObj.base64;
+            if (!imgUrl && sourceFiles[imgObj.id ?? idx]) {
+              const fileObj = sourceFiles[imgObj.id ?? idx];
+              if (fileObj?.data) {
+                imgUrl = fileObj.data.startsWith("data:") ? fileObj.data : `data:${fileObj.type || "image/jpeg"};base64,${fileObj.data}`;
+              }
+            }
+            if (!imgUrl && sourceFiles[idx]?.data) {
+              const fileObj = sourceFiles[idx];
               imgUrl = fileObj.data.startsWith("data:") ? fileObj.data : `data:${fileObj.type || "image/jpeg"};base64,${fileObj.data}`;
             }
-          }
-          if (!imgUrl && sourceFiles[idx]?.data) {
-            const fileObj = sourceFiles[idx];
-            imgUrl = fileObj.data.startsWith("data:") ? fileObj.data : `data:${fileObj.type || "image/jpeg"};base64,${fileObj.data}`;
-          }
-          if (!imgUrl && imgObj?.data) {
-            imgUrl = imgObj.data.startsWith("data:") ? imgObj.data : `data:${imgObj.type || "image/jpeg"};base64,${imgObj.data}`;
-          }
+            if (!imgUrl && imgObj?.data) {
+              imgUrl = imgObj.data.startsWith("data:") ? imgObj.data : `data:${imgObj.type || "image/jpeg"};base64,${imgObj.data}`;
+            }
 
-          const imgAnns = cocoAnns.filter((a: any) => a.image_id === imgObj.id || a.task_id === imgObj.id);
+            const imgAnns = cocoAnns.filter((a: any) => a.image_id === imgObj.id || a.task_id === imgObj.id);
 
-          if (imgUrl) {
-            parsedSamples.push({
-              name: imgObj.file_name ?? imgObj.name ?? `Image #${idx + 1}`,
-              url: imgUrl,
-              anns: imgAnns,
-            });
+            if (imgUrl) {
+              parsedSamples.push({
+                name: imgObj.file_name ?? imgObj.name ?? `Image #${idx + 1}`,
+                url: imgUrl,
+                anns: imgAnns,
+              });
+            }
+          });
+
+          if (parsedSamples.length > 0) {
+            setRealImages(parsedSamples);
           }
-        });
-
-        if (parsedSamples.length > 0) {
-          setRealImages(parsedSamples);
         }
+      } catch (e) {
+        console.warn("Could not load real dataset images:", e);
       }
-    } catch (e) {
-      console.warn("Could not load real dataset images:", e);
     }
   }
 
@@ -145,7 +154,8 @@ export default function DatasetDetail() {
     if (!registry || !dataset) return;
     setTxMsg("Purchasing…"); setTxErr(false);
     try {
-      const receipt = await registry.purchase(Number(datasetId), ethers.formatEther(dataset.price));
+      const priceEth = typeof dataset.price === "bigint" ? ethers.formatEther(dataset.price) : String(dataset.price || "0");
+      const receipt = await registry.purchase(Number(datasetId), priceEth);
       setTxMsg(`Purchased ✓ — ${GALILEO.explorer}/tx/${receipt.hash}`);
       setHasLicense(true);
     } catch (e: any) { setTxMsg(e.message); setTxErr(true); }
@@ -248,10 +258,27 @@ export default function DatasetDetail() {
     }
   }
 
-      if (!dataset) return <div className="page"><p className="hint">Loading…</p></div>;
+  if (!dataset) return <div className="page"><p className="hint">Loading…</p></div>;
 
-  const price = ethers.formatEther(dataset.price);
-  const isFree = dataset.price === 0n;
+  let price = "0";
+  let isFree = true;
+  try {
+    if (dataset.price !== null && dataset.price !== undefined) {
+      if (typeof dataset.price === "bigint") {
+        price = ethers.formatEther(dataset.price);
+        isFree = dataset.price === 0n;
+      } else if (typeof dataset.price === "string") {
+        price = dataset.price.includes(".") ? dataset.price : ethers.formatEther(dataset.price);
+        isFree = parseFloat(price) === 0;
+      } else if (typeof dataset.price === "number") {
+        price = String(dataset.price);
+        isFree = dataset.price === 0;
+      }
+    }
+  } catch {
+    price = "0";
+    isFree = true;
+  }
 
   return (
     <div className="page">
@@ -326,10 +353,10 @@ export default function DatasetDetail() {
               <tbody>
                 {[
                   ["Data Type", Number(dataset.dataType) === 0 ? "Image" : "Text"],
-                  ["Publisher Address", <span className="mono-tag">{dataset.publisher.slice(0, 10)}…{dataset.publisher.slice(-6)}</span>],
+                  ["Publisher Address", dataset.publisher ? <span className="mono-tag">{dataset.publisher.slice(0, 10)}…{dataset.publisher.slice(-6)}</span> : "—"],
                   metadata?.labels && ["Classes", <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>{metadata.labels.map((l: string) => <span key={l} className="badge badge-verified">{l}</span>)}</div>],
                   metadata?.taskCount && ["Total Images", `${metadata.taskCount} Images`],
-                  ["Root Hash", <span className="mono-tag" title={dataset.rootHash}>{dataset.rootHash.slice(0, 16)}…{dataset.rootHash.slice(-6)}</span>],
+                  ["Root Hash", dataset.rootHash ? <span className="mono-tag" title={dataset.rootHash}>{dataset.rootHash.slice(0, 16)}…{dataset.rootHash.slice(-6)}</span> : "—"],
                   dataset.sourceJobId > 0 && ["Source Job", `#${Number(dataset.sourceJobId)}`],
                 ].filter(Boolean).map(([k, v]: any) => (
                   <tr key={k}>
@@ -403,7 +430,7 @@ export default function DatasetDetail() {
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
               {[
-                ["Root Hash", dataset.rootHash.slice(0, 12) + "…"],
+                ["Root Hash", dataset.rootHash ? dataset.rootHash.slice(0, 12) + "…" : "—"],
                 ["Network", "0G Galileo Testnet"],
                 ["Protocol", "Heda v1.0"],
               ].map(([k, v]) => (
@@ -414,7 +441,7 @@ export default function DatasetDetail() {
               ))}
             </div>
             <a
-              href={dataset.txHash ? `${GALILEO.explorer}/tx/${dataset.txHash}` : `${GALILEO.explorer}/address/${dataset.publisher}`}
+              href={dataset.txHash ? `${GALILEO.explorer}/tx/${dataset.txHash}` : (dataset.publisher ? `${GALILEO.explorer}/address/${dataset.publisher}` : `${GALILEO.explorer}`)}
               target="_blank"
               rel="noreferrer"
               style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 16, color: "var(--primary)", fontSize: 13 }}
