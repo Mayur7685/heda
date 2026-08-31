@@ -371,9 +371,9 @@ export default function Models() {
                 </div>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                   <span>0G Storage Root:</span>
-                  <a href={`${GALILEO.storageExplorer}/file/${m.weightsRootHash}`} target="_blank" rel="noreferrer" style={{ color: "var(--primary)", textDecoration: "none" }}>
-                    {m.weightsRootHash.slice(0, 8)}…{m.weightsRootHash.slice(-6)} ↗
-                  </a>
+                  <span className="mono-tag" title={m.weightsRootHash} style={{ color: "var(--primary)" }}>
+                    {m.weightsRootHash.slice(0, 8)}…{m.weightsRootHash.slice(-6)}
+                  </span>
                 </div>
               </div>
 

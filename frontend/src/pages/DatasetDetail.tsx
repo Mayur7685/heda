@@ -33,8 +33,16 @@ export default function DatasetDetail() {
     let d: any = null;
     if (registry) {
       try {
-        d = await registry.getDataset(Number(datasetId));
-        if (d && d.publisher && d.publisher !== "0x0000000000000000000000000000000000000000") {
+        const [fetchedDataset, allDatasets] = await Promise.all([
+          registry.getDataset(Number(datasetId)).catch(() => null),
+          registry.listDatasets().catch(() => []),
+        ]);
+        if (fetchedDataset && fetchedDataset.publisher && fetchedDataset.publisher !== "0x0000000000000000000000000000000000000000") {
+          const match = Array.isArray(allDatasets) ? allDatasets.find((item: any) => Number(item.datasetId) === Number(datasetId)) : null;
+          d = {
+            ...fetchedDataset,
+            txHash: match?.txHash || "",
+          };
           setDataset(d);
           if (address) setHasLicense(await registry.hasLicense(Number(datasetId), address));
         } else {
@@ -321,7 +329,7 @@ export default function DatasetDetail() {
                   ["Publisher Address", <span className="mono-tag">{dataset.publisher.slice(0, 10)}…{dataset.publisher.slice(-6)}</span>],
                   metadata?.labels && ["Classes", <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>{metadata.labels.map((l: string) => <span key={l} className="badge badge-verified">{l}</span>)}</div>],
                   metadata?.taskCount && ["Total Images", `${metadata.taskCount} Images`],
-                  ["Root Hash", <a href={`${GALILEO.storageExplorer}/file/${dataset.rootHash}`} target="_blank" rel="noreferrer" style={{ fontFamily: "'Space Grotesk', monospace", fontSize: 12, color: "var(--primary)" }}>{dataset.rootHash.slice(0, 16)}…{dataset.rootHash.slice(-6)} ↗</a>],
+                  ["Root Hash", <span className="mono-tag" title={dataset.rootHash}>{dataset.rootHash.slice(0, 16)}…{dataset.rootHash.slice(-6)}</span>],
                   dataset.sourceJobId > 0 && ["Source Job", `#${Number(dataset.sourceJobId)}`],
                 ].filter(Boolean).map(([k, v]: any) => (
                   <tr key={k}>
@@ -405,8 +413,12 @@ export default function DatasetDetail() {
                 </div>
               ))}
             </div>
-            <a href={`${GALILEO.explorer}`} target="_blank" rel="noreferrer"
-              style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 16, color: "var(--primary)", fontSize: 13 }}>
+            <a
+              href={dataset.txHash ? `${GALILEO.explorer}/tx/${dataset.txHash}` : `${GALILEO.explorer}/address/${dataset.publisher}`}
+              target="_blank"
+              rel="noreferrer"
+              style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 16, color: "var(--primary)", fontSize: 13 }}
+            >
               View on 0G Explorer
               <span className="material-symbols-outlined" style={{ fontSize: 14 }}>open_in_new</span>
             </a>
