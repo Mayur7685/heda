@@ -4,9 +4,9 @@ The Heda backend is divided into two cleanly isolated, modular microservices:
 
 ---
 
-## 1. 🟢 `relayer/` — Node.js 0G Storage Upload Service (Port 3001)
-- **Role**: Handles 0G Storage SDK (`@0gfoundation/0g-ts-sdk`) Merkle tree generation and contract relayer uploads.
-- **Stack**: Node.js 20, Express, Ethers.js v6.
+## 1. 🟢 `relayer/` — Node.js Relayer & SQLite Indexers (Port 3001)
+- **Role**: Handles 0G Storage SDK uploads, Event Indexer (jobs/datasets/models), and Annotation Indexer with automated Moondream IoU quality evaluation and onchain reward settlement.
+- **Stack**: Node.js 20, Express, Ethers.js v6, Better-SQLite3.
 - **Run Locally**:
   ```bash
   cd relayer
@@ -16,18 +16,18 @@ The Heda backend is divided into two cleanly isolated, modular microservices:
 
 ---
 
-## 2. 🐍 `ai-service/` — Python Machine Learning Service (Port 8000)
-- **Role**: Downloads datasets from 0G Storage, prepares YOLO structure, trains PyTorch YOLOv8 models (CUDA / Apple Metal MPS / CPU), and posts trained weight hashes back to 0G Storage.
-- **Stack**: Python 3.11, FastAPI, Uvicorn, PyTorch, Ultralytics.
+## 2. 🐍 `ai-service/` — Python ML & Fine-Tuning Service (Port 8000 & 2020)
+- **Role**: Ingests 0G Storage datasets, trains PyTorch YOLO (v8, v11, RT-DETR) models with hardware acceleration (Apple Silicon MPS / CUDA), executes live `/predict` inference, and serves local Moondream 2 VLM (`moondream_server.py`).
+- **Stack**: Python 3.11+, FastAPI, Uvicorn, PyTorch, Ultralytics, Moondream.
 - **Run Locally**:
   ```bash
   cd ai-service
-  bash setup_env.sh
-  python main.py
+  ./setup_env.sh
+  python3 main.py
   ```
 - **Automated Tests**:
   ```bash
-  python test_trainer.py
+  pytest test_iou.py -v
   ```
 
 ---

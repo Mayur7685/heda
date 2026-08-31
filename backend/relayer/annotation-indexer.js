@@ -25,8 +25,8 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 // ── Config ────────────────────────────────────────────────────────────────────
 const GALILEO_RPC       = process.env.GALILEO_RPC       || 'https://evmrpc-testnet.0g.ai';
 const STORAGE_INDEXER   = process.env.STORAGE_INDEXER   || 'https://indexer-storage-testnet-turbo.0g.ai';
-const MARKET_V2_ADDRESS = process.env.VITE_MARKET_V2_ADDRESS || process.env.MARKET_V2_ADDRESS || '0xCBbb84EB5740630B4654Fbf963a503d86E67b939';
-const RELAYER_PRIVKEY   = process.env.PRIVATE_KEY        || '0x3d20b42d0ec55312d082c53a9fb1635a374051c976f8bd76f016b4781b438653';
+const MARKET_V2_ADDRESS = process.env.VITE_MARKET_V2_ADDRESS || process.env.MARKET_V2_ADDRESS || '0x91D36c08C323e9e7C3Fb77D4802E152277f73fFe';
+const RELAYER_PRIVKEY   = process.env.PRIVATE_KEY || '';
 
 const POLL_INTERVAL_MS  = 10_000;   // 10 seconds
 const EVAL_TIMEOUT_MS   = 24 * 60 * 60 * 1000;  // 24 hours

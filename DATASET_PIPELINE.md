@@ -38,10 +38,11 @@ This document provides a comprehensive technical breakdown of how **Heda Protoco
 - **Class Prompting**: Moondream scans each image for target object classes (e.g. `hardhat`, `worker`, `vehicle`).
 - **Normalized Outputs**: Moondream returns normalized bounding box coordinates (`x_min`, `y_min`, `x_max`, `y_max`) between `0.0` and `100.0`.
 
-### Step 3: Interactive Workspace & Non-Maximum Suppression (NMS)
+### Step 3: Interactive Review & Dynamic Golden-Angle Color Assignments
+- **Dynamic Golden-Angle Palette**: Rather than hardcoding class name keywords, Heda Protocol assigns class hues using a deterministic Golden Angle rotation ($\theta = (140^\circ + i \times 137.508^\circ) \pmod{360^\circ}$). This guarantees that whatever vision classes a user defines (*drones, microchips, crops, cattle, vehicles*), each class receives a distinct, non-overlapping, high-contrast color across the canvas and thumbnails.
 - **IoU Deduplication**: To eliminate overlapping duplicate boxes, a Non-Maximum Suppression algorithm (`deduplicateBoxes`, IoU threshold `0.35`) runs on both client and backend, keeping only the most confident bounding box per object.
 - **Aspect Ratio Coordinate Scaling**: Bounding box coordinates are mapped onto a unified reference canvas (`canvasW = 820`, `canvasH = (height / width) * 820`).
-- **Visual Verification**: SVG overlays render green bounding boxes and class label badges directly over images in real time.
+- **Visual Verification**: SVG and Konva overlays render colored bounding boxes and class label badges directly over images in real time.
 
 ### Step 4: 0G Storage Decentralized Dataset Pinning
 - **Complete Data Payload**: Unlike basic metadata-only systems, Heda Protocol embeds **both** bounding box annotations **and** the full base64 image data into the dataset JSON object:
@@ -94,9 +95,14 @@ This document provides a comprehensive technical breakdown of how **Heda Protoco
 - **Real-Time Telemetry HUD**: Streams live progress bars, metrics grid (mAP@50, Precision, Box Loss, Cls Loss), and log timeline events (`[EPOCH]`, `[HARDWARE]`, `[0G DATA]`).
 - **Artifact Output**: Exports fine-tuned PyTorch model weights (`best.pt`) and evaluation metrics.
 
-### Step 7: Onchain Model Registry & Live Inference
-- **Onchain Publishing**: Model weights and evaluation metrics are registered on `ModelRegistry.sol` on 0G Galileo Testnet with `sourceDatasetName` metadata linking back to `/datasets/:id`.
-- **Sub-15ms Live Testing**: Developers can test trained models live in the browser (`/models` -> **Test Model**). Uploaded images are passed to `http://localhost:8000/predict`, returning custom bounding box detections with sub-15ms latency.
+### Step 7: Interactive Test Sandbox & Live Model Inference
+- **Parameter-Driven Testing**: Users can test their fine-tuned model inside the **RapidCV Test Sandbox** before deploying. The sandbox provides live hyperparameter controls:
+  - **Confidence Threshold Slider** (`10% - 95%`): Filters predictions by model certainty.
+  - **NMS IoU Threshold Slider** (`10% - 90%`): Suppresses redundant overlapping bounding boxes.
+  - **Inference Hardware Selector**: Choose between `0G Private Computer (CUDA GPU)`, `0G Edge Runtime (ONNX)`, or `Local PyTorch CPU`.
+  - **Max Detections Limit**: Preset detection caps (`25`, `50`, `100`, `300`).
+- **Explicit Execution**: Separates test image upload from inference execution via a dedicated **⚡ Run Model Inference** action with sub-15ms execution latency.
+- **Onchain Publishing & SDK Export**: Model weights are registered on `ModelRegistry.sol` on 0G Galileo Testnet. Developers can export drop-in SDK integration snippets in Python, cURL, JavaScript, and React.
 
 ---
 

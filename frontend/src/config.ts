@@ -9,18 +9,18 @@ export const GALILEO = {
   storageExplorer: "https://storagescan-galileo.0g.ai",
   faucet: "https://faucet.0g.ai",
   contracts: {
-    annotationMarketV2: "0xCBbb84EB5740630B4654Fbf963a503d86E67b939",
-    datasetRegistry:    "0x63988395140a19662B3C1dC13B0B64286B0c7cc5",
-    modelRegistry:      "0xffc1A5A9a1bE52027142686079d8A78D9dBF4987",
-    pipelineSubscription: "0x313BC8CA6b0aa5258b612715a3fda3e70C007260",
+    annotationMarketV2: "0x91D36c08C323e9e7C3Fb77D4802E152277f73fFe",
+    datasetRegistry:    "0xb026c66388EaF015198b242E5c6ca00aF36A6E26",
+    modelRegistry:      "0x6aD6537618dD2bF3B9cAe585E485Ff216AAb1c0C",
+    pipelineSubscription: "0x3EE57E207D6A826f05b57101dcbA002fC1fCE6D1",
   },
 } as const;
 
 export const CONTRACTS = {
-  MARKET_V2:  "0xCBbb84EB5740630B4654Fbf963a503d86E67b939" as `0x${string}`,
-  DATASET_REGISTRY: "0x63988395140a19662B3C1dC13B0B64286B0c7cc5" as `0x${string}`,
-  MODEL_REGISTRY:   "0xffc1A5A9a1bE52027142686079d8A78D9dBF4987" as `0x${string}`,
-  SUBSCRIPTION:     "0x313BC8CA6b0aa5258b612715a3fda3e70C007260" as `0x${string}`,
+  MARKET_V2:  "0x91D36c08C323e9e7C3Fb77D4802E152277f73fFe" as `0x${string}`,
+  DATASET_REGISTRY: "0xb026c66388EaF015198b242E5c6ca00aF36A6E26" as `0x${string}`,
+  MODEL_REGISTRY:   "0x6aD6537618dD2bF3B9cAe585E485Ff216AAb1c0C" as `0x${string}`,
+  SUBSCRIPTION:     "0x3EE57E207D6A826f05b57101dcbA002fC1fCE6D1" as `0x${string}`,
 };
 
 export const COMPUTE_ROUTER = "https://router-api-testnet.integratenetwork.work/v1";

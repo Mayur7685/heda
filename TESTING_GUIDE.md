@@ -6,7 +6,7 @@ This testing guide provides step-by-step instructions for testing every feature 
 
 ## 💻 Step 0: Terminal Startup Commands for Local Testing
 
-Open 4 terminal windows to launch all sub-services locally:
+Open 3 or 4 terminal windows to launch the services:
 
 ### Terminal 1 — Frontend Web Application (Port 5173)
 ```bash
@@ -16,34 +16,37 @@ npm run dev
 ```
 *App will run at `http://localhost:5173`*
 
-### Terminal 2 — Node.js, SQLite Relayer Indexer & Annotation Indexer (Port 3001)
+### Terminal 2 — Node.js Relayer & SQLite Indexers (Port 3001)
 ```bash
 cd backend/relayer
 npm install
 npm start
 ```
-*Relayer + Event Indexer + Annotation Indexer will run at `http://localhost:3001`*
+*Relayer + Event Indexer + Annotation Indexer (with Moondream Cloud evaluation) will run at `http://localhost:3001`*
 
-### Terminal 3 — Local Moondream 2 VLM Server (Port 2020)
+### Terminal 3 — PyTorch YOLO Fine-Tuning & Inference Service (Port 8000)
 ```bash
 cd backend/ai-service
-python3 -m pip install -r requirements.txt --break-system-packages
-python3 moondream_server.py
-```
-*Dedicated VLM Server will load model onto GPU & run at `http://localhost:2020`*
-
-### Terminal 4 — PyTorch YOLO Fine-Tuning & Inference Service (Port 8000)
-```bash
-cd backend/ai-service
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
 python3 main.py
 ```
 *Main AI Microservice will run at `http://localhost:8000`*
+
+### Terminal 4 (Optional) — Local Moondream 2 VLM Server (Port 2020)
+```bash
+cd backend/ai-service
+source .venv/bin/activate
+python3 moondream_server.py
+```
+*Optional local GPU VLM server for offline auto-labeling at `http://localhost:2020`*
 
 ---
 
 ## 💻 CLI Verification & Test Commands
 
-You can also run these direct terminal commands to verify each subsystem:
+You can run these direct terminal commands to verify each subsystem:
 
 ### 1. Smart Contract Unit Tests (Foundry)
 ```bash
@@ -66,38 +69,28 @@ curl http://localhost:3001/annotations/leaderboard
 ```
 *Expected Output: `{ "leaderboard": [...] }` with top annotators by avg IoU score*
 
-### 4. Local Moondream 2 VLM Bounding Box Detection Test
+### 4. AI Microservice Health & Hardware Acceleration Check
+```bash
+curl http://localhost:8000/
+```
+*Expected Output: `{"message": "Heda AI Microservice Running", "hardware": ...}`*
+
+### 5. IoU & Model Trainer Python Unit Tests
+```bash
+cd backend/ai-service
+source .venv/bin/activate
+python3 -m pytest test_iou.py -v
+python3 -m unittest test_trainer.py
+```
+*Expected Output: `15 passed, 0 failed` & `Ran 2 tests in 0.001s OK`*
+
+### 6. Local Moondream 2 VLM Bounding Box Detection (If running local server)
 ```bash
 curl -X POST http://localhost:2020/v1/detect \
   -H "Content-Type: application/json" \
   -d '{"image_url": "https://raw.githubusercontent.com/ultralytics/yolov5/master/data/images/zidane.jpg", "object": "person"}'
 ```
 *Expected Output: JSON containing detected bounding box coordinates `[x_min, y_min, x_max, y_max]`*
-
-### 5. IoU Annotation Score Endpoint
-```bash
-curl -X POST http://localhost:8000/annotation/score \
-  -H "Content-Type: application/json" \
-  -d '{
-    "image_data": "<base64_image>",
-    "labels": ["person"],
-    "submitted_boxes": [{"label": "person", "x_min": 0.1, "y_min": 0.1, "x_max": 0.5, "y_max": 0.9}]
-  }'
-```
-*Expected Output: `{ "iou_score": 0.82, "mean_iou": 0.82, "ground_truth_count": 1 }`*
-
-### 6. IoU Python Unit Tests
-```bash
-cd backend/ai-service
-python3 -m pytest test_iou.py -v
-```
-*Expected Output: `15 passed, 0 failed`*
-
-### 7. AI Microservice Health Check
-```bash
-curl http://localhost:8000/
-```
-*Expected Output: `{"message": "Heda AI Microservice Running"}`*
 
 ---
 
@@ -206,39 +199,55 @@ curl http://localhost:3001/annotations/leaderboard
 
 | Contract Name | Deployed Galileo Address | Explorer Link |
 | :--- | :--- | :--- |
-| **`AnnotationMarketV2`** ⭐ | `0xCBbb84EB5740630B4654Fbf963a503d86E67b939` | [View on 0G Explorer](https://chainscan-galileo.0g.ai/address/0xCBbb84EB5740630B4654Fbf963a503d86E67b939) |
-| **`DatasetRegistry`** | `0x63988395140a19662B3C1dC13B0B64286B0c7cc5` | [View on 0G Explorer](https://chainscan-galileo.0g.ai/address/0x63988395140a19662B3C1dC13B0B64286B0c7cc5) |
-| **`ModelRegistry`** | `0xffc1A5A9a1bE52027142686079d8A78D9dBF4987` | [View on 0G Explorer](https://chainscan-galileo.0g.ai/address/0xffc1A5A9a1bE52027142686079d8A78D9dBF4987) |
-| **`PipelineSubscription`** | `0x313BC8CA6b0aa5258b612715a3fda3e70C007260` | [View on 0G Explorer](https://chainscan-galileo.0g.ai/address/0x313BC8CA6b0aa5258b612715a3fda3e70C007260) |
+| **`AnnotationMarketV2`** ⭐ | `0x91D36c08C323e9e7C3Fb77D4802E152277f73fFe` | [View on 0G Explorer](https://chainscan-galileo.0g.ai/address/0x91D36c08C323e9e7C3Fb77D4802E152277f73fFe) |
+| **`DatasetRegistry`** | `0xb026c66388EaF015198b242E5c6ca00aF36A6E26` | [View on 0G Explorer](https://chainscan-galileo.0g.ai/address/0xb026c66388EaF015198b242E5c6ca00aF36A6E26) |
+| **`ModelRegistry`** | `0x6aD6537618dD2bF3B9cAe585E485Ff216AAb1c0C` | [View on 0G Explorer](https://chainscan-galileo.0g.ai/address/0x6aD6537618dD2bF3B9cAe585E485Ff216AAb1c0C) |
+| **`PipelineSubscription`** | `0x3EE57E207D6A826f05b57101dcbA002fC1fCE6D1` | [View on 0G Explorer](https://chainscan-galileo.0g.ai/address/0x3EE57E207D6A826f05b57101dcbA002fC1fCE6D1) |
 
 ---
 
-## 🤖 Step 6: Fine-Tune PyTorch YOLO Model
+## 🤖 Step 6: RapidCV Studio (8-Stage Autonomous AI Pipeline)
 
-1. On the Dataset detail page or **Rapid CV Studio** (`http://localhost:5173/rapid-cv`), click **Start YOLO Fine-Tuning**.
-2. **MetaMask Onchain Transaction Signature Prompt**:
-   - Prompts you to confirm 1 Training Credit deduction onchain (`PipelineSubscription.sol.consumeTrainingQuota`).
-   - If confirmed, credit is deducted on 0G Galileo Testnet and PyTorch training starts!
-3. **Live Visual Telemetry Dashboard**:
-   - **Progress Fill Bar**: Animates `Epoch X of Y (XX%)`.
-   - **Metrics HUD Grid**: Live mAP@50, Precision, Box Loss, and Cls Loss pills.
-   - **Live Event Stream**: Streaming badges for `[HARDWARE]` (⚡ Apple Metal MPS), `[0G DATA]`, `[YOLO SETUP]`, and `[EPOCH]`.
-4. **Publish Model to Universe**:
-   - When training completes, click **Publish Model to Model Universe**.
-   - Model weights `.pt` are uploaded to 0G Storage and registered onchain.
+Navigate to **Rapid CV Studio** (`http://localhost:5173/rapid-cv` or `/pipeline`):
+
+1. **Stage 1 (Concept & Task Selection)**:
+   - Select a sample domain (e.g. *PPE Safety Equipment*, *Drone Inspection*, *Traffic Camera*, *Manufacturing Flaws*).
+   - Enter your target vision classes (e.g. `hardhat`, `safety vest`).
+2. **Stage 2 & 3 (Zero-Shot VLM Auto-Labeling)**:
+   - Upload sample images. Moondream VLM auto-detects bounding boxes and labels each class with sub-second latency.
+3. **Stage 4 (Multi-Class Review & Edit)**:
+   - Inspect the detected bounding boxes. Notice each class receives a unique, high-contrast color dynamically computed via the **Golden Angle ($137.5^\circ$) spectrum distribution**.
+   - Use the interactive Konva canvas editor to add or adjust boxes.
+4. **Stage 5 (Augmentations & 0G Storage Pinning)**:
+   - Select image augmentations (Flip, Rotate, Brightness, Mosaic) and click **Publish Dataset to 0G Storage**.
+   - Generates an immutable 0G Merkle root hash and registers the dataset on `DatasetRegistry.sol`.
+5. **Stage 6 (PyTorch GPU Fine-Tuning)**:
+   - Select architecture (**YOLOv8**, **YOLOv11**, or **RT-DETR**) and click **Start Fine-Tuning**.
+   - Prompts onchain MetaMask signature to deduct 1 training quota credit (`PipelineSubscription.sol`).
+   - Watch live **HUD Telemetry** stream real-time epochs, mAP@50, box loss, and classification loss.
+6. **Stage 7 (Interactive Test Sandbox)**:
+   - Upload or select a test image.
+   - Adjust hyperparameter controls in real-time:
+     - **Confidence Threshold Slider** (`10% - 95%`)
+     - **NMS IoU Overlap Suppression Slider** (`10% - 90%`)
+     - **Hardware Engine Selector** (0G Private Compute CUDA / ONNX Edge / CPU)
+     - **Max Detections Limit** (`25`, `50`, `100`, `300`)
+   - Click **⚡ Run Model Inference** to execute detections and inspect raw JSON outputs.
+7. **Stage 8 (0G Edge Deploy & Code Export)**:
+   - Click **Publish Model to 0G Testnet** to register model weights on `ModelRegistry.sol`.
+   - Copy developer integration snippets in **Python**, **cURL**, **JavaScript**, and **React**.
 
 ---
 
-## ⚡ Step 7: Live Model Testing & Weights Downloading
+## ⚡ Step 7: Live Model Universe & Weights Downloading
 
 1. Navigate to **Model Universe** (`http://localhost:5173/models`).
 2. Every model card displays:
    - **Source Dataset Badge & Link**: e.g., `🗄️ dataset of hardhat (#40)` linking straight to `/datasets/:id`.
    - **Download Weights (.pt)**: Decodes base64 model binary and saves as `<model_name>.pt`.
 3. Click **Test Model (Live Inference)** on your trained YOLO model.
-4. Upload any test image from your computer.
-5. Click **Run Live Inference**.
-6. **Expected Result**: Clean green bounding box overlays render on your test image with realtime detection latency (`<15ms`).
+4. Upload any test image from your computer and click **Run Live Inference**.
+5. **Expected Result**: Clean bounding box overlays render on your test image with realtime detection latency (`<15ms`).
 
 ---
 

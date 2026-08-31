@@ -3222,9 +3222,9 @@ export default function RapidCVPipeline() {
 
             {/* Smart Contract Provenance Footer */}
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 11, color: "var(--text-3)", borderTop: "1px solid var(--border)", paddingTop: 14 }}>
-              <span>Contract: <code>0x313B…7260</code></span>
+              <span>Contract: <code>0x3EE5…E6D1</code></span>
               <a
-                href="https://chainscan-galileo.0g.ai/address/0x313BC8CA6b0aa5258b612715a3fda3e70C007260"
+                href="https://chainscan-galileo.0g.ai/address/0x3EE57E207D6A826f05b57101dcbA002fC1fCE6D1"
                 target="_blank"
                 rel="noreferrer"
                 style={{ color: "var(--primary)", display: "flex", alignItems: "center", gap: 3, textDecoration: "none" }}

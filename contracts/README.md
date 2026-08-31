@@ -8,10 +8,10 @@ Solidity smart contracts deployed on **0G Galileo Testnet** (Chain ID `16602`) m
 
 | Contract | Address | Explorer |
 | :--- | :--- | :--- |
-| **`AnnotationMarketV2`** ⭐ | `0xCBbb84EB5740630B4654Fbf963a503d86E67b939` | [View Address](https://chainscan-galileo.0g.ai/address/0xCBbb84EB5740630B4654Fbf963a503d86E67b939) |
-| **`DatasetRegistry`** | `0x63988395140a19662B3C1dC13B0B64286B0c7cc5` | [View Address](https://chainscan-galileo.0g.ai/address/0x63988395140a19662B3C1dC13B0B64286B0c7cc5) |
-| **`ModelRegistry`** | `0xffc1A5A9a1bE52027142686079d8A78D9dBF4987` | [View Address](https://chainscan-galileo.0g.ai/address/0xffc1A5A9a1bE52027142686079d8A78D9dBF4987) |
-| **`PipelineSubscription`** | `0x313BC8CA6b0aa5258b612715a3fda3e70C007260` | [View Address](https://chainscan-galileo.0g.ai/address/0x313BC8CA6b0aa5258b612715a3fda3e70C007260) |
+| **`AnnotationMarketV2`** ⭐ | `0x91D36c08C323e9e7C3Fb77D4802E152277f73fFe` | [View Address](https://chainscan-galileo.0g.ai/address/0x91D36c08C323e9e7C3Fb77D4802E152277f73fFe) |
+| **`DatasetRegistry`** | `0xb026c66388EaF015198b242E5c6ca00aF36A6E26` | [View Address](https://chainscan-galileo.0g.ai/address/0xb026c66388EaF015198b242E5c6ca00aF36A6E26) |
+| **`ModelRegistry`** | `0x6aD6537618dD2bF3B9cAe585E485Ff216AAb1c0C` | [View Address](https://chainscan-galileo.0g.ai/address/0x6aD6537618dD2bF3B9cAe585E485Ff216AAb1c0C) |
+| **`PipelineSubscription`** | `0x3EE57E207D6A826f05b57101dcbA002fC1fCE6D1` | [View Address](https://chainscan-galileo.0g.ai/address/0x3EE57E207D6A826f05b57101dcbA002fC1fCE6D1) |
 
 ---
 

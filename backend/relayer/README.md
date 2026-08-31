@@ -30,32 +30,37 @@ Node.js Express microservice with two SQLite WAL indexers:
 ## 🔄 Annotation IoU Pipeline (Auto Flow)
 
 ```
-WorkSubmitted event detected
+WorkSubmitted event detected onchain
          │
          ▼
-  Check if task slots full
-  or EvaluationTriggered fired
+  Check if task slots full (e.g. 5/5)
+  or EvaluationTriggered fired by creator
          │
          ▼
-  Fetch image from 0G Storage
+  Fetch task image from 0G Storage
          │
          ▼
-  POST /annotation/score (AI service)
-  Moondream detects ground truth boxes
-  compute_iou() scores each submission
+  Direct Moondream Cloud API (/v1/detect)
+  (Fallback to local GPU VLM on port 2020)
+  Ground-truth detection boxes retrieved
+         │
+         ▼
+  computeMeanBestMatchIoU() scores each submission
+  (Submissions < 0.30 IoU receive 0 BPS)
          │
          ▼
   computeSharesBps() → proportional
   reward shares (sum exactly 10000 BPS)
          │
          ▼
-  distributeRewards() on-chain
-  ETH sent proportionally to annotators
+  AnnotationMarketV2.distributeRewards()
+  Onchain settlement → 0G ETH sent proportionally
 ```
 
-**IoU Thresholds:**
-- `MIN_IOU = 0.30` — submissions below this get 0 BPS (no reward).
-- Submissions above threshold share rewards proportionally to their IoU score.
+**IoU Thresholds & Distribution:**
+- `MIN_IOU_THRESHOLD = 0.30` — submissions below 30% mean IoU receive 0 reward.
+- Submissions above threshold share rewards in exact proportion to their IoU quality score.
+- Includes exact residue handling so sum of BPS shares equals exactly `10000`.
 
 ---
 

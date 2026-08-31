@@ -47,19 +47,19 @@ python3 main.py
 
 ## 🧪 Running Automated Tests
 
-Run the automated test suite to verify 0G dataset fetching, YOLO directory formatting, and PyTorch model weight exports:
+Run the automated test suite to verify 0G dataset fetching, YOLO directory formatting, IoU calculations, and PyTorch model weight exports:
 
 ```bash
-python3 heda/backend/ai-service/test_trainer.py
+cd heda/backend/ai-service
+python3 -m unittest test_trainer.py
+python3 -m pytest test_iou.py -v
 ```
 
 Expected Output:
 ```
-..
-----------------------------------------------------------------------
 Ran 2 tests in 0.001s
-
 OK
+15 passed, 0 failed
 ```
 
 ---

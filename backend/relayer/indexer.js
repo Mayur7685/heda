@@ -4,9 +4,9 @@ import path from 'path';
 
 const GALILEO_RPC = process.env.GALILEO_RPC || 'https://evmrpc-testnet.0g.ai';
 
-const ANNOTATION_MARKET_V2_ADDR = ethers.getAddress((process.env.VITE_MARKET_V2_ADDRESS || '0xCBbb84EB5740630B4654Fbf963a503d86E67b939').toLowerCase());
-const DATASET_REGISTRY_ADDR     = ethers.getAddress((process.env.VITE_DATASET_REGISTRY_ADDRESS || '0x63988395140a19662B3C1dC13B0B64286B0c7cc5').toLowerCase());
-const MODEL_REGISTRY_ADDR       = ethers.getAddress((process.env.VITE_MODEL_REGISTRY_ADDRESS || '0xffc1A5A9a1bE52027142686079d8A78D9dBF4987').toLowerCase());
+const ANNOTATION_MARKET_V2_ADDR = ethers.getAddress((process.env.VITE_MARKET_V2_ADDRESS || '0x91D36c08C323e9e7C3Fb77D4802E152277f73fFe').toLowerCase());
+const DATASET_REGISTRY_ADDR     = ethers.getAddress((process.env.VITE_DATASET_REGISTRY_ADDRESS || '0xb026c66388EaF015198b242E5c6ca00aF36A6E26').toLowerCase());
+const MODEL_REGISTRY_ADDR       = ethers.getAddress((process.env.VITE_MODEL_REGISTRY_ADDRESS || '0x6aD6537618dD2bF3B9cAe585E485Ff216AAb1c0C').toLowerCase());
 
 // Minimal ABIs for event indexing
 
