@@ -7,6 +7,7 @@ import { useDatasetRegistry } from "../hooks/useDatasetRegistry";
 import { useModelRegistry } from "../hooks/useModelRegistry";
 import { usePipelineSubscription } from "../hooks/usePipelineSubscription";
 import { uploadJson, fetchFrom0GStorage } from "../hooks/useStorage";
+import DatasetCreationModal from "../components/DatasetCreationModal";
 
 interface ChatMessage {
   sender: "ai" | "user";
@@ -2680,6 +2681,14 @@ export default function RapidCVPipeline() {
           </div>
         </div>
       )}
+
+      {/* Animated Dataset Creation Loading Modal */}
+      <DatasetCreationModal
+        isOpen={datasetUploading0G}
+        currentStep="Compiling approved images and YOLO label annotations into 0G dataset package…"
+        subStatus="Pinning Merkle tree archive & registering on 0G Storage…"
+        dataType="image"
+      />
       </div>
     </div>
   );

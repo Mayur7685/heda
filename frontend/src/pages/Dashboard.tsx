@@ -5,6 +5,7 @@ import { useDatasetRegistry } from "../hooks/useDatasetRegistry";
 import { uploadJson, uploadBlob, fetchFrom0GStorage } from "../hooks/useStorage";
 import { GALILEO } from "../config";
 import DatasetHealthCard from "../components/DatasetHealthCard";
+import DatasetCreationModal from "../components/DatasetCreationModal";
 
 
 type JobRow = { jobId: number; dataRootHash: string; rewardPerTask: string; taskCount: number; approvedCount: number; active: boolean; dataType: number };
@@ -1059,6 +1060,14 @@ export default function Dashboard() {
           </>
         )}
       </section>
+
+      {/* Animated Dataset Creation Loading Modal */}
+      <DatasetCreationModal
+        isOpen={pubBusy}
+        currentStep={txMsg || "Compiling images & annotations into dataset package…"}
+        subStatus="Packing dataset archive & pinning to 0G Storage…"
+        dataType={selected?.dataType === 1 ? "text" : "image"}
+      />
     </div>
   );
 }
