@@ -25,7 +25,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 // ── Config ────────────────────────────────────────────────────────────────────
 const GALILEO_RPC       = process.env.GALILEO_RPC       || 'https://evmrpc-testnet.0g.ai';
 const STORAGE_INDEXER   = process.env.STORAGE_INDEXER   || 'https://indexer-storage-testnet-turbo.0g.ai';
-const MARKET_V2_ADDRESS = process.env.VITE_MARKET_V2_ADDRESS || process.env.MARKET_V2_ADDRESS || '0x91D36c08C323e9e7C3Fb77D4802E152277f73fFe';
+const MARKET_V2_ADDRESS = process.env.VITE_MARKET_V2_ADDRESS || process.env.MARKET_V2_ADDRESS || '0xA93b5bB49Ef86ceB8Cb06d06e984bAaf25683Ff0';
 const RELAYER_PRIVKEY   = process.env.PRIVATE_KEY || '';
 
 const POLL_INTERVAL_MS  = 10_000;   // 10 seconds

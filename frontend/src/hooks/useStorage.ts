@@ -110,14 +110,24 @@ export function cache0GData(rootHash: string, data: any) {
   setToIndexedDB(normHash, data);
   setToIndexedDB(rawHash, data);
 
-  // 3. LocalStorage fallback for small metadata
+  // 3. LocalStorage fallback ONLY for tiny metadata (< 50 KB)
   try {
     const strData = typeof data === "string" ? data : JSON.stringify(data);
-    if (strData.length < 3_000_000) {
+    if (strData.length < 50_000) {
       localStorage.setItem(`0g_cache_${normHash}`, strData);
       localStorage.setItem(`0g_cache_${rawHash}`, strData);
     }
-  } catch { /* ignore localStorage quota limits */ }
+  } catch {
+    // If quota exceeded, clear old 0g_cache entries to free space
+    try {
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key && key.startsWith("0g_cache_")) {
+          localStorage.removeItem(key);
+        }
+      }
+    } catch {}
+  }
 }
 
 export async function fetchFrom0GStorage<T = any>(rootHash: string, maxRetries = 5): Promise<T> {

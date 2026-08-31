@@ -15,6 +15,37 @@ type Annotation = BBox | Polygon;
 const CANVAS_W = 680;
 const uid = () => Math.random().toString(36).slice(2, 8);
 
+function safeStorageSet(key: string, value: string) {
+  try {
+    localStorage.setItem(key, value);
+  } catch {
+    try {
+      // Purge stale 0g cache and draft entries to free quota
+      for (let i = localStorage.length - 1; i >= 0; i--) {
+        const k = localStorage.key(i);
+        if (k && (k.startsWith("0g_cache_") || (k.startsWith("draft-") && !k.includes(key)))) {
+          localStorage.removeItem(k);
+        }
+      }
+      localStorage.setItem(key, value);
+    } catch {}
+  }
+}
+
+function safeStorageGet(key: string): string | null {
+  try {
+    return localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+
+function safeStorageRemove(key: string) {
+  try {
+    localStorage.removeItem(key);
+  } catch {}
+}
+
 // ── Image Annotation Workspace ───────────────────────────────────────────────
 
 function ImageWorkspace({
@@ -59,7 +90,7 @@ function ImageWorkspace({
     if (savedAnnotations && Array.isArray(savedAnnotations)) {
       setAnnotations(savedAnnotations);
     } else {
-      const saved = localStorage.getItem(`draft-${jobId}-${taskId}`);
+      const saved = safeStorageGet(`draft-${jobId}-${taskId}`);
       setAnnotations(saved ? JSON.parse(saved) : []);
     }
     setSelectedId(null);
@@ -79,7 +110,7 @@ function ImageWorkspace({
   // Save draft on every change — ONLY for current active task
   useEffect(() => {
     if (currentTaskIdRef.current === taskId) {
-      localStorage.setItem(`draft-${jobId}-${taskId}`, JSON.stringify(annotations));
+      safeStorageSet(`draft-${jobId}-${taskId}`, JSON.stringify(annotations));
     }
   }, [annotations, jobId, taskId]);
 
@@ -422,11 +453,11 @@ function TextWorkspace({
   onSubmit: (result: { label: string }) => void;
   onNext: () => void; onPrev: () => void;
 }) {
-  const saved = localStorage.getItem(`draft-text-${jobId}-${taskId}`);
+  const saved = safeStorageGet(`draft-text-${jobId}-${taskId}`);
   const [selected, setSelected] = useState(saved ?? labels[0] ?? "");
 
   useEffect(() => {
-    localStorage.setItem(`draft-text-${jobId}-${taskId}`, selected);
+    safeStorageSet(`draft-text-${jobId}-${taskId}`, selected);
   }, [selected, jobId, taskId]);
 
   return (
@@ -581,7 +612,7 @@ export default function Workspace() {
   function handleSaveAndNext(annotation: Annotation[] | { label: string }) {
     const updatedDrafts = { ...draftAnnotations, [taskId]: annotation };
     setDraftAnnotations(updatedDrafts);
-    localStorage.setItem(`draft-${jobId}-${taskId}`, JSON.stringify(annotation));
+    safeStorageSet(`draft-${jobId}-${taskId}`, JSON.stringify(annotation));
     if (taskId < totalTasks - 1) {
       goToTask(taskId + 1);
     } else {
@@ -644,8 +675,8 @@ export default function Workspace() {
 
       // Clear all drafts & upload cache
       annotatedIds.forEach((tid) => {
-        localStorage.removeItem(`draft-${jobId}-${tid}`);
-        localStorage.removeItem(`draft-text-${jobId}-${tid}`);
+        safeStorageRemove(`draft-${jobId}-${tid}`);
+        safeStorageRemove(`draft-text-${jobId}-${tid}`);
       });
       setDraftAnnotations({});
       setUploadedHashes({});
@@ -711,7 +742,7 @@ export default function Workspace() {
       {/* Workspace header bar */}
       <div style={{ height: 48, background: "var(--bg)", borderBottom: "1px solid var(--border)", display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 24px", flexShrink: 0 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-          <button className="btn-ghost" onClick={() => navigate("/")} style={{ padding: "4px 0" }}>
+          <button className="btn-ghost" onClick={() => navigate("/jobs")} title="Back to Active Jobs" style={{ padding: "4px 0" }}>
             <span className="material-symbols-outlined" style={{ fontSize: 16 }}>arrow_back</span>
           </button>
           <div className="divider-v" />

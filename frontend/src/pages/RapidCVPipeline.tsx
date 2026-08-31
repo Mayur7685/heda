@@ -7,6 +7,7 @@ import { useDatasetRegistry } from "../hooks/useDatasetRegistry";
 import { useModelRegistry } from "../hooks/useModelRegistry";
 import { usePipelineSubscription } from "../hooks/usePipelineSubscription";
 import { uploadJson, fetchFrom0GStorage } from "../hooks/useStorage";
+import { GALILEO } from "../config";
 import DatasetCreationModal from "../components/DatasetCreationModal";
 
 interface ChatMessage {
@@ -3222,9 +3223,9 @@ export default function RapidCVPipeline() {
 
             {/* Smart Contract Provenance Footer */}
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 11, color: "var(--text-3)", borderTop: "1px solid var(--border)", paddingTop: 14 }}>
-              <span>Contract: <code>0x3EE5…E6D1</code></span>
+              <span>Contract: <code>{GALILEO.contracts.pipelineSubscription.slice(0, 6)}…{GALILEO.contracts.pipelineSubscription.slice(-4)}</code></span>
               <a
-                href="https://chainscan-galileo.0g.ai/address/0x3EE57E207D6A826f05b57101dcbA002fC1fCE6D1"
+                href={`${GALILEO.explorer}/address/${GALILEO.contracts.pipelineSubscription}`}
                 target="_blank"
                 rel="noreferrer"
                 style={{ color: "var(--primary)", display: "flex", alignItems: "center", gap: 3, textDecoration: "none" }}

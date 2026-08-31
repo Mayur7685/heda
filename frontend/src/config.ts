@@ -9,21 +9,24 @@ export const GALILEO = {
   storageExplorer: "https://storagescan-galileo.0g.ai",
   faucet: "https://faucet.0g.ai",
   contracts: {
-    annotationMarketV2: "0x91D36c08C323e9e7C3Fb77D4802E152277f73fFe",
-    datasetRegistry:    "0xb026c66388EaF015198b242E5c6ca00aF36A6E26",
-    modelRegistry:      "0x6aD6537618dD2bF3B9cAe585E485Ff216AAb1c0C",
-    pipelineSubscription: "0x3EE57E207D6A826f05b57101dcbA002fC1fCE6D1",
+    annotationMarketV2:   "0xA93b5bB49Ef86ceB8Cb06d06e984bAaf25683Ff0",
+    datasetRegistry:      "0x22eBC4856744a628d19992d12304C951c7F5E1aD",
+    modelRegistry:        "0xed6Ba6EC7c9ada63e0b37f97a4cA36042E3D6698",
+    pipelineSubscription: "0x6952ec1f73626BdBF7BD8C549589710b25cfE622",
+    deviceRegistry:       "0xae5f90a24513ca825a30C66aA279f5f363bdbbAb",
   },
 } as const;
 
 export const CONTRACTS = {
-  MARKET_V2:  "0x91D36c08C323e9e7C3Fb77D4802E152277f73fFe" as `0x${string}`,
-  DATASET_REGISTRY: "0xb026c66388EaF015198b242E5c6ca00aF36A6E26" as `0x${string}`,
-  MODEL_REGISTRY:   "0x6aD6537618dD2bF3B9cAe585E485Ff216AAb1c0C" as `0x${string}`,
-  SUBSCRIPTION:     "0x3EE57E207D6A826f05b57101dcbA002fC1fCE6D1" as `0x${string}`,
+  MARKET_V2:  "0xA93b5bB49Ef86ceB8Cb06d06e984bAaf25683Ff0" as `0x${string}`,
+  DATASET_REGISTRY: "0x22eBC4856744a628d19992d12304C951c7F5E1aD" as `0x${string}`,
+  MODEL_REGISTRY:   "0xed6Ba6EC7c9ada63e0b37f97a4cA36042E3D6698" as `0x${string}`,
+  SUBSCRIPTION:     "0x6952ec1f73626BdBF7BD8C549589710b25cfE622" as `0x${string}`,
+  DEVICE_REGISTRY:  "0xae5f90a24513ca825a30C66aA279f5f363bdbbAb" as `0x${string}`,
 };
 
 export const RELAYER_API_URL = import.meta.env.VITE_UPLOAD_API || import.meta.env.VITE_RELAYER_URL || "http://localhost:3001";
+export const INGEST_API_URL = import.meta.env.VITE_INGEST_API || "http://localhost:3002";
 export const AI_SERVICE_API_URL = import.meta.env.VITE_AI_SERVICE_API || "http://localhost:8000";
 export const COMPUTE_ROUTER = "https://router-api-testnet.integratenetwork.work/v1";
 

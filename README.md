@@ -1,6 +1,6 @@
 # ⚡ Heda Protocol — Decentralized AI Data & Model Training Marketplace on 0G
 
-> **Heda Protocol** is a decentralized end-to-end AI vision engineering ecosystem, multi-annotator bounding box annotation marketplace with Moondream IoU quality scoring, and autonomous model training pipeline built natively on **0G Storage** and the **0G Galileo Testnet**.
+> **Heda Protocol** is a decentralized end-to-end AI vision engineering ecosystem, physical IoT edge camera fleet manager, multi-annotator bounding box annotation marketplace with Moondream IoU quality scoring, and autonomous model training pipeline built natively on **0G Storage** and the **0G Galileo Testnet**.
 
 [![0G Galileo Testnet](https://img.shields.io/badge/Network-0G%20Galileo%20Testnet%20(16602)-00e479?style=flat-square)](https://chainscan-galileo.0g.ai)
 [![0G Storage](https://img.shields.io/badge/Storage-0G%20Decentralized%20Storage-00bfff?style=flat-square)](https://storagescan-galileo.0g.ai)
@@ -14,17 +14,15 @@
 
 1. [Key Features & Subsystems](#-key-features--subsystems)
    - [1. Autonomous RapidCV Studio (8-Stage Pipeline)](#1-autonomous-rapidcv-studio-8-stage-ai-pipeline)
-   - [2. Multi-Annotator Bounty Marketplace](#2-multi-annotator-bounty-marketplace-annotationmarketv2sol)
-   - [3. 0G Storage Verified Dataset Registry](#3-0g-storage-verified-dataset-registry-datasetregistrysol)
-   - [4. Autonomous PyTorch GPU Model Fine-Tuning](#4-autonomous-pytorch-gpu-model-fine-tuning-backendai-service)
-   - [5. Interactive Test Sandbox & Live Inference](#5-interactive-test-sandbox--live-inference)
-   - [6. Decentralized AI Model Registry](#6-decentralized-ai-model-registry-modelregistrysol)
-   - [7. Pipeline Subscription & Quota Management](#7-pipeline-subscription--quota-management-pipelinesubscriptionsol)
-   - [8. Creator Dashboard & Quality Leaderboard](#8-creator-dashboard--quality-leaderboard)
-2. [🔮 Upcoming Features & Roadmap (Coming Soon)](#-upcoming-features--roadmap-coming-soon)
-   - [1. Unified 0G VLM Leaderboard](#1-unified-0g-vlm-leaderboard-0g-private-compute-benchmark)
-   - [2. Actionable Vision Workflows](#2-actionable-vision-workflows-event-trigger--reaction-engine)
-   - [3. Physical Device & Edge IoT Vision Pipeline](#3-physical-device--edge-iot-vision-pipeline-esp32--raspberry-pi--jetson)
+   - [2. Physical IoT & Edge Hardware Fleet](#2-physical-iot--edge-hardware-fleet-deviceregistrysol)
+   - [3. Multi-Annotator Bounty Marketplace](#3-multi-annotator-bounty-marketplace-annotationmarketv2sol)
+   - [4. 0G Storage Verified Dataset Registry](#4-0g-storage-verified-dataset-registry-datasetregistrysol)
+   - [5. Autonomous PyTorch GPU Model Fine-Tuning](#5-autonomous-pytorch-gpu-model-fine-tuning-backendai-service)
+   - [6. Interactive Test Sandbox & Live Inference](#6-interactive-test-sandbox--live-inference)
+   - [7. Decentralized AI Model Registry](#7-decentralized-ai-model-registry-modelregistrysol)
+   - [8. Pipeline Subscription & Quota Management](#8-pipeline-subscription--quota-management-pipelinesubscriptionsol)
+   - [9. Creator Dashboard & Quality Leaderboard](#9-creator-dashboard--quality-leaderboard)
+2. [📡 Edge Hardware & Demo Simulation Guide](#-edge-hardware--demo-simulation-guide)
 3. [Deployed 0G Galileo Smart Contracts](#-deployed-0g-galileo-smart-contracts)
 4. [System Architecture](#-system-architecture)
 5. [Quick Start & Running Locally](#-quick-start--running-locally)
@@ -50,7 +48,18 @@ RapidCV Studio (`/rapid-cv` or `/pipeline`) transforms raw, unlabeled images int
 
 ---
 
-### 2. Multi-Annotator Bounty Marketplace (`AnnotationMarketV2.sol`)
+### 2. Physical IoT & Edge Hardware Fleet (`DeviceRegistry.sol`)
+Connect physical cameras and edge computing microcontrollers directly to the 0G network:
+
+- **On-Chain Hardware Pairing**: Register edge devices (`ESP32-CAM`, Raspberry Pi, Jetson) under your wallet on `DeviceRegistry.sol`.
+- **Decentralized Ingestion**: Microcontrollers stream photos directly via HTTP POST, pinned instantly to **0G Storage**.
+- **1-Click Bounty Conversion**: Select streamed camera frames and package them into decentralized bounding box bounties.
+- **Over-The-Air (OTA) Weights Sync**: Assign trained YOLO/ONNX weights onchain $\rightarrow$ cameras automatically sync checkpoints via `/api/v1/devices/:id/ota`.
+- 📖 **[View Hardware Firmware Guide & Pinouts](firmware/esp32-cam/README.md)**
+
+---
+
+### 3. Multi-Annotator Bounty Marketplace (`AnnotationMarketV2.sol`)
 A decentralized crowdsourced labeling market with automated quality-weighted reward settlement:
 
 - **Open Task Slots**: Up to 5 independent annotators can submit annotations per task without restrictive claim locks.
@@ -61,7 +70,7 @@ A decentralized crowdsourced labeling market with automated quality-weighted rew
 
 ---
 
-### 3. 0G Storage Verified Dataset Registry (`DatasetRegistry.sol`)
+### 4. 0G Storage Verified Dataset Registry (`DatasetRegistry.sol`)
 Decentralized dataset publishing and licensing infrastructure:
 
 - **Complete Binary Embedding**: Unlike metadata-only pointers, Heda embeds binary image data and COCO annotations into single verified 0G Storage Merkle root hashes.
@@ -70,7 +79,7 @@ Decentralized dataset publishing and licensing infrastructure:
 
 ---
 
-### 4. Autonomous PyTorch GPU Model Fine-Tuning (`backend/ai-service`)
+### 5. Autonomous PyTorch GPU Model Fine-Tuning (`backend/ai-service`)
 High-performance machine learning microservice for fine-tuning vision models on 0G datasets:
 
 - **Hardware Acceleration**: Automatically detects and activates **Apple Silicon Metal (MPS)**, **NVIDIA CUDA**, or multi-threaded CPU.
@@ -79,10 +88,9 @@ High-performance machine learning microservice for fine-tuning vision models on 
 
 ---
 
-### 5. Interactive Test Sandbox & Live Inference
+### 6. Interactive Test Sandbox & Live Inference
 A comprehensive testing environment embedded directly into the RapidCV Pipeline:
 
-- **Separated Upload & Inference**: Upload test images or pick 1-click samples from the staged dataset reel.
 - **Live Hyperparameter Sliders**:
   - **Confidence Threshold** (`10% - 95%`): Live filters low-confidence predictions.
   - **NMS IoU Threshold** (`10% - 90%`): Controls overlapping bounding box suppression.
@@ -92,7 +100,7 @@ A comprehensive testing environment embedded directly into the RapidCV Pipeline:
 
 ---
 
-### 6. Decentralized AI Model Registry (`ModelRegistry.sol`)
+### 7. Decentralized AI Model Registry (`ModelRegistry.sol`)
 Onchain repository for trained computer vision model weights:
 
 - **Dataset Provenance**: Every model entry stores the source dataset ID, title, and training metrics (mAP@50, epochs, architecture).
@@ -101,7 +109,7 @@ Onchain repository for trained computer vision model weights:
 
 ---
 
-### 7. Pipeline Subscription & Quota Management (`PipelineSubscription.sol`)
+### 8. Pipeline Subscription & Quota Management (`PipelineSubscription.sol`)
 Smart contract credit manager for compute-intensive pipelines:
 
 - **Credit Escrow**: Manages user training quotas onchain.
@@ -109,7 +117,7 @@ Smart contract credit manager for compute-intensive pipelines:
 
 ---
 
-### 8. Creator Dashboard & Quality Leaderboard
+### 9. Creator Dashboard & Quality Leaderboard
 Comprehensive analytics and reputation tracking:
 
 - **Creator Studio (`/dashboard`)**: Track active jobs, view annotator slot fill rates, inspect color-coded submission IoU scores (🟢 $\ge 70\%$, 🟡 $30-69\%$, 🔴 $<30\%$), and trigger batch evaluations.
@@ -117,29 +125,77 @@ Comprehensive analytics and reputation tracking:
 
 ---
 
-## 🔮 Upcoming Features & Roadmap (Coming Soon)
+## 📡 Edge Hardware & Demo Simulation Guide
 
-Based on the platform showcase on the landing page, the following major vision infrastructure modules are in active development:
+Heda supports both **physical hardware deployments** (e.g. Seeed Studio XIAO ESP32-S3, AI-Thinker ESP32-CAM) and a **complete simulation workflow** for testing in demo and evaluation environments.
 
-### 1. Unified 0G VLM Leaderboard (0G Private Compute Benchmark)
-- **Decentralized Vision Benchmarks**: Comprehensive rankings and evaluation of Vision-Language Models (VLMs) hosted on **0G Private Compute**.
-- **Specialized Vision Tasks**: Performance tracking across *Object Detection, Counting, Spatial Identification, Industrial OCR, Structured Data Extraction, and Visual Reasoning*.
-- **Quality Score Tiers**: Transparent performance tiers (🟢 $\ge 75\%$ High Accuracy, 🟡 $40–74\%$ Medium, 🔴 $<40\%$ Low) with filters for Open vs. Closed weights.
+### How it Works in Production (Physical Microcontroller)
+```
+ ┌──────────────┐    Raw Binary JPEG    ┌──────────────────┐    0G Turbo    ┌──────────────────┐
+ │  ESP32-CAM   │ ────────────────────> │  Heda Relayer    │ ─────────────> │    0G Storage    │
+ │  Edge Node   │  X-Device-Id Header   │  /api/v1/ingest  │                │  (Decentralized) │
+ └──────────────┘                       └──────────────────┘                └──────────────────┘
+```
+1. The physical camera connects to 2.4GHz Wi-Fi and captures a JPEG frame from its OV2640 sensor.
+2. The firmware executes an HTTP POST to `/api/v1/ingest` with header `X-Device-Id: ESP32-<MAC_ADDRESS>`.
+3. The Relayer calculates the Merkle root and pins the image to **0G Storage**.
+4. The frame index is registered in SQLite WAL database and tied to the paired wallet on `DeviceRegistry.sol`.
 
-### 2. Actionable Vision Workflows (Event Trigger & Reaction Engine)
-- **Threshold-Driven Automation**: Transform raw computer vision detections into automated real-world physical and digital actions:
-  - **Industrial PPE Compliance**: `IF 'no_hardhat' in Zone A > 85% confidence` $\rightarrow$ Trigger audio siren on factory floor + write immutable incident hash to 0G Galileo.
-  - **Automated Conveyor Defect Ejection**: `IF 'surface_scratch' > 90% confidence` $\rightarrow$ Pulse GPIO relay on Raspberry Pi / PLC to divert defective part to reject bin.
-  - **Perimeter Security Alert**: `IF 'unauthorized_vehicle' after hours` $\rightarrow$ Dispatch webhook alert + pin high-res Merkle proof snapshot to 0G Storage.
+---
 
-### 3. Physical Device & Edge IoT Vision Pipeline (ESP32 / Raspberry Pi / Jetson)
-- **Autonomous Microcontroller Ingestion**: Connect low-cost $5 ESP32-CAMs and edge cameras via `POST /api/device/push`.
-- **Automated Field Ingestion Flow**:
-  1. Microcontrollers capture frames on motion/optical triggers.
-  2. Frames are pushed directly to Heda for zero-shot Moondream VLM auto-labeling.
-  3. Raw image captures are permanently pinned to **0G Storage** Merkle trees.
-  4. Automatic creation of onchain bounty tasks for human verification.
-  5. Export lightweight **ONNX / TensorRT** optimized weights back to edge microcontrollers.
+### How to Simulate Edge Ingestion in Demo Environments
+
+You do **not** need physical ESP32 hardware to test the edge hardware fleet features. You can simulate edge camera snapshots using standard CLI commands:
+
+#### Step 1: Pair a Simulated Camera in the WebApp
+1. Navigate to **`http://localhost:5173/devices`** in your browser.
+2. Click **`+ Pair New Camera`**.
+3. Enter Device ID: `ESP32-94:E6:86:12:AB:CD` and Device Name: `Construction Site Cam #1`.
+4. Confirm the transaction in MetaMask on **0G Galileo Testnet**.
+
+#### Step 2: Simulate Edge Camera Frame Snapshots (0G Storage Upload)
+Run the following curl command to upload a batch of real-world edge camera snapshots to 0G Storage under your paired device ID:
+
+```bash
+# Upload sample hardhat construction photos to 0G Storage
+curl -X POST http://localhost:3001/api/v1/ingest \
+  -H "X-Device-Id: ESP32-94:E6:86:12:AB:CD" \
+  -F "frame=@hardhatdata/hardhat1.jpg"
+```
+
+*To stream 5 distinct frames:*
+```bash
+for file in hardhat1.jpg hardhat2.jpg hardhat3.jpg hardhat4.jpg hardhat5.jpg; do
+  echo "Streaming $file to 0G Storage..."
+  curl -s -X POST http://localhost:3001/api/v1/ingest \
+    -H "X-Device-Id: ESP32-94:E6:86:12:AB:CD" \
+    -F "frame=@hardhatdata/$file"
+  echo ""
+  sleep 1
+done
+```
+
+#### Step 3: View Ingested Frames & Deploy Bounties
+1. Refresh **`http://localhost:5173/devices`** — your camera card will show `Live 0G Node` and `Frames Ingested: 5`.
+2. Click **`View Ingest Stream`** to open the gallery (`/devices/ESP32-94:E6:86:12:AB:CD`).
+3. Select frames, click **`⚡ Create Bounty Job`**, set instructions and reward, and deploy directly to **0G Galileo**.
+4. Annotators can now annotate these edge frames in the **Workspace**!
+
+#### Step 4: Simulate OTA Weights Synchronization
+When a model is assigned to the camera from the web dashboard, simulate the edge camera checking for new model weights:
+```bash
+curl http://localhost:3001/api/v1/devices/ESP32-94:E6:86:12:AB:CD/ota
+```
+**Output:**
+```json
+{
+  "deviceId": "ESP32-94:E6:86:12:AB:CD",
+  "assigned": true,
+  "modelTitle": "PPE Hardhat Detector v1",
+  "weightsRootHash": "0x794bfa2542a2205562857e4e13028bc1665a3ba2e8e2d42bfe07d4b4a16ca32e",
+  "weightsDownloadUrl": "http://localhost:3001/file?root=0x794bfa2542a2205562857e4e13028bc1665a3ba2e8e2d42bfe07d4b4a16ca32e"
+}
+```
 
 ---
 
@@ -149,10 +205,11 @@ All smart contracts are compiled with Solidity `^0.8.24` and deployed on the **0
 
 | Contract Name | Deployed Galileo Address | Explorer Link |
 | :--- | :--- | :--- |
-| **`AnnotationMarketV2`** ⭐ | `0x91D36c08C323e9e7C3Fb77D4802E152277f73fFe` | [View on 0G Explorer](https://chainscan-galileo.0g.ai/address/0x91D36c08C323e9e7C3Fb77D4802E152277f73fFe) |
-| **`DatasetRegistry`** | `0xb026c66388EaF015198b242E5c6ca00aF36A6E26` | [View on 0G Explorer](https://chainscan-galileo.0g.ai/address/0xb026c66388EaF015198b242E5c6ca00aF36A6E26) |
-| **`ModelRegistry`** | `0x6aD6537618dD2bF3B9cAe585E485Ff216AAb1c0C` | [View on 0G Explorer](https://chainscan-galileo.0g.ai/address/0x6aD6537618dD2bF3B9cAe585E485Ff216AAb1c0C) |
-| **`PipelineSubscription`** | `0x3EE57E207D6A826f05b57101dcbA002fC1fCE6D1` | [View on 0G Explorer](https://chainscan-galileo.0g.ai/address/0x3EE57E207D6A826f05b57101dcbA002fC1fCE6D1) |
+| **`AnnotationMarketV2`** ⭐ | `0xA93b5bB49Ef86ceB8Cb06d06e984bAaf25683Ff0` | [View on 0G Explorer](https://chainscan-galileo.0g.ai/address/0xA93b5bB49Ef86ceB8Cb06d06e984bAaf25683Ff0) |
+| **`DatasetRegistry`** | `0x22eBC4856744a628d19992d12304C951c7F5E1aD` | [View on 0G Explorer](https://chainscan-galileo.0g.ai/address/0x22eBC4856744a628d19992d12304C951c7F5E1aD) |
+| **`ModelRegistry`** | `0xed6Ba6EC7c9ada63e0b37f97a4cA36042E3D6698` | [View on 0G Explorer](https://chainscan-galileo.0g.ai/address/0xed6Ba6EC7c9ada63e0b37f97a4cA36042E3D6698) |
+| **`PipelineSubscription`** | `0x6952ec1f73626BdBF7BD8C549589710b25cfE622` | [View on 0G Explorer](https://chainscan-galileo.0g.ai/address/0x6952ec1f73626BdBF7BD8C549589710b25cfE622) |
+| **`DeviceRegistry`** 📷 | `0xae5f90a24513ca825a30C66aA279f5f363bdbbAb` | [View on 0G Explorer](https://chainscan-galileo.0g.ai/address/0xae5f90a24513ca825a30C66aA279f5f363bdbbAb) |
 
 ---
 
@@ -176,8 +233,13 @@ All smart contracts are compiled with Solidity `^0.8.24` and deployed on the **0
                                       │
                            ┌──────────▼──────────────┐
                            │ SQLite Event Indexer    │
-                           │ + Annotation Indexer    │
+                           │ + Hardware Ingest Engine│
                            │ (Backend Port 3001)     │
+                           └──────────▲──────────────┘
+                                      │
+                           ┌──────────┴──────────────┐
+                           │ Physical ESP32-CAMs     │
+                           │ & Edge Vision Nodes     │
                            └─────────────────────────┘
 ```
 
@@ -230,4 +292,5 @@ python3 moondream_server.py
 
 For comprehensive end-to-end testing scenarios, smart contract Foundry test suites, and API verification commands, please refer to:
 - 📖 **[TESTING_GUIDE.md](TESTING_GUIDE.md)** — Step-by-step judge and developer testing playbook.
+- 📷 **[firmware/esp32-cam/README.md](firmware/esp32-cam/README.md)** — Physical ESP32-CAM flashing & wiring guide.
 - 📦 **[DATASET_PIPELINE.md](DATASET_PIPELINE.md)** — In-depth dataset serialization, 0G Storage Merkle proofs, and model training specifications.
