@@ -723,9 +723,8 @@ export function startAnnotationIndexer(database) {
   db = database;
   initAnnotationTables(db);
 
-  const rawV2 = process.env.VITE_MARKET_V2_ADDRESS || process.env.MARKET_V2_ADDRESS || '0x5afF6365A6D559CDcE5EfE7E796abD3bef119Fa4';
-  const marketV2Addr = ethers.getAddress(rawV2.toLowerCase());
-  const relayerPrivKey = process.env.PRIVATE_KEY || '0x3d20b42d0ec55312d082c53a9fb1635a374051c976f8bd76f016b4781b438653';
+  const marketV2Addr = ethers.getAddress(MARKET_V2_ADDRESS.toLowerCase());
+  const relayerPrivKey = RELAYER_PRIVKEY;
 
   if (!marketV2Addr || marketV2Addr === '0x0000000000000000000000000000000000000000') {
     console.log('[AnnotationIndexer] VITE_MARKET_V2_ADDRESS not set — indexer disabled.');
