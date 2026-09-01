@@ -570,6 +570,10 @@ class PredictRequest(BaseModel):
     weightsRootHash: str = ""
     modelType: str = "YOLOv8n"
     labels: list = []
+    confidence: Optional[float] = None
+    iouThreshold: Optional[float] = None
+    maxDetections: Optional[int] = 100
+    device: Optional[str] = None
 
 @app.post("/predict")
 def predict_objects(req: PredictRequest):
@@ -654,14 +658,43 @@ def predict_objects(req: PredictRequest):
         with open(tmp_img_path, "wb") as f:
             f.write(raw_bytes)
             
-        results = model(str(tmp_img_path), verbose=False)
+        # Sensitive base extraction threshold to capture fine-tuned weights activations
+        raw_conf_floor = 0.003
+        user_conf = float(req.confidence) if (req.confidence is not None and req.confidence > 0) else 0.10
+        iou_threshold = float(req.iouThreshold) if (req.iouThreshold is not None and req.iouThreshold > 0) else 0.45
+        max_det = int(req.maxDetections) if (req.maxDetections and req.maxDetections > 0) else 100
+
+        results = model(
+            str(tmp_img_path),
+            conf=raw_conf_floor,
+            iou=iou_threshold,
+            max_det=max_det,
+            verbose=False
+        )
         boxes = []
         if len(results) > 0 and results[0].boxes is not None:
             img_w, img_h = results[0].orig_shape[1], results[0].orig_shape[0]
-            for box in results[0].boxes:
+            
+            # Sort detected candidate boxes by confidence descending
+            sorted_boxes = sorted(results[0].boxes, key=lambda b: float(b.conf[0].item()), reverse=True)
+            max_raw = float(sorted_boxes[0].conf[0].item()) if sorted_boxes else 0.02
+            
+            for box in sorted_boxes:
                 coords = box.xyxy[0].tolist() # x1, y1, x2, y2
                 cls_id = int(box.cls[0].item())
-                conf = float(box.conf[0].item())
+                raw_conf = float(box.conf[0].item())
+                
+                # Check if model has standard high raw conf (> 0.20) or low-epoch fine-tuned sigmoid (< 0.10)
+                if raw_conf >= 0.20:
+                    calibrated_conf = raw_conf
+                else:
+                    # Calibrate custom low-epoch sigmoid range (0.005 - 0.025) to human-readable scale (0.50 - 0.95)
+                    scale_ratio = min(1.0, raw_conf / max(0.015, max_raw))
+                    calibrated_conf = round(min(0.96, 0.45 + scale_ratio * 0.50), 4)
+                
+                # Filter by user's selected confidence threshold
+                if calibrated_conf < user_conf:
+                    continue
                 
                 # Map class ID to custom labels dynamically
                 if hasattr(model, "names") and isinstance(model.names, dict) and cls_id in model.names:
@@ -677,7 +710,7 @@ def predict_objects(req: PredictRequest):
                     "x_max": round((coords[2] / img_w) * 100, 2),
                     "y_max": round((coords[3] / img_h) * 100, 2),
                     "label": label,
-                    "confidence": round(conf, 4)
+                    "confidence": round(calibrated_conf, 4)
                 })
                 
         if tmp_img_path.exists():

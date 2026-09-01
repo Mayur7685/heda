@@ -1075,7 +1075,8 @@ export default function RapidCVPipeline() {
     setInferring(true);
     try {
       const rawB64 = testImg.includes(",") ? testImg.split(",")[1] : testImg;
-      const res = await fetch("http://localhost:8000/predict", {
+      const aiApi = import.meta.env.VITE_AI_SERVICE_API || "http://localhost:8000";
+      const res = await fetch(`${aiApi}/predict`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

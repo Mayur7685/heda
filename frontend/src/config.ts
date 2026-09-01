@@ -9,20 +9,20 @@ export const GALILEO = {
   storageExplorer: "https://storagescan-galileo.0g.ai",
   faucet: "https://faucet.0g.ai",
   contracts: {
-    annotationMarketV2:   "0xA93b5bB49Ef86ceB8Cb06d06e984bAaf25683Ff0",
-    datasetRegistry:      "0x22eBC4856744a628d19992d12304C951c7F5E1aD",
-    modelRegistry:        "0xed6Ba6EC7c9ada63e0b37f97a4cA36042E3D6698",
-    pipelineSubscription: "0x6952ec1f73626BdBF7BD8C549589710b25cfE622",
-    deviceRegistry:       "0xae5f90a24513ca825a30C66aA279f5f363bdbbAb",
+    annotationMarketV2:   "0x5b3C320AD51e062b4F93E739470D2dfB7FF4071C",
+    datasetRegistry:      "0x8306ef2dfA1713c8053ae85e91a3319509F4fb9F",
+    modelRegistry:        "0xaf4675D76a6B19F09b2c6e56Ab387Edb61d5DC78",
+    pipelineSubscription: "0x65f2af3CFfcF3e955dC0e93fd598dff93981bC63",
+    deviceRegistry:       "0x5abD3a8206528c8Bc0a504fF9413B905ce755af7",
   },
 } as const;
 
 export const CONTRACTS = {
-  MARKET_V2:  "0xA93b5bB49Ef86ceB8Cb06d06e984bAaf25683Ff0" as `0x${string}`,
-  DATASET_REGISTRY: "0x22eBC4856744a628d19992d12304C951c7F5E1aD" as `0x${string}`,
-  MODEL_REGISTRY:   "0xed6Ba6EC7c9ada63e0b37f97a4cA36042E3D6698" as `0x${string}`,
-  SUBSCRIPTION:     "0x6952ec1f73626BdBF7BD8C549589710b25cfE622" as `0x${string}`,
-  DEVICE_REGISTRY:  "0xae5f90a24513ca825a30C66aA279f5f363bdbbAb" as `0x${string}`,
+  MARKET_V2:  "0x5b3C320AD51e062b4F93E739470D2dfB7FF4071C" as `0x${string}`,
+  DATASET_REGISTRY: "0x8306ef2dfA1713c8053ae85e91a3319509F4fb9F" as `0x${string}`,
+  MODEL_REGISTRY:   "0xaf4675D76a6B19F09b2c6e56Ab387Edb61d5DC78" as `0x${string}`,
+  SUBSCRIPTION:     "0x65f2af3CFfcF3e955dC0e93fd598dff93981bC63" as `0x${string}`,
+  DEVICE_REGISTRY:  "0x5abD3a8206528c8Bc0a504fF9413B905ce755af7" as `0x${string}`,
 };
 
 export const RELAYER_API_URL = import.meta.env.VITE_UPLOAD_API || import.meta.env.VITE_RELAYER_URL || "http://localhost:3001";

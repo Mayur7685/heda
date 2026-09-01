@@ -303,6 +303,16 @@ export default function Dashboard() {
 
     try {
       const approvedSubs = subs.filter((s) => s.approved);
+      const candidateSubs = approvedSubs.length > 0 ? approvedSubs : subs;
+
+      // Group submissions by taskId to select 1 winning consensus submission per unique task
+      const subsByTaskId: Record<number, SubRow[]> = {};
+      candidateSubs.forEach((s) => {
+        if (!subsByTaskId[s.taskId]) subsByTaskId[s.taskId] = [];
+        subsByTaskId[s.taskId].push(s);
+      });
+
+      const taskIds = Object.keys(subsByTaskId).map(Number).sort((a, b) => a - b);
 
       // Fetch job metadata to get jsonlSchema and labels
       setTxMsg("Fetching job metadata…");
@@ -310,13 +320,37 @@ export default function Dashboard() {
       const labels: string[] = publishForm.labels?.split(",").map((l: string) => l.trim()).filter(Boolean) ?? jobMeta.labels ?? [];
       const jsonlSchema: string = jobMeta.jsonlSchema ?? "chat";
 
-      // Fetch all approved annotation data
-      setTxMsg("Fetching annotations…");
-      const annotationData = await Promise.all(
-        approvedSubs.map(async (sub) => {
-          return fetchFrom0GStorage(sub.annotationRootHash, 3).catch(() => null);
+      // For each unique task, pick the highest-scoring annotator's submission
+      setTxMsg("Selecting consensus task annotations…");
+      const winningSubmissions: { taskId: number; sub: SubRow; annotation: any }[] = [];
+
+      await Promise.all(
+        taskIds.map(async (tid) => {
+          const taskSubs = subsByTaskId[tid];
+          let bestSub = taskSubs[0];
+
+          // Use indexer scores if available to pick the highest IoU submission
+          const taskInfo = v2TaskData[tid];
+          if (taskInfo && Array.isArray(taskInfo.submissions) && taskInfo.submissions.length > 0) {
+            const sortedByScore = [...taskInfo.submissions].sort((a: any, b: any) => (b.iou_score ?? 0) - (a.iou_score ?? 0));
+            const topAddr = sortedByScore[0]?.annotator?.toLowerCase();
+            const matched = taskSubs.find((s) => s.annotator.toLowerCase() === topAddr);
+            if (matched) bestSub = matched;
+          }
+
+          if (bestSub && bestSub.annotationRootHash) {
+            const ann = await fetchFrom0GStorage(bestSub.annotationRootHash, 3).catch(() => null);
+            if (ann) {
+              winningSubmissions.push({
+                taskId: tid,
+                sub: bestSub,
+                annotation: ann.annotation ?? ann,
+              });
+            }
+          }
         })
       );
+      winningSubmissions.sort((a, b) => a.taskId - b.taskId);
 
       let datasetRootHash: string;
       let previewImage: string | undefined = undefined;
@@ -329,12 +363,10 @@ export default function Dashboard() {
         const allFiles: Array<{ name: string; data: string }> = await fetchFrom0GStorage(job.dataRootHash, 3).catch(() => []);
 
         const lines: string[] = [];
-        annotationData.forEach((ann) => {
-          if (!ann) return;
-          const { taskId, annotation } = ann;
+        winningSubmissions.forEach(({ taskId, annotation }) => {
           const file = allFiles[taskId];
           const text = file?.data ? atob(file.data) : `task_${taskId}`;
-          const label: string = annotation?.label ?? "";
+          const label: string = typeof annotation === "string" ? annotation : annotation?.label ?? "";
 
           if (jsonlSchema === "chat") {
             lines.push(JSON.stringify({
@@ -368,9 +400,7 @@ export default function Dashboard() {
         const cocoAnnotations: any[] = [];
         let annId = 0;
 
-        annotationData.forEach((ann) => {
-          if (!ann) return;
-          const { taskId, annotation } = ann;
+        winningSubmissions.forEach(({ taskId, annotation }) => {
           const file = allFiles.find((f: any) => f.taskId === taskId) || allFiles[taskId];
           cocoImages.push({
             id: taskId,
@@ -380,10 +410,18 @@ export default function Dashboard() {
             task_id: taskId,
             base64: file?.data ? (file.data.startsWith("data:") ? file.data : `data:${file?.type || "image/jpeg"};base64,${file.data}`) : undefined,
           });
+
           if (Array.isArray(annotation)) {
             annotation.forEach((bbox: any) => {
               if (bbox.type !== "bbox") return;
-              cocoAnnotations.push({ id: annId++, image_id: taskId, category_id: labelToId[bbox.label] ?? 1, bbox: [bbox.x, bbox.y, bbox.w, bbox.h], area: bbox.w * bbox.h, iscrowd: 0 });
+              cocoAnnotations.push({
+                id: annId++,
+                image_id: taskId,
+                category_id: labelToId[bbox.label] ?? 1,
+                bbox: [bbox.x, bbox.y, bbox.w, bbox.h],
+                area: bbox.w * bbox.h,
+                iscrowd: 0,
+              });
             });
           }
         });
@@ -415,7 +453,7 @@ export default function Dashboard() {
         jsonlSchema: job.dataType === 1 ? jsonlSchema : undefined,
         sourceJobId: job.jobId,
         labels,
-        taskCount: job.taskCount,
+        taskCount: winningSubmissions.length > 0 ? winningSubmissions.length : job.taskCount,
         approvedCount: job.approvedCount,
         previewImage,
       });

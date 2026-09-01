@@ -199,11 +199,11 @@ curl http://localhost:3001/annotations/leaderboard
 
 | Contract Name | Deployed Galileo Address | Explorer Link |
 | :--- | :--- | :--- |
-| **`AnnotationMarketV2`** ⭐ | `0xA93b5bB49Ef86ceB8Cb06d06e984bAaf25683Ff0` | [View on 0G Explorer](https://chainscan-galileo.0g.ai/address/0xA93b5bB49Ef86ceB8Cb06d06e984bAaf25683Ff0) |
-| **`DatasetRegistry`** | `0x22eBC4856744a628d19992d12304C951c7F5E1aD` | [View on 0G Explorer](https://chainscan-galileo.0g.ai/address/0x22eBC4856744a628d19992d12304C951c7F5E1aD) |
-| **`ModelRegistry`** | `0xed6Ba6EC7c9ada63e0b37f97a4cA36042E3D6698` | [View on 0G Explorer](https://chainscan-galileo.0g.ai/address/0xed6Ba6EC7c9ada63e0b37f97a4cA36042E3D6698) |
-| **`PipelineSubscription`** | `0x6952ec1f73626BdBF7BD8C549589710b25cfE622` | [View on 0G Explorer](https://chainscan-galileo.0g.ai/address/0x6952ec1f73626BdBF7BD8C549589710b25cfE622) |
-| **`DeviceRegistry`** 📷 | `0xae5f90a24513ca825a30C66aA279f5f363bdbbAb` | [View on 0G Explorer](https://chainscan-galileo.0g.ai/address/0xae5f90a24513ca825a30C66aA279f5f363bdbbAb) |
+| **`AnnotationMarketV2`** ⭐ | `0x5b3C320AD51e062b4F93E739470D2dfB7FF4071C` | [View on 0G Explorer](https://chainscan-galileo.0g.ai/address/0x5b3C320AD51e062b4F93E739470D2dfB7FF4071C) |
+| **`DatasetRegistry`** | `0x8306ef2dfA1713c8053ae85e91a3319509F4fb9F` | [View on 0G Explorer](https://chainscan-galileo.0g.ai/address/0x8306ef2dfA1713c8053ae85e91a3319509F4fb9F) |
+| **`ModelRegistry`** | `0xaf4675D76a6B19F09b2c6e56Ab387Edb61d5DC78` | [View on 0G Explorer](https://chainscan-galileo.0g.ai/address/0xaf4675D76a6B19F09b2c6e56Ab387Edb61d5DC78) |
+| **`PipelineSubscription`** | `0x65f2af3CFfcF3e955dC0e93fd598dff93981bC63` | [View on 0G Explorer](https://chainscan-galileo.0g.ai/address/0x65f2af3CFfcF3e955dC0e93fd598dff93981bC63) |
+| **`DeviceRegistry`** 📷 | `0x5abD3a8206528c8Bc0a504fF9413B905ce755af7` | [View on 0G Explorer](https://chainscan-galileo.0g.ai/address/0x5abD3a8206528c8Bc0a504fF9413B905ce755af7) |
 
 ---
 

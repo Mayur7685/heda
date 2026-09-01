@@ -297,6 +297,10 @@ def main():
         project=str(work_dir),
         name="yolo_run",
         exist_ok=True,
+        lr0=0.01,
+        lrf=0.01,
+        warmup_epochs=1,
+        plots=False,
         verbose=False
     )
 
