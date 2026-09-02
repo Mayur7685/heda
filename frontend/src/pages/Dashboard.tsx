@@ -871,11 +871,11 @@ export default function Dashboard() {
                   )}
 
                   {!previewLoading && previewImageUrl && (
-                    <div style={{ position: "relative", display: "inline-block", width: "100%" }}>
+                    <div style={{ position: "relative", display: "inline-block", width: "100%", overflow: "hidden", borderRadius: 6, border: "1px solid var(--border)", background: "#000" }}>
                       <img
                         src={previewImageUrl}
                         alt="annotated"
-                        style={{ width: "100%", height: "auto", display: "block", borderRadius: 6 }}
+                        style={{ width: "100%", height: "auto", display: "block" }}
                         onLoad={(e) => {
                           const img = e.currentTarget;
                           setPreviewImgSize({ w: img.naturalWidth, h: img.naturalHeight });
@@ -884,23 +884,37 @@ export default function Dashboard() {
 
                       {/* Render Moondream AI Ground-Truth Box Overlay Layer (Gold Dashed #ffd700) */}
                       {layerVisibility.gt && previewGTBoxes.map((gt: any, i: number) => {
-                        // Coords normalized relative 0..1 or pixel
-                        const relX = gt.relX ?? (gt.x > 1.0 ? gt.x / (previewImgSize?.w || 820) : gt.x);
-                        const relY = gt.relY ?? (gt.y > 1.0 ? gt.y / (previewImgSize?.h || 500) : gt.y);
-                        const relW = gt.relW ?? (gt.w > 1.0 ? gt.w / (previewImgSize?.w || 820) : gt.w);
-                        const relH = gt.relH ?? (gt.h > 1.0 ? gt.h / (previewImgSize?.h || 500) : gt.h);
+                        const CANVAS_W = 680;
+                        const CANVAS_H = previewImgSize ? Math.round((previewImgSize.h / previewImgSize.w) * CANVAS_W) : 400;
+
+                        let rawX = gt.relX ?? (gt.x_min !== undefined ? gt.x_min : gt.x);
+                        let rawY = gt.relY ?? (gt.y_min !== undefined ? gt.y_min : gt.y);
+                        let rawW = gt.relW ?? (gt.x_max !== undefined ? gt.x_max - gt.x_min : gt.w);
+                        let rawH = gt.relH ?? (gt.y_max !== undefined ? gt.y_max - gt.y_min : gt.h);
+
+                        // If in canvas pixels (> 1.0), normalize by canvas dimensions
+                        const normX = rawX > 1.0 ? rawX / (gt.canvasW || CANVAS_W) : rawX;
+                        const normY = rawY > 1.0 ? rawY / (gt.canvasH || CANVAS_H) : rawY;
+                        const normW = rawW > 1.0 ? rawW / (gt.canvasW || CANVAS_W) : rawW;
+                        const normH = rawH > 1.0 ? rawH / (gt.canvasH || CANVAS_H) : rawH;
+
+                        const clampedX = Math.max(0, Math.min(0.99, normX || 0));
+                        const clampedY = Math.max(0, Math.min(0.99, normY || 0));
+                        const clampedW = Math.max(0.01, Math.min(1.0 - clampedX, normW || 0.1));
+                        const clampedH = Math.max(0.01, Math.min(1.0 - clampedY, normH || 0.1));
 
                         return (
                           <div key={`gt_${i}`} style={{
                             position: "absolute",
-                            left:   `${relX * 100}%`,
-                            top:    `${relY * 100}%`,
-                            width:  `${relW * 100}%`,
-                            height: `${relH * 100}%`,
+                            left:   `${clampedX * 100}%`,
+                            top:    `${clampedY * 100}%`,
+                            width:  `${clampedW * 100}%`,
+                            height: `${clampedH * 100}%`,
                             border: "2px dashed #ffd700",
                             background: "rgba(255,215,0,0.12)",
                             pointerEvents: "none",
                             boxShadow: "0 0 10px rgba(255,215,0,0.4)",
+                            boxSizing: "border-box",
                           }}>
                             <span style={{
                               position: "absolute", top: -20, left: 0,
@@ -920,21 +934,27 @@ export default function Dashboard() {
                         const CANVAS_W = 680; // Matches Workspace.tsx canvas width exactly
                         const CANVAS_H = Math.round((previewImgSize.h / previewImgSize.w) * CANVAS_W);
 
-                        const relX = box.relX ?? (box.x > 1.0 ? box.x / CANVAS_W : box.x);
-                        const relY = box.relY ?? (box.y > 1.0 ? box.y / CANVAS_H : box.y);
-                        const relW = box.relW ?? (box.w > 1.0 ? box.w / CANVAS_W : box.w);
-                        const relH = box.relH ?? (box.h > 1.0 ? box.h / CANVAS_H : box.h);
+                        const normX = box.relX ?? (box.x > 1.0 ? box.x / (box.canvasW || CANVAS_W) : box.x);
+                        const normY = box.relY ?? (box.y > 1.0 ? box.y / (box.canvasH || CANVAS_H) : box.y);
+                        const normW = box.relW ?? (box.w > 1.0 ? box.w / (box.canvasW || CANVAS_W) : box.w);
+                        const normH = box.relH ?? (box.h > 1.0 ? box.h / (box.canvasH || CANVAS_H) : box.h);
+
+                        const clampedX = Math.max(0, Math.min(0.99, normX || 0));
+                        const clampedY = Math.max(0, Math.min(0.99, normY || 0));
+                        const clampedW = Math.max(0.01, Math.min(1.0 - clampedX, normW || 0.1));
+                        const clampedH = Math.max(0.01, Math.min(1.0 - clampedY, normH || 0.1));
 
                         return (
                           <div key={`sub_${i}`} style={{
                             position: "absolute",
-                            left:   `${relX * 100}%`,
-                            top:    `${relY * 100}%`,
-                            width:  `${relW * 100}%`,
-                            height: `${relH * 100}%`,
+                            left:   `${clampedX * 100}%`,
+                            top:    `${clampedY * 100}%`,
+                            width:  `${clampedW * 100}%`,
+                            height: `${clampedH * 100}%`,
                             border: "2px solid #00e479",
                             background: "rgba(0,228,121,0.08)",
                             pointerEvents: "none",
+                            boxSizing: "border-box",
                           }}>
                             <span style={{
                               position: "absolute", bottom: -20, left: 0,

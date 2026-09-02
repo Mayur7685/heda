@@ -148,12 +148,23 @@ function ImageWorkspace({
   function handleStageMouseUp() {
     if (tool === "bbox" && drawing) {
       const end = getPos();
+      const bx = Math.min(drawStart.x, end.x);
+      const by = Math.min(drawStart.y, end.y);
+      const bw = Math.abs(end.x - drawStart.x);
+      const bh = Math.abs(end.y - drawStart.y);
+
       const box: BBox = {
         id: uid(), type: "bbox",
-        x: Math.min(drawStart.x, end.x),
-        y: Math.min(drawStart.y, end.y),
-        w: Math.abs(end.x - drawStart.x),
-        h: Math.abs(end.y - drawStart.y),
+        x: bx,
+        y: by,
+        w: bw,
+        h: bh,
+        relX: bx / CANVAS_W,
+        relY: by / CANVAS_H,
+        relW: bw / CANVAS_W,
+        relH: bh / CANVAS_H,
+        canvasW: CANVAS_W,
+        canvasH: CANVAS_H,
         label: activeLabel,
       };
       if (box.w > 5 && box.h > 5) {
