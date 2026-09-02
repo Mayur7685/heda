@@ -8,7 +8,7 @@ import { GALILEO, RELAYER_API_URL } from "../config";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
-type BBox = { id: string; type: "bbox"; x: number; y: number; w: number; h: number; relX?: number; relY?: number; relW?: number; relH?: number; label: string };
+type BBox = { id: string; type: "bbox"; x: number; y: number; w: number; h: number; relX?: number; relY?: number; relW?: number; relH?: number; canvasW?: number; canvasH?: number; label: string };
 type Polygon = { id: string; type: "polygon"; points: number[]; label: string; closed: boolean };
 type Annotation = BBox | Polygon;
 
