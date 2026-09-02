@@ -601,7 +601,19 @@ export default function Workspace() {
       ]);
 
       if (metaResult.status === "fulfilled") setMetadata(metaResult.value);
-      if (dataResult.status === "fulfilled") setAllTaskData(dataResult.value);
+      if (dataResult.status === "fulfilled") {
+        const val = dataResult.value;
+        if (Array.isArray(val) && val.length > 0) {
+          setAllTaskData(val);
+        } else if (val && typeof val === "object" && Array.isArray(val.files) && val.files.length > 0) {
+          setAllTaskData(val.files);
+        } else {
+          setError("0G Storage returned an empty or invalid dataset format for this job.");
+        }
+      } else {
+        const reason = dataResult.status === "rejected" ? dataResult.reason?.message : "Unknown error";
+        setError(`Failed to retrieve task dataset from 0G Storage (${reason}).`);
+      }
     } catch (e: any) {
       setError(`Failed to load: ${e.message}`);
     }
@@ -762,9 +774,25 @@ export default function Workspace() {
         </div>
       </div>
 
-      {/* Loading states */}
+      {/* Loading & Error states */}
       {!job && !error && <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center" }}><p className="hint">Loading job…</p></div>}
-      {job && !taskData && <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center" }}><p className="hint">Loading task data from 0G Storage…</p></div>}
+      {job && !taskData && !error && <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center" }}><p className="hint">Loading task data from 0G Storage…</p></div>}
+      {error && !taskData && (
+        <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 16, padding: 32, textAlign: "center" }}>
+          <span className="material-symbols-outlined" style={{ fontSize: 44, color: "var(--error)" }}>cloud_off</span>
+          <div style={{ color: "#fff", fontSize: 16, fontWeight: 600 }}>Could Not Load 0G Storage Dataset</div>
+          <p style={{ color: "var(--text-2)", fontSize: 13, maxWidth: 520, lineHeight: 1.5 }}>{error}</p>
+          <div style={{ display: "flex", gap: 12, marginTop: 8 }}>
+            <button className="btn-secondary" onClick={() => { setError(""); loadJob(); }}>
+              <span className="material-symbols-outlined" style={{ fontSize: 16 }}>refresh</span>
+              Retry 0G Fetch
+            </button>
+            <button className="btn-ghost" onClick={() => navigate("/jobs")}>
+              Back to Jobs
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Left sidebar: workspace tools */}
       {job && taskData && (

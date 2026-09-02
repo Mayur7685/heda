@@ -156,7 +156,14 @@ app.get('/file', async (req, res) => {
           res.set('Content-Type', 'image/png');
           return res.send(buf);
         } else {
-          return res.send(buf.toString('utf-8'));
+          const str = buf.toString('utf-8');
+          try {
+            const parsed = JSON.parse(str);
+            if (parsed && typeof parsed === 'object' && (parsed.code === 101 || parsed.message === 'File not found' || parsed.error === 'File not found')) {
+              continue; // try next endpoint
+            }
+          } catch {}
+          return res.send(str);
         }
       }
     } catch {}

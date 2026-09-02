@@ -184,9 +184,17 @@ export async function fetchFrom0GStorage<T = any>(rootHash: string, maxRetries =
           const text = await res.text();
           try {
             const json = JSON.parse(text);
+            // 0G Storage Indexer returns {"code":101,"message":"File not found","data":null} with HTTP 200
+            if (json && typeof json === "object" && (json.code === 101 || json.message === "File not found" || json.error === "File not found")) {
+              throw new Error(`0G Storage: ${json.message || json.error || "File not found"}`);
+            }
             cache0GData(normHash, json);
             return json;
-          } catch {
+          } catch (parseErr: any) {
+            if (parseErr.message?.startsWith("0G Storage:")) {
+              lastError = parseErr;
+              continue;
+            }
             cache0GData(normHash, text);
             return text as any;
           }
